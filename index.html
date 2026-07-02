@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Classifica Pack</title>
+    
+    <!-- Configurações PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563EB">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Ícones simples -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-100 font-sans text-gray-900 select-none">
+
+    <!-- Container Principal (Limitado para Mobile e centralizado em telas maiores) -->
+    <div class="max-w-md mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
+        
+        <!-- Cabeçalho -->
+        <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md">
+            Classifica Pack
+        </header>
+
+        <!-- SEÇÃO 1: TRIAGEM (TELA INICIAL) -->
+        <main id="view-triagem" class="flex-1 flex flex-col p-4 space-y-4">
+            
+            <!-- Configuração de Prefixo Travado -->
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <div class="flex items-center justify-between">
+                    <label class="flex items-center space-x-2 text-sm font-semibold text-blue-800 cursor-pointer">
+                        <input type="checkbox" id="chk-fixar-prefixo" class="w-4 h-4 text-blue-600 rounded">
+                        <span>Fixar 4 dígitos iniciais</span>
+                    </label>
+                    <input type="number" id="input-prefixo" placeholder="Ex: 2700" disabled
+                           class="w-20 px-2 py-1 text-center border rounded bg-gray-200 text-gray-500 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <!-- Visor do Código Postal -->
+            <div class="bg-gray-900 text-white rounded-xl p-4 text-center shadow-inner relative">
+                <div class="text-xs text-gray-400 uppercase tracking-wider">Código Postal</div>
+                <div id="visor-codigo" class="text-4xl font-mono font-bold tracking-widest mt-1 text-yellow-400">
+                    - - - - - - -
+                </div>
+            </div>
+
+            <!-- Teclado Numérico Gigante -->
+            <div class="grid grid-cols-3 gap-3 flex-1">
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="1">1</button>
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="2">2</button>
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="3">3</button>
+                
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="4">4</button>
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="5">5</button>
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="6">6</button>
+                
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="7">7</button>
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="8">8</button>
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="9">9</button>
+                
+                <button type="button" id="btn-key-clear" class="bg-red-100 active:bg-red-200 text-red-700 text-lg font-bold py-4 rounded-xl shadow-sm focus:outline-none">Limpar</button>
+                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="0">0</button>
+                <button type="button" id="btn-key-backspace" class="bg-yellow-100 active:bg-yellow-200 text-yellow-700 text-xl font-bold py-4 rounded-xl shadow-sm focus:outline-none">
+                    <i class="fa-solid fa-backspace"></i>
+                </button>
+            </div>
+
+            <!-- Botão de Ação -->
+            <button id="btn-analisar" class="w-full bg-green-600 active:bg-green-700 text-white font-bold text-xl py-4 rounded-xl shadow-md transition duration-150">
+                Analisar Código
+            </button>
+        </main>
+
+        <!-- SEÇÃO 2: MOTORISTAS (COM RESUMO DE LEITURAS) -->
+        <main id="view-motoristas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
+            
+            <!-- Painel de Estatística / Resumo das Leituras -->
+            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-sm font-bold uppercase text-gray-500 tracking-wider">Resumo de Leituras</h3>
+                    <button id="btn-limpar-leituras" class="text-xs text-red-600 active:text-red-800 font-bold flex items-center space-x-1 border border-red-200 px-2 py-1 rounded bg-red-50">
+                        <i class="fa-solid fa-rotate-left"></i> <span>Reset Leituras</span>
+                    </button>
+                </div>
+                
+                <!-- Lista de distribuição dos pacotes por motorista -->
+                <div id="painel-resumo" class="space-y-2">
+                    <!-- Gerado dinamicamente -->
+                </div>
+            </div>
+
+            <h2 class="text-xl font-bold text-gray-800 mt-2">Registo de Motoristas</h2>
+            
+            <!-- Formulário de Registo -->
+            <form id="form-motorista" class="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-600">Nome do Motorista</label>
+                    <input type="text" id="nome-motorista" required placeholder="Ex: João Silva" 
+                           class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
+                    <div class="grid grid-cols-6 gap-2" id="color-picker-container">
+                        <!-- Gerado por JS -->
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded shadow">
+                    Adicionar Motorista
+                </button>
+            </form>
+
+            <!-- Lista de Motoristas Cadastrados -->
+            <div>
+                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Motoristas Ativos</h3>
+                <div id="lista-motoristas" class="space-y-2">
+                    <!-- Gerado dinamicamente -->
+                    <p class="text-sm text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- SEÇÃO 3: INTERVALOS -->
+        <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
+            <h2 class="text-xl font-bold text-gray-800">Intervalos de Código Postal</h2>
+
+            <!-- Formulário de Intervalo -->
+            <form id="form-intervalo" class="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-600">Atribuir ao Motorista</label>
+                    <select id="select-motorista" required class="w-full mt-1 p-2 border rounded bg-white outline-none">
+                        <option value="">Selecione um motorista...</option>
+                    </select>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-600">Código Inicial</label>
+                        <input type="text" id="int-inicio" required placeholder="Ex: 2700-000" maxlength="8"
+                               class="w-full mt-1 p-2 border rounded text-center font-mono outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-600">Código Final</label>
+                        <input type="text" id="int-fim" required placeholder="Ex: 2700-999" maxlength="8"
+                               class="w-full mt-1 p-2 border rounded text-center font-mono outline-none">
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded shadow">
+                    Criar Intervalo
+                </button>
+            </form>
+
+            <!-- Lista de Intervalos -->
+            <div>
+                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Intervalos Atribuídos</h3>
+                <div id="lista-intervalos" class="space-y-2">
+                    <!-- Gerado dinamicamente -->
+                    <p class="text-sm text-gray-400 italic text-center py-4">Nenhum intervalo registado.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- OVERLAY DO RESULTADO DA ANÁLISE -->
+        <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-6 z-50">
+            <div class="bg-white w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
+                <div class="bg-gray-100 p-4 border-b text-center font-bold text-gray-700">
+                    Resultado da Triagem
+                </div>
+                
+                <div id="resultado-cor-bg" class="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4 min-h-[250px] transition-colors duration-300">
+                    <p class="text-white text-lg font-semibold tracking-wider uppercase opacity-85">Código Postal</p>
+                    <h3 id="resultado-codigo" class="text-white text-4xl font-mono font-black tracking-widest bg-black/25 px-4 py-2 rounded-lg">---</h3>
+                    
+                    <p class="text-white text-lg font-semibold tracking-wider uppercase opacity-85 mt-4">Motorista Designado</p>
+                    <h2 id="resultado-motorista" class="text-white text-3xl font-bold tracking-wide drop-shadow-md">---</h2>
+                </div>
+                
+                <div class="p-4 bg-gray-50 border-t">
+                    <button id="btn-confirmar-atribuir" class="w-full bg-blue-600 active:bg-blue-700 text-white font-bold text-lg py-4 rounded-xl shadow-md">
+                        Confirmar e Atribuir
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barra de Navegação Inferior -->
+        <nav class="absolute bottom-0 inset-x-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around">
+            <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
+                <i class="fa-solid fa-qrcode text-lg"></i>
+                <span>Triagem</span>
+            </button>
+            <button id="nav-motoristas" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
+                <i class="fa-solid fa-users text-lg"></i>
+                <span>Motoristas</span>
+            </button>
+            <button id="nav-intervalos" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
+                <i class="fa-solid fa-map-location-dot text-lg"></i>
+                <span>Zonas</span>
+            </button>
+        </nav>
+
+    </div>
+
+    <!-- Script de Aplicação -->
+    <script src="app.js"></script>
+</body>
+</html>
