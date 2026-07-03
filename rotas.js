@@ -15,7 +15,7 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     autocompleteWidget.addListener('place_changed', () => {
         const place = autocompleteWidget.getPlace();
         if (!place.geometry || !place.geometry.location) {
-            alert("Morada não encontrada. Selecione um dos locais sugeridos pela Google.");
+            alert("Morada não encontrada. Selecione uma sugestão da lista.");
             return;
         }
 
@@ -23,7 +23,6 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
         const lng = place.geometry.location.lng();
         const address = place.formatted_address;
 
-        // Executa a função que adiciona o ponto ao estado da aplicação
         callback({ id: 'm_' + Date.now(), lat, lng, address });
     });
 }
@@ -56,12 +55,13 @@ export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// NOVO: Algoritmo de Jitter para evitar sobreposição de marcadores adjacentes
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined') return;
 
     if (!googleMap) {
         googleMap = new google.maps.Map(mapElement, {
-            zoom: 13,
+            zoom: 14,
             center: { lat: partida.lat, lng: partida.lng },
             mapTypeControl: false,
             streetViewControl: false,
@@ -74,8 +74,29 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     const path = [];
     const bounds = new google.maps.LatLngBounds();
+    const posicoesOcupadas = [];
 
-    const startPos = new google.maps.LatLng(partida.lat, partida.lng);
+    // Função interna para afastar ligeiramente os marcadores sobrepostos
+    function evitarSobreposicao(lat, lng) {
+        let finalLat = lat;
+        let finalLng = lng;
+        const margemDiferenca = 0.00003; // Tolerância de igualdade
+        const deslocamento = 0.00008; // Afastamento de segurança (aprox. 10m)
+
+        while (posicoesOcupadas.some(pos => 
+            Math.abs(pos.lat - finalLat) < margemDiferenca && 
+            Math.abs(pos.lng - finalLng) < margemDiferenca
+        )) {
+            finalLat += (Math.random() - 0.5) * deslocamento;
+            finalLng += (Math.random() - 0.5) * deslocamento;
+        }
+
+        posicoesOcupadas.push({ lat: finalLat, lng: finalLng });
+        return new google.maps.LatLng(finalLat, finalLng);
+    }
+
+    // Desenhar Partida
+    const startPos = evitarSobreposicao(partida.lat, partida.lng);
     path.push(startPos);
     bounds.extend(startPos);
 
@@ -95,8 +116,9 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     });
     googleMarkers.push(partidaMarker);
 
+    // Desenhar Entregas
     rotas.forEach((p, i) => {
-        const pos = new google.maps.LatLng(p.lat, p.lng);
+        const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
         bounds.extend(pos);
 
@@ -136,11 +158,3 @@ export function limparMapaVisual() {
         googleRoutePolyline = null;
     }
 }
-
-window.ajustarLimitesMapaGoogle = () => {
-    if (!googleMap || !window.partidaLocalizacao) return;
-    const bounds = new google.maps.LatLngBounds();
-    bounds.extend(new google.maps.LatLng(window.partidaLocalizacao.lat, window.partidaLocalizacao.lng));
-    window.rotaOtimizada.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
-    googleMap.fitBounds(bounds);
-};
