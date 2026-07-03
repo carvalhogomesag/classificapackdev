@@ -66,7 +66,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupRotasLogic();
     updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
     
-    // Renderização inicial das abas secundárias
+    // Renderização inicial
     renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
     renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
     updateMotoristaSelect(window.drivers, selectMotorista);
@@ -76,7 +76,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function carregarGoogleMapsScript() {
     if (typeof google !== 'undefined') return;
     if (typeof GOOGLE_MAPS_API_KEY === 'undefined' || !GOOGLE_MAPS_API_KEY) {
-        console.error("Chave de API do Google Maps não definida no config.js.");
+        console.error("Chave de API do Google Maps não foi definida no config.js.");
         return;
     }
 
@@ -92,7 +92,7 @@ function carregarGoogleMapsScript() {
     document.head.appendChild(script);
 }
 
-// Configuração de eventos do ecrã de rotas
+// Lógica das Rotas
 function setupRotasLogic() {
     btnGpsPartida.addEventListener('click', () => {
         statusPartida.textContent = "A obter localização do GPS...";
@@ -115,7 +115,8 @@ function setupRotasLogic() {
                     }
                 });
             },
-            () => {
+            (error) => {
+                console.error("Erro GPS:", error);
                 alert("Verifique as permissões de localização do seu telemóvel.");
                 statusPartida.textContent = "Partida: Permissão negada";
             },
@@ -139,8 +140,14 @@ function setupRotasLogic() {
     });
 
     btnOtimizarRota.addEventListener('click', () => {
-        if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
-        if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
+        if (!window.partidaLocalizacao) {
+            alert("Por favor, defina um ponto de Partida primeiro.");
+            return;
+        }
+        if (window.moradasEntregas.length === 0) {
+            alert("Adicione pelo menos uma morada de entrega.");
+            return;
+        }
         otimizarItinerarioComVizinhoMaisProximo();
     });
 }
@@ -187,10 +194,15 @@ function otimizarItinerarioComVizinhoMaisProximo() {
     window.rotaOtimizada = [];
 
     while (restantes.length > 0) {
-        let indiceMaisProximo = -1, menorDistancia = Infinity;
+        let indiceMaisProximo = -1;
+        let menorDistancia = Infinity;
+
         for (let i = 0; i < restantes.length; i++) {
             const dist = calcularDistanciaHaversine(atual.lat, atual.lng, restantes[i].lat, restantes[i].lng);
-            if (dist < menorDistancia) { menorDistancia = dist; indiceMaisProximo = i; }
+            if (dist < menorDistancia) {
+                menorDistancia = dist;
+                indiceMaisProximo = i;
+            }
         }
 
         if (indiceMaisProximo !== -1) {
@@ -204,6 +216,7 @@ function otimizarItinerarioComVizinhoMaisProximo() {
 
     document.getElementById('container-mapa').classList.remove('hidden');
     document.getElementById('container-rota-ordenada').classList.remove('hidden');
+
     renderizarItinerarioOtimizado();
     desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 }
@@ -238,7 +251,11 @@ function renderizarItinerarioOtimizado() {
 }
 
 function usarFallbackGPS(lat, lng) {
-    window.partidaLocalizacao = { lat, lng, address: `Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})` };
+    window.partidaLocalizacao = {
+        lat: lat,
+        lng: lng,
+        address: `Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+    };
     statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 }
 
@@ -314,17 +331,32 @@ function setupForms() {
         const driverId = selectMotorista.value;
         const startRaw = intInicioInput.value;
         const endRaw = intFimInput.value;
+
         const startClean = sanitizeDigits(startRaw);
         const endClean = sanitizeDigits(endRaw);
 
-        if (startClean.length !== 7 || endClean.length !== 7) return alert('Insira códigos postais completos (ex: 2700-123).');
-        if (parseInt(startClean, 10) > parseInt(endClean, 10)) return alert('Código inicial não pode ser maior.');
+        if (startClean.length !== 7 || endClean.length !== 7) {
+            alert('Por favor, digite códigos postais completos com 7 dígitos (ex: 2700-123).');
+            return;
+        }
 
-        const newInterval = { id: 'i_' + Date.now(), driverId, start: `${startClean.substring(0, 4)}-${startClean.substring(4, 7)}`, end: `${endClean.substring(0, 4)}-${endClean.substring(4, 7)}` };
+        if (parseInt(startClean, 10) > parseInt(endClean, 10)) {
+            alert('O código inicial não pode ser maior que o código final.');
+            return;
+        }
+
+        const newInterval = {
+            id: 'i_' + Date.now(),
+            driverId: driverId,
+            start: `${startClean.substring(0, 4)}-${startClean.substring(4, 7)}`,
+            end: `${endClean.substring(0, 4)}-${endClean.substring(4, 7)}`
+        };
+
         window.intervals.push(newInterval);
         saveData(window.drivers, window.intervals, window.assignments);
 
-        intInicioInput.value = ""; intFimInput.value = "";
+        intInicioInput.value = "";
+        intFimInput.value = "";
         renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
         alert('Intervalo criado!');
     });
@@ -337,6 +369,7 @@ function renderColorPicker() {
         btn.type = "button";
         btn.style.backgroundColor = color;
         btn.className = `h-10 w-full rounded-lg border-2 transition-all duration-150 ${idx === 0 ? 'border-black scale-110' : 'border-transparent'}`;
+        
         btn.addEventListener('click', () => {
             window.selectedColor = color;
             Array.from(colorPickerContainer.children).forEach(child => {
@@ -344,6 +377,7 @@ function renderColorPicker() {
                 child.classList.add('border-transparent');
             });
             btn.classList.add('border-black', 'scale-110');
+            btn.classList.remove('border-transparent');
         });
         colorPickerContainer.appendChild(btn);
     });
@@ -351,7 +385,7 @@ function renderColorPicker() {
 
 function setupResetLeituras() {
     btnLimparLeituras.addEventListener('click', () => {
-        if (confirm("Deseja realmente limpar todas as leituras?")) {
+        if (confirm("Deseja realmente limpar todas as leituras acumuladas? Isto reiniciará os contadores para zero.")) {
             window.assignments = [];
             saveData(window.drivers, window.intervals, window.assignments);
             renderSummary();
@@ -359,12 +393,27 @@ function setupResetLeituras() {
     });
 }
 
-// Métodos globais de exclusão (chamados por botões dinâmicos)
+// Funções Auxiliares Internas do app.js
+function setupIntervalInputFormatting(inputElement) {
+    inputElement.addEventListener('input', (e) => {
+        let val = sanitizeDigits(e.target.value);
+        if (val.length > 4) {
+            val = val.substring(0, 4) + '-' + val.substring(4, 7);
+        }
+        e.target.value = val;
+    });
+}
+
+function sanitizeDigits(str) { 
+    return str.replace(/\D/g, ''); 
+}
+
+// Métodos Globais de Exclusão
 window.deleteDriver = (id) => {
-    if (confirm("Apagar este motorista removerá os seus intervalos e leituras. Confirmar?")) {
+    if (confirm("Ao apagar este motorista, os seus intervalos e contagens de pacotes também serão removidos. Confirmar?")) {
         window.drivers = window.drivers.filter(d => d.id !== id);
         window.intervals = window.intervals.filter(i => i.driverId !== id);
-        window.assignments = window.assignments.filter(a => a.driverId !== id);
+        window.assignments = window.assignments.filter(a => a.driverId !== id); 
         saveData(window.drivers, window.intervals, window.assignments);
         renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
         renderSummary();
@@ -379,5 +428,3 @@ window.deleteInterval = (id) => {
         renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
     }
 };
-
-function sanitizeDigits(str) { return str.replace(/\D/g, ''); }
