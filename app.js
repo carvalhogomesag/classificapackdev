@@ -5,7 +5,7 @@ import { renderDrivers, handleDriverSubmit, updateMotoristaSelect, renderInterva
 import { inicializarGoogleAutocomplete, obterEnderecoPorGPSGoogle, calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './rotas.js';
 
 // ==========================================
-// CONFIGURAÇÕES GLOBAIS DE ESTADO
+// PALETE DE CORES GLOBAL
 // ==========================================
 const colorPalette = [
     "#2563EB", "#DC2626", "#059669", "#EA580C", 
@@ -13,6 +13,9 @@ const colorPalette = [
     "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
 ];
 
+// ==========================================
+// ESTADO GLOBAL DA APLICAÇÃO
+// ==========================================
 window.drivers = JSON.parse(localStorage.getItem('cp_drivers')) || [];
 window.intervals = JSON.parse(localStorage.getItem('cp_intervals')) || [];
 window.assignments = JSON.parse(localStorage.getItem('cp_assignments')) || [];
@@ -32,68 +35,10 @@ window.rotaIniciada = JSON.parse(localStorage.getItem('cp_rota_iniciada')) || fa
 window.definindoPartidaPorMorada = false;
 
 // Estado para controle de edição
-let itemSendoEditado = null; // Guarda referência do item que o motorista está a editar
-
-// Referências do DOM
-const chkFixarPrefixo = document.getElementById('chk-fixar-prefixo');
-const inputPrefixo = document.getElementById('input-prefixo');
-const visorCodigo = document.getElementById('visor-codigo');
-const btnAnalisar = document.getElementById('btn-analisar');
-const modalResultado = document.getElementById('modal-resultado');
-const resultadoCorBg = document.getElementById('resultado-cor-bg');
-const resultadoCodigo = document.getElementById('resultado-codigo');
-const resultadoMotorista = document.getElementById('resultado-motorista');
-const btnConfirmarAtribuir = document.getElementById('btn-confirmar-atribuir');
-const chkPrioridade = document.getElementById('chk-prioridade');
-
-const formMotorista = document.getElementById('form-motorista');
-const nomeMotoristaInput = document.getElementById('nome-motorista');
-const colorPickerContainer = document.getElementById('color-picker-container');
-const listaMotoristas = document.getElementById('lista-motoristas');
-const painelResumo = document.getElementById('painel-resumo');
-const btnLimparLeituras = document.getElementById('btn-limpar-leituras');
-
-const formIntervalo = document.getElementById('form-intervalo');
-const selectMotorista = document.getElementById('select-motorista');
-const intInicioInput = document.getElementById('int-inicio');
-const intFimInput = document.getElementById('int-fim');
-const listaIntervalos = document.getElementById('lista-intervalos');
-
-// Elementos de Gestão de Rota do Turno
-const containerSetupRota = document.getElementById('container-setup-rota');
-const containerPlaneadorRota = document.getElementById('container-planeador-rota');
-const dataRotaInput = document.getElementById('data-rota');
-const btnIniciarRota = document.getElementById('btn-iniciar-rota');
-const displayDataRota = document.getElementById('display-data-rota');
-const btnEncerrarRota = document.getElementById('btn-encerrar-rota');
-
-const btnGpsPartida = document.getElementById('btn-gps-partida');
-const btnBuscarPartida = document.getElementById('btn-buscar-partida');
-const statusPartida = document.getElementById('status-partida');
-const buscaMoradaInput = document.getElementById('busca-morada');
-const listaMoradasAdicionadas = document.getElementById('lista-moradas-adicionadas');
-const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
-const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
-const containerMapa = document.getElementById('container-mapa');
-const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-const listaRotaFinal = document.getElementById('lista-rota-final');
-
-// Elementos das Estatísticas de Entrega
-const estatisticasRota = document.getElementById('estatisticas-rota');
-const statTotal = document.getElementById('stat-total');
-const statEntregues = document.getElementById('stat-entregues');
-const statFalhadas = document.getElementById('stat-falhadas');
-const statPendentes = document.getElementById('stat-pendentes');
-
-// Elementos do Modal de Edição de Paragem
-const modalEditarParagem = document.getElementById('modal-editar-paragem');
-const editMoradaTexto = document.getElementById('edit-morada-texto');
-const editMoradaObs = document.getElementById('edit-morada-obs');
-const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
-const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
+let itemSendoEditado = null; 
 
 // ==========================================
-// INICIALIZAÇÃO
+// INICIALIZAÇÃO DA APLICAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     carregarGoogleMapsScript();
@@ -105,22 +50,36 @@ document.addEventListener('DOMContentLoaded', () => {
     setupResetLeituras();
     setupRotasLogic();
     setupModaisEdicao();
-    updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
     
-    // Renderizações Iniciais
-    renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
-    renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
-    updateMotoristaSelect(window.drivers, selectMotorista);
+    const visorCodigo = document.getElementById('visor-codigo');
+    if (visorCodigo) {
+        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+    }
+    
+    // Renderizações Iniciais Seguras (Se os elementos existirem)
+    const listaMotoristas = document.getElementById('lista-motoristas');
+    if (listaMotoristas) {
+        renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
+    }
+    
+    const listaIntervalos = document.getElementById('lista-intervalos');
+    if (listaIntervalos) {
+        renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
+    }
+    
+    const selectMotorista = document.getElementById('select-motorista');
+    if (selectMotorista) {
+        updateMotoristaSelect(window.drivers, selectMotorista);
+    }
+    
     renderSummary();
-
-    // Sincroniza o Itinerário Ativo na memória (Mantém o estado mesmo que reinicie o tlm)
     sincronizarInterfaceRota();
 });
 
 function carregarGoogleMapsScript() {
     if (typeof google !== 'undefined') return;
     if (typeof GOOGLE_MAPS_API_KEY === 'undefined' || !GOOGLE_MAPS_API_KEY) {
-        console.error("Chave de API do Google Maps não definida no config.js.");
+        console.error("Chave de API do Google Maps não foi definida no config.js.");
         return;
     }
 
@@ -130,166 +89,205 @@ function carregarGoogleMapsScript() {
     script.defer = true;
     script.onload = () => {
         console.log("Google Maps SDK carregado.");
-        inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
+        const buscaMoradaInput = document.getElementById('busca-morada');
+        if (buscaMoradaInput) {
+            inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
+        }
     };
     script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
     document.head.appendChild(script);
 }
 
 // ==========================================
-// LOGICA DE ROTAS E EXECUÇÃO DO TURNO
+// LÓGICA DAS ROTAS DO TURNO
 // ==========================================
 function setupRotasLogic() {
-    
-    // Iniciar a Criação de Rota
-    btnIniciarRota.addEventListener('click', () => {
-        const dataSelecionada = dataRotaInput.value;
-        if (!dataSelecionada) {
-            alert("Por favor, selecione uma data para continuar.");
-            return;
-        }
+    const btnIniciarRota = document.getElementById('btn-iniciar-rota');
+    const dataRotaInput = document.getElementById('data-rota');
+    const btnEncerrarRota = document.getElementById('btn-encerrar-rota');
+    const btnGpsPartida = document.getElementById('btn-gps-partida');
+    const btnBuscarPartida = document.getElementById('btn-buscar-partida');
+    const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
+    const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
+    const statusPartida = document.getElementById('status-partida');
+    const buscaMoradaInput = document.getElementById('busca-morada');
 
-        // Formata data de forma amigável (DD/MM/AAAA)
-        const d = new Date(dataSelecionada);
-        const dataFormatada = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-
-        window.dataRotaSelecionada = dataFormatada;
-        window.rotaIniciada = true;
-        
-        sincronizarPersistencia();
-        sincronizarInterfaceRota();
-    });
-
-    // Encerrar a Rota Atual
-    btnEncerrarRota.addEventListener('click', () => {
-        if (confirm("Tem a certeza de que deseja encerrar a rota atual? Isto limpará o itinerário planeado (os motoristas e as regras não serão apagados).")) {
-            window.partidaLocalizacao = null;
-            window.moradasEntregas = [];
-            window.rotaOtimizada = [];
-            window.dataRotaSelecionada = "";
-            window.rotaIniciada = false;
-
-            limparMapaVisual();
+    if (btnIniciarRota && dataRotaInput) {
+        btnIniciarRota.addEventListener('click', () => {
+            const dataSelecionada = dataRotaInput.value;
+            if (!dataSelecionada) {
+                alert("Por favor, selecione uma data para continuar.");
+                return;
+            }
+            const d = new Date(dataSelecionada);
+            const dataFormatada = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            window.dataRotaSelecionada = dataFormatada;
+            window.rotaIniciada = true;
             sincronizarPersistencia();
             sincronizarInterfaceRota();
-        }
-    });
+        });
+    }
 
-    // Obter GPS do Telemóvel como Partida
-    btnGpsPartida.addEventListener('click', () => {
-        statusPartida.textContent = "A obter geolocalização do GPS...";
-        
-        if (!navigator.geolocation) {
-            alert("O seu telemóvel não suporta Geolocalização.");
-            statusPartida.textContent = "Partida: Erro no GPS";
-            return;
-        }
+    if (btnEncerrarRota) {
+        btnEncerrarRota.addEventListener('click', () => {
+            if (confirm("Tem a certeza de que deseja encerrar a rota atual? Isto limpará o itinerário planeado.")) {
+                window.partidaLocalizacao = null;
+                window.moradasEntregas = [];
+                window.rotaOtimizada = [];
+                window.dataRotaSelecionada = "";
+                window.rotaIniciada = false;
+                limparMapaVisual();
+                sincronizarPersistencia();
+                sincronizarInterfaceRota();
+            }
+        });
+    }
 
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                const lat = position.coords.latitude;
-                const lng = position.coords.longitude;
-                obterEnderecoPorGPSGoogle(lat, lng, (moradaGps) => {
-                    if (moradaGps) {
-                        window.partidaLocalizacao = moradaGps;
-                        statusPartida.innerHTML = `<strong>Partida:</strong> ${moradaGps.address}`;
-                    } else {
-                        window.partidaLocalizacao = { lat, lng, address: `GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})` };
-                        statusPartida.innerHTML = `<strong>Partida:</strong> GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
-                    }
-                    sincronizarPersistencia();
-                });
-            },
-            () => {
-                alert("Não foi possível aceder ao GPS. Verifique as permissões.");
-                statusPartida.textContent = "Partida: Permissão negada";
-            },
-            { enableHighAccuracy: true }
-        );
-    });
+    if (btnGpsPartida && statusPartida) {
+        btnGpsPartida.addEventListener('click', () => {
+            statusPartida.textContent = "A obter geolocalização do GPS...";
+            if (!navigator.geolocation) {
+                alert("O seu telemóvel não suporta Geolocalização.");
+                statusPartida.textContent = "Partida: Erro no GPS";
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    obterEnderecoPorGPSGoogle(lat, lng, (moradaGps) => {
+                        if (moradaGps) {
+                            window.partidaLocalizacao = moradaGps;
+                            statusPartida.innerHTML = `<strong>Partida:</strong> ${moradaGps.address}`;
+                        } else {
+                            window.partidaLocalizacao = { lat, lng, address: `GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})` };
+                            statusPartida.innerHTML = `<strong>Partida:</strong> GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                        }
+                        sincronizarPersistencia();
+                    });
+                },
+                () => {
+                    alert("Não foi possível aceder ao GPS. Verifique as permissões.");
+                    statusPartida.textContent = "Partida: Permissão negada";
+                },
+                { enableHighAccuracy: true }
+            );
+        });
+    }
 
-    btnBuscarPartida.addEventListener('click', () => {
-        window.definindoPartidaPorMorada = true;
-        buscaMoradaInput.placeholder = "Procure a morada de PARTIDA...";
-        buscaMoradaInput.focus();
-    });
+    if (btnBuscarPartida && buscaMoradaInput) {
+        btnBuscarPartida.addEventListener('click', () => {
+            window.definindoPartidaPorMorada = true;
+            buscaMoradaInput.placeholder = "Procure a morada de PARTIDA...";
+            buscaMoradaInput.focus();
+        });
+    }
 
-    btnLimparEnderecos.addEventListener('click', () => {
-        window.moradasEntregas = [];
-        window.rotaOtimizada = [];
-        containerMapa.classList.add('hidden');
-        containerRotaOrdenada.classList.add('hidden');
-        estatisticasRota.classList.add('hidden');
-        limparMapaVisual();
-        renderMoradasAdicionadas();
-        sincronizarPersistencia();
-    });
+    if (btnLimparEnderecos) {
+        btnLimparEnderecos.addEventListener('click', () => {
+            window.moradasEntregas = [];
+            window.rotaOtimizada = [];
+            
+            const containerMapa = document.getElementById('container-mapa');
+            const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+            const estatisticasRota = document.getElementById('estatisticas-rota');
+            
+            if (containerMapa) containerMapa.classList.add('hidden');
+            if (containerRotaOrdenada) containerRotaOrdenada.classList.add('hidden');
+            if (estatisticasRota) estatisticasRota.classList.add('hidden');
+            
+            limparMapaVisual();
+            renderMoradasAdicionadas();
+            sincronizarPersistencia();
+        });
+    }
 
-    btnOtimizarRota.addEventListener('click', () => {
-        if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
-        if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
-        otimizarItinerarioComVizinhoMaisProximo();
-    });
+    if (btnOtimizarRota) {
+        btnOtimizarRota.addEventListener('click', () => {
+            if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
+            if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
+            otimizarItinerarioComVizinhoMaisProximo();
+        });
+    }
 }
 
-// Sincroniza os dados visuais na tela dependendo de a rota estar iniciada ou não
 function sincronizarInterfaceRota() {
+    const containerSetupRota = document.getElementById('container-setup-rota');
+    const containerPlaneadorRota = document.getElementById('container-planeador-rota');
+    const displayDataRota = document.getElementById('display-data-rota');
+    const statusPartida = document.getElementById('status-partida');
+    const dataRotaInput = document.getElementById('data-rota');
+
+    if (!containerSetupRota || !containerPlaneadorRota) return;
+
     if (window.rotaIniciada) {
         containerSetupRota.classList.add('hidden');
         containerPlaneadorRota.classList.remove('hidden');
-        displayDataRota.textContent = window.dataRotaSelecionada;
+        if (displayDataRota) displayDataRota.textContent = window.dataRotaSelecionada;
 
-        // Recupera localização de partida se existir
-        if (window.partidaLocalizacao) {
-            statusPartida.innerHTML = `<strong>Partida:</strong> ${window.partidaLocalizacao.address}`;
-        } else {
-            statusPartida.textContent = "Partida: Localização não definida";
+        if (statusPartida) {
+            if (window.partidaLocalizacao) {
+                statusPartida.innerHTML = `<strong>Partida:</strong> ${window.partidaLocalizacao.address}`;
+            } else {
+                statusPartida.textContent = "Partida: Localização não definida";
+            }
         }
 
         renderMoradasAdicionadas();
 
-        // Se já tinha sido gerada uma rota otimizada, exibe o mapa e a lista de entregas automaticamente
         if (window.rotaOtimizada.length > 0) {
-            containerMapa.classList.remove('hidden');
-            containerRotaOrdenada.classList.remove('hidden');
+            const containerMapa = document.getElementById('container-mapa');
+            const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+            if (containerMapa) containerMapa.classList.remove('hidden');
+            if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+            
             renderizarItinerarioOtimizado();
             
             setTimeout(() => {
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
             }, 300);
         } else {
-            containerMapa.classList.add('hidden');
-            containerRotaOrdenada.classList.add('hidden');
-            estatisticasRota.classList.add('hidden');
+            const containerMapa = document.getElementById('container-mapa');
+            const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+            const estatisticasRota = document.getElementById('estatisticas-rota');
+            if (containerMapa) containerMapa.classList.add('hidden');
+            if (containerRotaOrdenada) containerRotaOrdenada.classList.add('hidden');
+            if (estatisticasRota) estatisticasRota.classList.add('hidden');
         }
 
     } else {
         containerSetupRota.classList.remove('hidden');
         containerPlaneadorRota.classList.add('hidden');
-        
-        // Define data padrão de hoje para o input
-        const hoje = new Date();
-        dataRotaInput.value = hoje.toISOString().split('T')[0];
+        if (dataRotaInput) {
+            const hoje = new Date();
+            dataRotaInput.value = hoje.toISOString().split('T')[0];
+        }
     }
 }
 
 function adicionarMorada(morada) {
+    const buscaMoradaInput = document.getElementById('busca-morada');
+    const statusPartida = document.getElementById('status-partida');
+
     if (window.definindoPartidaPorMorada) {
         window.partidaLocalizacao = morada;
-        statusPartida.innerHTML = `<strong>Partida:</strong> ${morada.address}`;
+        if (statusPartida) statusPartida.innerHTML = `<strong>Partida:</strong> ${morada.address}`;
         window.definindoPartidaPorMorada = false;
-        buscaMoradaInput.placeholder = "Comece a digitar a morada aqui...";
+        if (buscaMoradaInput) buscaMoradaInput.placeholder = "Comece a digitar a morada aqui...";
     } else {
-        morada.status = "Pendente"; // Status inicial do pacote
-        morada.observation = ""; // Observação inicial vazia
+        morada.status = "Pendente"; 
+        morada.observation = ""; 
         window.moradasEntregas.push(morada);
         renderMoradasAdicionadas();
     }
     sincronizarPersistencia();
-    buscaMoradaInput.value = "";
+    if (buscaMoradaInput) buscaMoradaInput.value = "";
 }
 
 function renderMoradasAdicionadas() {
+    const listaMoradasAdicionadas = document.getElementById('lista-moradas-adicionadas');
+    if (!listaMoradasAdicionadas) return;
+
     listaMoradasAdicionadas.innerHTML = "";
     if (window.moradasEntregas.length === 0) {
         listaMoradasAdicionadas.innerHTML = `<p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>`;
@@ -346,8 +344,10 @@ function otimizarItinerarioComVizinhoMaisProximo() {
         }
     }
 
-    containerMapa.classList.remove('hidden');
-    containerRotaOrdenada.classList.remove('hidden');
+    const containerMapa = document.getElementById('container-mapa');
+    const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+    if (containerMapa) containerMapa.classList.remove('hidden');
+    if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
 
     renderizarItinerarioOtimizado();
     sincronizarPersistencia();
@@ -358,15 +358,17 @@ function otimizarItinerarioComVizinhoMaisProximo() {
 }
 
 function renderizarItinerarioOtimizado() {
+    const listaRotaFinal = document.getElementById('lista-rota-final');
+    if (!listaRotaFinal) return;
+
     listaRotaFinal.innerHTML = "";
     
     window.rotaOtimizada.forEach((paragem, index) => {
         const item = document.createElement('div');
         
-        // Define cor do indicador com base no estado de conclusão do pacote
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
-        if (paragem.status === "Falhou") statusColor = "bg-red-500";
+        if (paragem.status === "Failed" || paragem.status === "Falhou") statusColor = "bg-red-500";
 
         item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
@@ -397,7 +399,6 @@ function renderizarItinerarioOtimizado() {
                 </div>
             </div>
             
-            <!-- Barra de Ações Rápidas de Entrega -->
             <div class="flex space-x-1.5 pt-1.5 border-t border-dashed">
                 <button class="btn-status bg-gray-50 text-gray-600 hover:bg-gray-100 text-[10px] font-bold py-1.5 rounded flex-1 border ${!paragem.status || paragem.status === 'Pendente' ? 'ring-2 ring-gray-400' : ''}" data-status="Pendente">
                     Pendente
@@ -405,16 +406,14 @@ function renderizarItinerarioOtimizado() {
                 <button class="btn-status bg-green-50 text-green-700 hover:bg-green-100 text-[10px] font-bold py-1.5 rounded flex-1 border border-green-200 ${paragem.status === 'Entregue' ? 'ring-2 ring-green-500' : ''}" data-status="Entregue">
                     ✓ Entregue
                 </button>
-                <button class="btn-status bg-red-50 text-red-700 hover:bg-red-100 text-[10px] font-bold py-1.5 rounded flex-1 border border-red-200 ${paragem.status === 'Falhou' ? 'ring-2 ring-red-500' : ''}" data-status="Falhou">
+                <button class="btn-status bg-red-50 text-red-700 hover:bg-red-100 text-[10px] font-bold py-1.5 rounded flex-1 border border-red-200 ${paragem.status === 'Failed' || paragem.status === 'Falhou' ? 'ring-2 ring-red-500' : ''}" data-status="Falhou">
                     ✗ Falhou
                 </button>
             </div>
         `;
 
-        // Lógica de edição
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
-        // Lógica de atualização de estado da entrega
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
                 const novoStatus = btn.getAttribute('data-status');
@@ -433,14 +432,23 @@ function renderizarItinerarioOtimizado() {
 }
 
 // ==========================================
-// PAINEL DE ESTATÍSTICAS DO TURNO (CÁLCULO)
+// PAINEL DE ESTATÍSTICAS DO TURNO (À PROVA DE FALHAS)
 // ==========================================
 function renderEstatisticasRota() {
+    const estatisticasRota = document.getElementById('estatisticas-rota');
+    const statTotal = document.getElementById('stat-total');
+    const statEntregues = document.getElementById('stat-entregues');
+    const statFalhadas = document.getElementById('stat-falhadas');
+    const statPendentes = document.getElementById('stat-pendentes');
+
+    // Se os elementos não existirem no HTML, sai silenciosamente sem quebrar o código
+    if (!estatisticasRota || !statTotal) return;
+
     estatisticasRota.classList.remove('hidden');
 
     const total = window.rotaOtimizada.length;
     const entregues = window.rotaOtimizada.filter(p => p.status === "Entregue").length;
-    const falhadas = window.rotaOtimizada.filter(p => p.status === "Falhou").length;
+    const falhadas = window.rotaOtimizada.filter(p => p.status === "Failed" || p.status === "Falhou").length;
     const pendentes = window.rotaOtimizada.filter(p => !p.status || p.status === "Pendente").length;
 
     statTotal.textContent = total;
@@ -453,13 +461,23 @@ function renderEstatisticasRota() {
 // MODAL DE EDIÇÃO DE MORADA / OBSERVAÇÃO
 // ==========================================
 function setupModaisEdicao() {
+    const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
+    const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
+
+    if (!btnCancelarEdicao || !btnSalvarEdicao) return;
+
     btnCancelarEdicao.addEventListener('click', () => {
-        modalEditarParagem.classList.add('hidden');
+        const modalEditarParagem = document.getElementById('modal-editar-paragem');
+        if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
         itemSendoEditado = null;
     });
 
     btnSalvarEdicao.addEventListener('click', () => {
         if (!itemSendoEditado) return;
+
+        const editMoradaTexto = document.getElementById('edit-morada-texto');
+        const editMoradaObs = document.getElementById('edit-morada-obs');
+        if (!editMoradaTexto || !editMoradaObs) return;
 
         const novaMorada = editMoradaTexto.value.trim();
         const novaObs = editMoradaObs.value.trim();
@@ -469,7 +487,6 @@ function setupModaisEdicao() {
             return;
         }
 
-        // Procura se o item está na lista pré-otimização ou na otimizada
         let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
         let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
 
@@ -485,26 +502,31 @@ function setupModaisEdicao() {
 
         sincronizarPersistencia();
         
-        // Atualiza os ecrãs
         renderMoradasAdicionadas();
         if (window.rotaOtimizada.length > 0) {
             renderizarItinerarioOtimizado();
             desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
         }
 
-        modalEditarParagem.classList.add('hidden');
+        const modalEditarParagem = document.getElementById('modal-editar-paragem');
+        if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
         itemSendoEditado = null;
     });
 }
 
 function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
+    const modalEditarParagem = document.getElementById('modal-editar-paragem');
+    const editMoradaTexto = document.getElementById('edit-morada-texto');
+    const editMoradaObs = document.getElementById('edit-morada-obs');
+
+    if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
+
     itemSendoEditado = paragem;
     editMoradaTexto.value = paragem.address;
     editMoradaObs.value = paragem.observation || "";
     modalEditarParagem.classList.remove('hidden');
 }
 
-// Grava todos os estados do turno em tempo real no localStorage
 function sincronizarPersistencia() {
     saveData(
         window.drivers, 
@@ -513,7 +535,8 @@ function sincronizarPersistencia() {
         window.partidaLocalizacao,
         window.moradasEntregas,
         window.rotaOtimizada,
-        window.definindoPartidaPorMorada
+        window.dataRotaSelecionada,
+        window.rotaIniciada
     );
 }
 
@@ -527,23 +550,38 @@ function setupKeypad() {
             const maxDigits = window.isPrefixLocked ? 3 : 7;
             if (window.currentInput.length < maxDigits) {
                 window.currentInput += val;
-                updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                const visorCodigo = document.getElementById('visor-codigo');
+                if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
             }
         });
     });
 
-    document.getElementById('btn-key-clear').addEventListener('click', () => {
-        window.currentInput = "";
-        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-    });
+    const btnClear = document.getElementById('btn-key-clear');
+    if (btnClear) {
+        btnClear.addEventListener('click', () => {
+            window.currentInput = "";
+            const visorCodigo = document.getElementById('visor-codigo');
+            if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+        });
+    }
 
-    document.getElementById('btn-key-backspace').addEventListener('click', () => {
-        window.currentInput = window.currentInput.slice(0, -1);
-        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-    });
+    const btnBackspace = document.getElementById('btn-key-backspace');
+    if (btnBackspace) {
+        btnBackspace.addEventListener('click', () => {
+            window.currentInput = window.currentInput.slice(0, -1);
+            const visorCodigo = document.getElementById('visor-codigo');
+            if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+        });
+    }
 }
 
 function setupPrefixLock() {
+    const chkFixarPrefixo = document.getElementById('chk-fixar-prefixo');
+    const inputPrefixo = document.getElementById('input-prefixo');
+    const visorCodigo = document.getElementById('visor-codigo');
+
+    if (!chkFixarPrefixo || !inputPrefixo || !visorCodigo) return;
+
     chkFixarPrefixo.addEventListener('change', (e) => {
         window.isPrefixLocked = e.target.checked;
         if (window.isPrefixLocked) {
@@ -578,39 +616,54 @@ function setupPrefixLock() {
 // GESTÃO DE FORMULÁRIOS E DADOS
 // ==========================================
 function setupForms() {
-    formMotorista.addEventListener('submit', (e) => {
-        handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
-            renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
-            renderSummary();
-            updateMotoristaSelect(window.drivers, selectMotorista);
+    const formMotorista = document.getElementById('form-motorista');
+    const formIntervalo = document.getElementById('form-intervalo');
+    const listaMotoristas = document.getElementById('lista-motoristas');
+    const selectMotorista = document.getElementById('select-motorista');
+    const intInicioInput = document.getElementById('int-inicio');
+    const intFimInput = document.getElementById('int-fim');
+    const listaIntervalos = document.getElementById('lista-intervalos');
+
+    if (formMotorista && listaMotoristas && selectMotorista) {
+        formMotorista.addEventListener('submit', (e) => {
+            handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
+                renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
+                renderSummary();
+                updateMotoristaSelect(window.drivers, selectMotorista);
+            });
         });
-    });
+    }
 
-    setupIntervalInputFormatting(intInicioInput);
-    setupIntervalInputFormatting(intFimInput);
+    if (intInicioInput) setupIntervalInputFormatting(intInicioInput);
+    if (intFimInput) setupIntervalInputFormatting(intFimInput);
 
-    formIntervalo.addEventListener('submit', (e) => {
-        e.preventDefault();
-        const driverId = selectMotorista.value;
-        const startRaw = intInicioInput.value;
-        const endRaw = intFimInput.value;
-        const startClean = sanitizeDigits(startRaw);
-        const endClean = sanitizeDigits(endRaw);
+    if (formIntervalo && selectMotorista && intInicioInput && intFimInput && listaIntervalos) {
+        formIntervalo.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const driverId = selectMotorista.value;
+            const startRaw = intInicioInput.value;
+            const endRaw = intFimInput.value;
+            const startClean = sanitizeDigits(startRaw);
+            const endClean = sanitizeDigits(endRaw);
 
-        if (startClean.length !== 7 || endClean.length !== 7) return alert('Insira códigos postais completos (ex: 2700-123).');
-        if (parseInt(startClean, 10) > parseInt(endClean, 10)) return alert('Código inicial não pode ser maior.');
+            if (startClean.length !== 7 || endClean.length !== 7) return alert('Insira códigos postais completos (ex: 2700-123).');
+            if (parseInt(startClean, 10) > parseInt(endClean, 10)) return alert('Código inicial não pode ser maior.');
 
-        const newInterval = { id: 'i_' + Date.now(), driverId, start: `${startClean.substring(0, 4)}-${startClean.substring(4, 7)}`, end: `${endClean.substring(0, 4)}-${endClean.substring(4, 7)}` };
-        window.intervals.push(newInterval);
-        sincronizarPersistencia();
+            const newInterval = { id: 'i_' + Date.now(), driverId, start: `${startClean.substring(0, 4)}-${startClean.substring(4, 7)}`, end: `${endClean.substring(0, 4)}-${endClean.substring(4, 7)}` };
+            window.intervals.push(newInterval);
+            sincronizarPersistencia();
 
-        intInicioInput.value = ""; intFimInput.value = "";
-        renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
-        alert('Intervalo criado!');
-    });
+            intInicioInput.value = ""; intFimInput.value = "";
+            renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
+            alert('Intervalo criado!');
+        });
+    }
 }
 
 function renderColorPicker() {
+    const colorPickerContainer = document.getElementById('color-picker-container');
+    if (!colorPickerContainer) return;
+
     colorPickerContainer.innerHTML = "";
     colorPalette.forEach((color, idx) => {
         const btn = document.createElement('button');
@@ -630,25 +683,109 @@ function renderColorPicker() {
 }
 
 function setupResetLeituras() {
-    btnLimparLeituras.addEventListener('click', () => {
-        if (confirm("Deseja realmente limpar todas as leituras?")) {
-            window.assignments = [];
-            sincronizarPersistencia();
-            renderSummary();
-        }
-    });
+    const btnLimparLeituras = document.getElementById('btn-limpar-leituras');
+    if (btnLimparLeituras) {
+        btnLimparLeituras.addEventListener('click', () => {
+            if (confirm("Deseja realmente limpar todas as leituras?")) {
+                window.assignments = [];
+                sincronizarPersistencia();
+                renderSummary();
+            }
+        });
+    }
 }
 
-// Métodos globais de exclusão
+// ==========================================
+// HISTÓRICO DE LEITURAS / RESUMO DE PRODUÇÃO
+// ==========================================
+// NOVO: RenderSummary declarada de forma segura e visível em qualquer nível
+function renderSummary() {
+    const painelResumo = document.getElementById('painel-resumo');
+    if (!painelResumo) return;
+
+    painelResumo.innerHTML = "";
+
+    const totalLeituras = window.assignments.length;
+    const totalPrioritarios = window.assignments.filter(a => a.priority === true).length; 
+
+    const headerDiv = document.createElement('div');
+    headerDiv.className = "flex justify-between items-center pb-2 border-b text-sm font-semibold text-gray-700";
+    headerDiv.innerHTML = `
+        <span>Total Processado:</span>
+        <div class="flex items-center space-x-1.5">
+            <span class="bg-blue-600 text-white px-2.5 py-0.5 rounded-full text-xs font-bold" title="Total de encomendas">${totalLeituras} un</span>
+            ${totalPrioritarios > 0 ? `<span class="bg-orange-500 text-white px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center space-x-1" title="Prioritárias"><i class="fa-solid fa-circle-exclamation"></i> <span>${totalPrioritarios}</span></span>` : ''}
+        </div>
+    `;
+    painelResumo.appendChild(headerDiv);
+
+    if (window.drivers.length === 0) {
+        painelResumo.innerHTML += `<p class="text-xs text-gray-400 italic text-center py-2">Registe motoristas para ver o resumo.</p>`;
+        return;
+    }
+
+    window.drivers.forEach(driver => {
+        const totalDriver = window.assignments.filter(a => a.driverId === driver.id).length;
+        const totalPrioritariosDriver = window.assignments.filter(a => a.driverId === driver.id && a.priority === true).length;
+        const percent = totalLeituras > 0 ? Math.round((totalDriver / totalLeituras) * 100) : 0;
+
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between text-xs py-1";
+        row.innerHTML = `
+            <div class="flex items-center space-x-2">
+                <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${driver.color}"></span>
+                <span class="font-medium text-gray-700">${driver.name}</span>
+            </div>
+            <div class="flex items-center space-x-2 font-bold text-gray-900">
+                <span>${totalDriver} un</span>
+                ${totalPrioritariosDriver > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5" title="Prioritários"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalPrioritariosDriver}</span></span>` : ''}
+                <span class="text-gray-400 text-[10px] font-normal">(${percent}%)</span>
+            </div>
+        `;
+        painelResumo.appendChild(row);
+    });
+
+    const totalSemMotorista = window.assignments.filter(a => a.driverId === null).length;
+    const totalSemMotoristaPrioridade = window.assignments.filter(a => a.driverId === null && a.priority === true).length;
+    
+    if (totalSemMotorista > 0) {
+        const percentSem = Math.round((totalSemMotorista / totalLeituras) * 100);
+        const rowSem = document.createElement('div');
+        rowSem.className = "flex items-center justify-between text-xs py-1 border-t border-dashed mt-1 pt-1";
+        rowSem.innerHTML = `
+            <div class="flex items-center space-x-2 text-gray-500">
+                <span class="w-3.5 h-3.5 rounded-full bg-gray-400"></span>
+                <span class="font-medium italic">Sem Motorista</span>
+            </div>
+            <div class="flex items-center space-x-2 font-bold text-red-600">
+                <span>${totalSemMotorista} un</span>
+                ${totalSemMotoristaPrioridade > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalSemMotoristaPrioridade}</span></span>` : ''}
+                <span class="text-gray-400 text-[10px] font-normal">(${percentSem}%)</span>
+            </div>
+        `;
+        painelResumo.appendChild(rowSem);
+    }
+}
+
+// Métodos Globais de Exclusão
 window.deleteDriver = (id) => {
     if (confirm("Ao apagar este motorista, os seus intervalos e contagens de pacotes também serão removidos. Confirmar?")) {
         window.drivers = window.drivers.filter(d => d.id !== id);
         window.intervals = window.intervals.filter(i => i.driverId !== id);
         window.assignments = window.assignments.filter(a => a.driverId !== id); 
         sincronizarPersistencia();
-        renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
+        
+        const listaMotoristas = document.getElementById('lista-motoristas');
+        if (listaMotoristas) {
+            renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
+        }
+        
         renderSummary();
-        updateMotoristaSelect(window.drivers, selectMotorista);
+        
+        const selectMotorista = document.getElementById('select-motorista');
+        if (selectMotorista) {
+            updateMotoristaSelect(window.drivers, selectMotorista);
+        }
     }
 };
 
@@ -656,7 +793,11 @@ window.deleteInterval = (id) => {
     if (confirm("Deseja apagar este intervalo?")) {
         window.intervals = window.intervals.filter(i => i.id !== id);
         sincronizarPersistencia();
-        renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
+        
+        const listaIntervalos = document.getElementById('lista-intervalos');
+        if (listaIntervalos) {
+            renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
+        }
     }
 };
 
