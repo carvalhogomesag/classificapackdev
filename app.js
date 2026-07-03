@@ -696,36 +696,51 @@ function usarFallbackGPS(lat, lng) {
     statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 }
 
-// NOVO: Conexão inteligente com o PHOTON (Komoot) - Suporta autocomplete difuso e priorização de zona
+// Conexão inteligente com o PHOTON (Komoot)
 async function procurarMoradaNoOSM(query) {
     containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic flex items-center"><i class="fa-solid fa-spinner animate-spin mr-2"></i>A pesquisar morada de forma inteligente...</div>`;
     containerSugestoes.classList.remove('hidden');
 
     try {
-        // Usamos o Photon para geolocalização tolerante a erros e autocomplete rápido
+        // Correção de Robustez para a API do Photon pública
         let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lang=pt&limit=6`;
         
-        // Se já tivermos definido o ponto de partida, o sistema foca a pesquisa em redor do motorista! (Location Bias)
-        if (partidaLocalizacao) {
-            url += `&lat=${partidaLocalizacao.lat}&lon=${partidaLocalizacao.lng}`;
+        // NOVO FALLBACK DE SEGURANÇA:
+        // Apenas adicionamos lat/lon se as coordenadas forem números válidos.
+        // Adicionalmente, limitamos a precisão para evitar estouros de processamento (overload) no ElasticSearch do Komoot
+        if (partidaLocalizacao && 
+            typeof partidaLocalizacao.lat === 'number' && !isNaN(partidaLocalizacao.lat) &&
+            typeof partidaLocalizacao.lng === 'number' && !isNaN(partidaLocalizacao.lng)) {
+            
+            const latVal = parseFloat(partidaLocalizacao.lat).toFixed(4);
+            const lonVal = parseFloat(partidaLocalizacao.lng).toFixed(4);
+            url += `&lat=${latVal}&lon=${lonVal}`;
         }
         
-        const response = await fetch(url);
+        let response = await fetch(url);
+        
+        // NOVO: Se o servidor der erro 400 (Bad Request) devido à busca em linha reta de termos amplos (ex: "rua da"),
+        // a aplicação recupera-se automaticamente removendo o filtro de proximidade e voltando a tentar a chamada!
+        if (response.status === 400 && partidaLocalizacao) {
+            console.warn("Classifica Pack: Servidor Photon devolveu 400. Tentando fallback seguro sem coordenadas...");
+            const urlFallback = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lang=pt&limit=6`;
+            response = await fetch(urlFallback);
+        }
+        
         if (!response.ok) throw new Error(`HTTP erro! Status: ${response.status}`);
         
         const data = await response.json();
-        // O Photon devolve os resultados no formato GeoJSON 'features'
         renderizarSugestoesProcura(data.features || []);
     } catch (error) {
         console.error("Erro detalhado na consulta ao Photon:", error);
         containerSugestoes.innerHTML = `
             <div class="p-3 text-xs text-red-500 font-semibold">
-                Erro ao procurar. Se estiver a testar localmente, publique no Netlify ou use o Live Server do VS Code para evitar bloqueios de segurança (CORS).
+                Erro ao procurar. Se persistir, simplifique a escrita da morada (ex: remova "rua" ou adicione a localidade).
             </div>`;
     }
 }
 
-// NOVO: Processa os resultados GeoJSON do Photon e monta moradas legíveis e bonitas
+// Processa os resultados GeoJSON do Photon e monta moradas legíveis e bonitas
 function renderizarSugestoesProcura(features) {
     containerSugestoes.innerHTML = "";
     
@@ -743,7 +758,6 @@ function renderizarSugestoesProcura(features) {
         const longitude = coordinates[0];
         const latitude = coordinates[1];
 
-        // Montamos um endereço legível juntando as informações disponíveis de forma inteligente
         const partesMorada = [];
         if (props.name) partesMorada.push(props.name);
         if (props.street && props.street !== props.name) partesMorada.push(props.street);
