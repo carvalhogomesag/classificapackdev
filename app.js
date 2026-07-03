@@ -4,7 +4,18 @@ import { saveData } from './storage.js';
 import { renderDrivers, handleDriverSubmit, updateMotoristaSelect, renderIntervals } from './gestao.js';
 import { inicializarGoogleAutocomplete, obterEnderecoPorGPSGoogle, calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './rotas.js';
 
-// Variáveis Globais de Estado
+// ==========================================
+// PALETE DE CORES GLOBAL (CORRIGIDA)
+// ==========================================
+const colorPalette = [
+    "#2563EB", "#DC2626", "#059669", "#EA580C", 
+    "#7C3AED", "#DB2777", "#0891B2", "#D97706", 
+    "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
+];
+
+// ==========================================
+// ESTADO GLOBAL DA APLICAÇÃO
+// ==========================================
 window.drivers = JSON.parse(localStorage.getItem('cp_drivers')) || [];
 window.intervals = JSON.parse(localStorage.getItem('cp_intervals')) || [];
 window.assignments = JSON.parse(localStorage.getItem('cp_assignments')) || [];
@@ -55,6 +66,9 @@ const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
 const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
 const listaRotaFinal = document.getElementById('lista-rota-final');
 
+// ==========================================
+// INICIALIZAÇÃO
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     carregarGoogleMapsScript();
     setupNavigation(showTab);
@@ -92,7 +106,9 @@ function carregarGoogleMapsScript() {
     document.head.appendChild(script);
 }
 
-// Lógica das Rotas
+// ==========================================
+// LOGICA DE ROTAS
+// ==========================================
 function setupRotasLogic() {
     btnGpsPartida.addEventListener('click', () => {
         statusPartida.textContent = "A obter localização do GPS...";
@@ -259,7 +275,9 @@ function usarFallbackGPS(lat, lng) {
     statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 }
 
-// Teclado Numérico
+// ==========================================
+// TECLADO NUMÉRICO E VISOR
+// ==========================================
 function setupKeypad() {
     document.querySelectorAll('.btn-key').forEach(button => {
         button.addEventListener('click', () => {
@@ -314,6 +332,9 @@ function setupPrefixLock() {
     });
 }
 
+// ==========================================
+// GESTÃO DE FORMULÁRIOS E DADOS
+// ==========================================
 function setupForms() {
     formMotorista.addEventListener('submit', (e) => {
         handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
@@ -393,7 +414,77 @@ function setupResetLeituras() {
     });
 }
 
-// Funções Auxiliares Internas do app.js
+// ==========================================
+// HISTÓRICO DE LEITURAS / RESUMO DE PRODUÇÃO
+// ==========================================
+function renderSummary() {
+    painelResumo.innerHTML = "";
+
+    const totalLeituras = window.assignments.length;
+    const totalPrioritarios = window.assignments.filter(a => a.priority === true).length; 
+
+    const headerDiv = document.createElement('div');
+    headerDiv.className = "flex justify-between items-center pb-2 border-b text-sm font-semibold text-gray-700";
+    headerDiv.innerHTML = `
+        <span>Total Processado:</span>
+        <div class="flex items-center space-x-1.5">
+            <span class="bg-blue-600 text-white px-2.5 py-0.5 rounded-full text-xs font-bold" title="Total de encomendas">${totalLeituras} un</span>
+            ${totalPrioritarios > 0 ? `<span class="bg-orange-500 text-white px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center space-x-1" title="Prioritárias"><i class="fa-solid fa-circle-exclamation"></i> <span>${totalPrioritarios}</span></span>` : ''}
+        </div>
+    `;
+    painelResumo.appendChild(headerDiv);
+
+    if (window.drivers.length === 0) {
+        painelResumo.innerHTML += `<p class="text-xs text-gray-400 italic text-center py-2">Registe motoristas para ver o resumo.</p>`;
+        return;
+    }
+
+    window.drivers.forEach(driver => {
+        const totalDriver = window.assignments.filter(a => a.driverId === driver.id).length;
+        const totalPrioritariosDriver = window.assignments.filter(a => a.driverId === driver.id && a.priority === true).length;
+        const percent = totalLeituras > 0 ? Math.round((totalDriver / totalLeituras) * 100) : 0;
+
+        const row = document.createElement('div');
+        row.className = "flex items-center justify-between text-xs py-1";
+        row.innerHTML = `
+            <div class="flex items-center space-x-2">
+                <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${driver.color}"></span>
+                <span class="font-medium text-gray-700">${driver.name}</span>
+            </div>
+            <div class="flex items-center space-x-2 font-bold text-gray-900">
+                <span>${totalDriver} un</span>
+                ${totalPrioritariosDriver > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5" title="Prioritários"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalPrioritariosDriver}</span></span>` : ''}
+                <span class="text-gray-400 text-[10px] font-normal">(${percent}%)</span>
+            </div>
+        `;
+        painelResumo.appendChild(row);
+    });
+
+    const totalSemMotorista = window.assignments.filter(a => a.driverId === null).length;
+    const totalSemMotoristaPrioridade = window.assignments.filter(a => a.driverId === null && a.priority === true).length;
+    
+    if (totalSemMotorista > 0) {
+        const percentSem = Math.round((totalSemMotorista / totalLeituras) * 100);
+        const rowSem = document.createElement('div');
+        rowSem.className = "flex items-center justify-between text-xs py-1 border-t border-dashed mt-1 pt-1";
+        rowSem.innerHTML = `
+            <div class="flex items-center space-x-2 text-gray-500">
+                <span class="w-3.5 h-3.5 rounded-full bg-gray-400"></span>
+                <span class="font-medium italic">Sem Motorista</span>
+            </div>
+            <div class="flex items-center space-x-2 font-bold text-red-600">
+                <span>${totalSemMotorista} un</span>
+                ${totalSemMotoristaPrioridade > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalSemMotoristaPrioridade}</span></span>` : ''}
+                <span class="text-gray-400 text-[10px] font-normal">(${percentSem}%)</span>
+            </div>
+        `;
+        painelResumo.appendChild(rowSem);
+    }
+}
+
+// ==========================================
+// FUNÇÕES AUXILIARES INTERNAS DO APP.JS
+// ==========================================
 function setupIntervalInputFormatting(inputElement) {
     inputElement.addEventListener('input', (e) => {
         let val = sanitizeDigits(e.target.value);
