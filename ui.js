@@ -7,18 +7,39 @@ export function setupNavigation(showTab) {
 }
 
 export function showTab(tabName) {
-    ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas'].forEach(id => {
-        document.getElementById(id).classList.add('hidden');
+    const views = ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas'];
+    views.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
     });
-    document.getElementById(`view-${tabName}`).classList.remove('hidden');
+
+    const activeView = document.getElementById(`view-${tabName}`);
+    if (activeView) activeView.classList.remove('hidden');
     
-    // Reset cores navegação
-    ['nav-triagem', 'nav-motoristas', 'nav-intervalos', 'nav-rotas'].forEach(id => {
-        document.getElementById(id).classList.remove('text-blue-600', 'font-bold');
-        document.getElementById(id).classList.add('text-gray-400', 'font-semibold');
+    // Reset estilos navegação
+    ['triagem', 'motoristas', 'intervalos', 'rotas'].forEach(id => {
+        const btn = document.getElementById(`nav-${id}`);
+        if (btn) {
+            btn.classList.remove('text-blue-600', 'font-bold');
+            btn.classList.add('text-gray-400', 'font-semibold');
+        }
     });
-    document.getElementById(`nav-${tabName}`).classList.add('text-blue-600', 'font-bold');
-    document.getElementById(`nav-${tabName}`).classList.remove('text-gray-400', 'font-semibold');
+
+    const activeNav = document.getElementById(`nav-${tabName}`);
+    if (activeNav) {
+        activeNav.classList.add('text-blue-600', 'font-bold');
+        activeNav.classList.remove('text-gray-400', 'font-semibold');
+    }
+
+    // Corrige renderização do mapa se entrar na aba Rotas
+    if (tabName === 'rotas' && window.googleMapInstance) {
+        setTimeout(() => {
+            google.maps.event.trigger(window.googleMapInstance, "resize");
+            if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+                window.ajustarLimitesMapaGoogle();
+            }
+        }, 200);
+    }
 }
 
 export function updateVisor(isPrefixLocked, lockedPrefixValue, currentInput, visorCodigo) {
