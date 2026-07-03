@@ -14,11 +14,29 @@ const colorPalette = [
 ];
 
 // ==========================================
-// ESTADO GLOBAL DA APLICAÇÃO
+// FUNÇÃO DE UTILIDADE: SAFE JSON PARSE (BLINDAGEM DE MEMÓRIA)
 // ==========================================
-window.drivers = JSON.parse(localStorage.getItem('cp_drivers')) || [];
-window.intervals = JSON.parse(localStorage.getItem('cp_intervals')) || [];
-window.assignments = JSON.parse(localStorage.getItem('cp_assignments')) || [];
+function safeJSONParse(key, fallback) {
+    try {
+        const item = localStorage.getItem(key);
+        // Filtra nulos, vazios ou o texto literal corrompido "undefined"
+        if (item === null || item === "undefined" || item === "") {
+            return fallback;
+        }
+        return JSON.parse(item);
+    } catch (error) {
+        console.warn(`Classifica Pack (LocalStorage): Chave corrompida '${key}'. Limpando registo.`, error);
+        localStorage.removeItem(key);
+        return fallback;
+    }
+}
+
+// ==========================================
+// ESTADO GLOBAL DA APLICAÇÃO (RECUPERAÇÃO SEGURA)
+// ==========================================
+window.drivers = safeJSONParse('cp_drivers', []);
+window.intervals = safeJSONParse('cp_intervals', []);
+window.assignments = safeJSONParse('cp_assignments', []);
 
 window.currentInput = "";
 window.isPrefixLocked = false;
@@ -26,12 +44,12 @@ window.lockedPrefixValue = "";
 window.selectedColor = "#2563EB";
 window.lastAnalysisResult = null;
 
-// Estados das Rotas com Recuperação de Memória Ativa (Persistência)
-window.partidaLocalizacao = JSON.parse(localStorage.getItem('cp_partida')) || null;
-window.moradasEntregas = JSON.parse(localStorage.getItem('cp_entregas')) || [];
-window.rotaOtimizada = JSON.parse(localStorage.getItem('cp_rota_otimizada')) || [];
-window.dataRotaSelecionada = JSON.parse(localStorage.getItem('cp_data_rota')) || "";
-window.rotaIniciada = JSON.parse(localStorage.getItem('cp_rota_iniciada')) || false;
+// Estados das Rotas com Recuperação de Memória Ativa e Segura contra erros de sintaxe
+window.partidaLocalizacao = safeJSONParse('cp_partida', null);
+window.moradasEntregas = safeJSONParse('cp_entregas', []);
+window.rotaOtimizada = safeJSONParse('cp_rota_otimizada', []);
+window.dataRotaSelecionada = safeJSONParse('cp_data_rota', "");
+window.rotaIniciada = safeJSONParse('cp_rota_iniciada', false);
 window.definindoPartidaPorMorada = false;
 
 // Estado para controle de edição
@@ -56,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
     }
     
-    // Renderizações Iniciais Seguras (Se os elementos existirem)
+    // Renderizações Iniciais Seguras
     const listaMotoristas = document.getElementById('lista-motoristas');
     if (listaMotoristas) {
         renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
@@ -358,17 +376,13 @@ function otimizarItinerarioComVizinhoMaisProximo() {
 }
 
 function renderizarItinerarioOtimizado() {
-    const listaRotaFinal = document.getElementById('lista-rota-final');
-    if (!listaRotaFinal) return;
-
     listaRotaFinal.innerHTML = "";
-    
     window.rotaOtimizada.forEach((paragem, index) => {
         const item = document.createElement('div');
         
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
-        if (paragem.status === "Failed" || paragem.status === "Falhou") statusColor = "bg-red-500";
+        if (paragem.status === "Falhou") statusColor = "bg-red-500";
 
         item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
@@ -441,7 +455,6 @@ function renderEstatisticasRota() {
     const statFalhadas = document.getElementById('stat-falhadas');
     const statPendentes = document.getElementById('stat-pendentes');
 
-    // Se os elementos não existirem no HTML, sai silenciosamente sem quebrar o código
     if (!estatisticasRota || !statTotal) return;
 
     estatisticasRota.classList.remove('hidden');
@@ -527,6 +540,7 @@ function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     modalEditarParagem.classList.remove('hidden');
 }
 
+// CORREÇÃO: Gravação correta de parâmetros para o storage.js
 function sincronizarPersistencia() {
     saveData(
         window.drivers, 
@@ -535,8 +549,8 @@ function sincronizarPersistencia() {
         window.partidaLocalizacao,
         window.moradasEntregas,
         window.rotaOtimizada,
-        window.dataRotaSelecionada,
-        window.rotaIniciada
+        window.dataRotaSelecionada, // Passagem correta do parâmetro de data
+        window.rotaIniciada // Passagem correta do parâmetro de status da rota
     );
 }
 
