@@ -1,4 +1,4 @@
-const CACHE_NAME = 'classifica-pack-v1';
+const CACHE_NAME = 'classifica-pack-v2'; // Alterado para v2
 const ASSETS = [
   '/',
   '/index.html',

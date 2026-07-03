@@ -37,6 +37,7 @@ const resultadoCorBg = document.getElementById('resultado-cor-bg');
 const resultadoCodigo = document.getElementById('resultado-codigo');
 const resultadoMotorista = document.getElementById('resultado-motorista');
 const btnConfirmarAtribuir = document.getElementById('btn-confirmar-atribuir');
+const chkPrioridade = document.getElementById('chk-prioridade'); // NOVO: Checkbox de prioridade
 
 // Formulários, Listas e Painel Estatístico
 const formMotorista = document.getElementById('form-motorista');
@@ -188,12 +189,17 @@ function renderSummary() {
     painelResumo.innerHTML = "";
 
     const totalLeituras = assignments.length;
+    // NOVO: Conta o total de prioritários de toda a ronda
+    const totalPrioritarios = assignments.filter(a => a.priority === true).length; 
 
     const headerDiv = document.createElement('div');
     headerDiv.className = "flex justify-between items-center pb-2 border-b text-sm font-semibold text-gray-700";
     headerDiv.innerHTML = `
         <span>Total Processado:</span>
-        <span class="bg-blue-600 text-white px-2 py-0.5 rounded-full text-xs font-bold">${totalLeituras} pacotes</span>
+        <div class="flex items-center space-x-1.5">
+            <span class="bg-blue-600 text-white px-2.5 py-0.5 rounded-full text-xs font-bold" title="Total de encomendas">${totalLeituras} un</span>
+            ${totalPrioritarios > 0 ? `<span class="bg-orange-500 text-white px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center space-x-1" title="Prioritárias"><i class="fa-solid fa-circle-exclamation"></i> <span>${totalPrioritarios}</span></span>` : ''}
+        </div>
     `;
     painelResumo.appendChild(headerDiv);
 
@@ -204,6 +210,8 @@ function renderSummary() {
 
     drivers.forEach(driver => {
         const totalDriver = assignments.filter(a => a.driverId === driver.id).length;
+        // NOVO: Conta quantos pacotes deste motorista específico são prioridade
+        const totalPrioritariosDriver = assignments.filter(a => a.driverId === driver.id && a.priority === true).length;
         const percent = totalLeituras > 0 ? Math.round((totalDriver / totalLeituras) * 100) : 0;
 
         const row = document.createElement('div');
@@ -215,6 +223,8 @@ function renderSummary() {
             </div>
             <div class="flex items-center space-x-2 font-bold text-gray-900">
                 <span>${totalDriver} un</span>
+                <!-- NOVO: Badge laranja se este motorista tiver pacotes prioritários -->
+                ${totalPrioritariosDriver > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5" title="Prioritários"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalPrioritariosDriver}</span></span>` : ''}
                 <span class="text-gray-400 text-[10px] font-normal">(${percent}%)</span>
             </div>
         `;
@@ -222,6 +232,8 @@ function renderSummary() {
     });
 
     const totalSemMotorista = assignments.filter(a => a.driverId === null).length;
+    const totalSemMotoristaPrioridade = assignments.filter(a => a.driverId === null && a.priority === true).length;
+    
     if (totalSemMotorista > 0) {
         const percentSem = Math.round((totalSemMotorista / totalLeituras) * 100);
         const rowSem = document.createElement('div');
@@ -233,6 +245,7 @@ function renderSummary() {
             </div>
             <div class="flex items-center space-x-2 font-bold text-red-600">
                 <span>${totalSemMotorista} un</span>
+                ${totalSemMotoristaPrioridade > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalSemMotoristaPrioridade}</span></span>` : ''}
                 <span class="text-gray-400 text-[10px] font-normal">(${percentSem}%)</span>
             </div>
         `;
@@ -321,7 +334,6 @@ function updateMotoristaSelect() {
     });
 }
 
-// Define the logic to render zones
 function renderIntervals() {
     listaIntervalos.innerHTML = "";
     if (intervals.length === 0) {
@@ -491,6 +503,8 @@ btnAnalisar.addEventListener('click', () => {
         };
     }
 
+    // NOVO: Reseta a caixa de seleção de prioridade para vazia sempre que analisar um novo pacote
+    chkPrioridade.checked = false; 
     modalResultado.classList.remove('hidden');
 });
 
@@ -501,7 +515,8 @@ btnConfirmarAtribuir.addEventListener('click', () => {
             zip: lastAnalysisResult.zip,
             driverId: lastAnalysisResult.driverId,
             driverName: lastAnalysisResult.driverName,
-            timestamp: new Date().toISOString()
+            timestamp: new Date().toISOString(),
+            priority: chkPrioridade.checked // NOVO: Salva se o utilizador marcou como prioridade
         };
         
         assignments.push(record);
