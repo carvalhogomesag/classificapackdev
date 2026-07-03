@@ -19,6 +19,8 @@ let leafletMap = null;
 let leafletMarkersGroup = null;
 let leafletRouteLine = null;
 
+let temporizadorDigitacao = null; // Controla o autocompletar automático
+
 const colorPalette = [
     "#2563EB", "#DC2626", "#059669", "#EA580C", 
     "#7C3AED", "#DB2777", "#0891B2", "#D97706", 
@@ -81,6 +83,11 @@ let definindoPartidaPorMorada = false;
 // EVENTOS DE INICIALIZAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
+    // Alerta de segurança sobre carregar ficheiros locais (file://)
+    if (window.location.protocol === 'file:') {
+        console.warn("Classifica Pack: Está a testar localmente como ficheiro (file://). Recursos de mapas e GPS podem ser bloqueados pelo navegador. Se a busca falhar, publique no Netlify ou use o Live Server no VS Code.");
+    }
+
     setupNavigation();
     setupKeypad();
     setupPrefixLock();
@@ -133,7 +140,6 @@ function showTab(tabName) {
         navRotas.classList.add('text-blue-600', 'font-bold');
         navRotas.classList.remove('text-gray-400', 'font-semibold');
         
-        // Recarrega o tamanho do mapa se ele já existir (corrige bugs visuais de renderização do Leaflet)
         setTimeout(() => {
             if (leafletMap) {
                 leafletMap.invalidateSize();
@@ -564,7 +570,7 @@ btnConfirmarAtribuir.addEventListener('click', () => {
 });
 
 // ==========================================
-// LOGICA DE ROTAS, MAPAS E OTIMIZAÇÃO (NOVO)
+// LOGICA DE ROTAS, MAPAS E OTIMIZAÇÃO
 // ==========================================
 function setupRotasLogic() {
     // Obter GPS do Telemóvel como Partida
@@ -581,14 +587,11 @@ function setupRotasLogic() {
             (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                partidaLocalizacao = {
-                    lat: lat,
-                    lng: lng,
-                    address: "Localização Atual (GPS)"
-                };
-                statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+                // NOVO: Faz o reverse geocoding para achar o nome da rua baseado no GPS
+                obterEnderecoPorGPS(lat, lng);
             },
             (error) => {
+                console.error("Erro no GPS:", error);
                 alert("Não foi possível aceder ao GPS. Verifique as permissões de localização do seu telemóvel.");
                 statusPartida.textContent = "Partida: Permissão de GPS negada";
             },
@@ -603,8 +606,24 @@ function setupRotasLogic() {
         buscaMoradaInput.focus();
     });
 
-    // Botão de Procurar Morada (Geral)
+    // NOVO: Autocompletar inteligente (pesquisa automaticamente após 500ms de paragem na digitação)
+    buscaMoradaInput.addEventListener('input', () => {
+        clearTimeout(temporizadorDigitacao);
+        const query = buscaMoradaInput.value.trim();
+
+        if (query.length < 3) {
+            containerSugestoes.classList.add('hidden');
+            return;
+        }
+
+        temporizadorDigitacao = setTimeout(() => {
+            procurarMoradaNoOSM(query);
+        }, 500); // 500ms de atraso (debounce)
+    });
+
+    // Botão de Procurar Morada (Manual)
     btnProcurarMorada.addEventListener('click', () => {
+        clearTimeout(temporizadorDigitacao);
         const query = buscaMoradaInput.value.trim();
         if (query.length < 3) {
             alert("Digite pelo menos 3 caracteres para procurar.");
@@ -644,20 +663,62 @@ function setupRotasLogic() {
     });
 }
 
+// NOVO: Traduz coordenadas de latitude/longitude obtidas do GPS num endereço de rua real (Reverse Geocoding)
+async function obterEnderecoPorGPS(lat, lng) {
+    try {
+        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+        const response = await fetch(url);
+        
+        if (!response.ok) throw new Error("Erro na rede ao tentar traduzir o GPS.");
+        
+        const data = await response.json();
+        
+        if (data && data.display_name) {
+            partidaLocalizacao = {
+                lat: lat,
+                lng: lng,
+                address: data.display_name
+            };
+            statusPartida.innerHTML = `<strong>Partida:</strong> ${data.display_name}`;
+        } else {
+            usarFallbackGPS(lat, lng);
+        }
+    } catch (error) {
+        console.error("Erro no Reverse Geocoding do GPS:", error);
+        usarFallbackGPS(lat, lng);
+    }
+}
+
+// Fallback caso o servidor não consiga traduzir as coordenadas em morada
+function usarFallbackGPS(lat, lng) {
+    partidaLocalizacao = {
+        lat: lat,
+        lng: lng,
+        address: `Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`
+    };
+    statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+}
+
 // Conexão gratuita com o OpenStreetMap (Nominatim)
 async function procurarMoradaNoOSM(query) {
-    containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic">A pesquisar morada no mapa...</div>`;
+    containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic flex items-center"><i class="fa-solid fa-spinner animate-spin mr-2"></i>A pesquisar morada no mapa...</div>`;
     containerSugestoes.classList.remove('hidden');
 
     try {
-        // Limitamos a pesquisa a Portugal (pt) e Espanha (es)
-        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=pt,es&limit=5`;
+        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&countrycodes=pt,es&limit=5`;
         const response = await fetch(url);
+        
+        if (!response.ok) throw new Error(`HTTP erro! Status: ${response.status}`);
+        
         const data = await response.json();
-
         renderizarSugestoesProcura(data);
     } catch (error) {
-        containerSugestoes.innerHTML = `<div class="p-3 text-xs text-red-500">Erro ao comunicar com o servidor de moradas.</div>`;
+        // Agora o erro é impresso detalhadamente no console F12 para ajudar no diagnóstico
+        console.error("Erro detalhado na consulta OSM Nominatim:", error);
+        containerSugestoes.innerHTML = `
+            <div class="p-3 text-xs text-red-500 font-semibold">
+                Erro ao procurar. Se estiver a testar localmente, publique no Netlify ou use o Live Server do VS Code para evitar bloqueios de CORS.
+            </div>`;
     }
 }
 
@@ -672,7 +733,7 @@ function renderizarSugestoesProcura(resultados) {
 
     resultados.forEach(item => {
         const option = document.createElement('div');
-        option.className = "p-3 hover:bg-blue-50 cursor-pointer transition-colors";
+        option.className = "p-3 hover:bg-blue-50 cursor-pointer transition-colors border-b last:border-0";
         option.textContent = item.display_name;
         
         option.addEventListener('click', () => {
@@ -680,7 +741,6 @@ function renderizarSugestoesProcura(resultados) {
             const longitude = parseFloat(item.lon);
 
             if (definindoPartidaPorMorada) {
-                // Define o endereço como Ponto de Partida
                 partidaLocalizacao = {
                     lat: latitude,
                     lng: longitude,
@@ -690,7 +750,6 @@ function renderizarSugestoesProcura(resultados) {
                 definindoPartidaPorMorada = false;
                 buscaMoradaInput.placeholder = "Rua, número, cidade...";
             } else {
-                // Adiciona o endereço na lista de Entregas
                 moradasEntregas.push({
                     id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
                     lat: latitude,
@@ -700,7 +759,6 @@ function renderizarSugestoesProcura(resultados) {
                 renderMoradasAdicionadas();
             }
 
-            // Limpa o ecrã de sugestões
             buscaMoradaInput.value = "";
             containerSugestoes.classList.add('hidden');
         });
@@ -723,7 +781,7 @@ function renderMoradasAdicionadas() {
         item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs";
         item.innerHTML = `
             <div class="flex-1 truncate pr-2">
-                <strong class="text-gray-500">#${index + 1}</strong> <span class="text-gray-700">${morada.address}</span>
+                <strong class="text-gray-500 flex-shrink-0">#${index + 1}</strong> <span class="text-gray-700">${morada.address}</span>
             </div>
             <button onclick="removerMoradaEntrega('${morada.id}')" class="text-red-500 font-bold px-1.5 py-0.5 hover:bg-red-50 rounded">
                 <i class="fa-solid fa-times"></i>
@@ -744,10 +802,8 @@ window.removerMoradaEntrega = function(id) {
 // ==========================================
 // CÁLCULO ALGORÍTMICO TSP HAVERSINE (OTIMIZADOR)
 // ==========================================
-
-// Calcula a distância real em Linha Reta entre dois pontos geográficos (Fórmula de Haversine)
 function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
-    const R = 6371; // Raio médio da Terra em km
+    const R = 6371; 
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = 
@@ -755,10 +811,9 @@ function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
         Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Retorna distância em km
+    return R * c; 
 }
 
-// Algoritmo de Vizinho Mais Próximo para ordenar a melhor sequência de entregas
 function otimizarItinerarioComVizinhoMaisProximo() {
     let atual = { lat: partidaLocalizacao.lat, lng: partidaLocalizacao.lng };
     let restantes = [...moradasEntregas];
@@ -768,7 +823,6 @@ function otimizarItinerarioComVizinhoMaisProximo() {
         let indiceMaisProximo = -1;
         let menorDistancia = Infinity;
 
-        // Procura entre as moradas restantes a que está mais perto da atual
         for (let i = 0; i < restantes.length; i++) {
             const dist = calcularDistanciaHaversine(atual.lat, atual.lng, restantes[i].lat, restantes[i].lng);
             if (dist < menorDistancia) {
@@ -778,20 +832,15 @@ function otimizarItinerarioComVizinhoMaisProximo() {
         }
 
         if (indiceMaisProximo !== -1) {
-            // Define o ponto mais próximo como a nova paragem
             const paragem = restantes[indiceMaisProximo];
-            paragem.distanciaDoAnterior = menorDistancia; // Guarda a distância para exibição
+            paragem.distanciaDoAnterior = menorDistancia; 
             rotaOtimizada.push(paragem);
             
-            // O ponto mais próximo passa a ser o ponto de partida para calcular a próxima distância
             atual = { lat: paragem.lat, lng: paragem.lng };
-            
-            // Remove da lista para não repetir a mesma morada
             restantes.splice(indiceMaisProximo, 1);
         }
     }
 
-    // Exibe os ecrãs de resultado
     containerMapa.classList.remove('hidden');
     containerRotaOrdenada.classList.remove('hidden');
 
@@ -799,21 +848,18 @@ function otimizarItinerarioComVizinhoMaisProximo() {
     desenharMapaComLeaflet();
 }
 
-// Desenha a lista final das entregas ordenadas para o motorista navegar
 function renderizarItinerarioOtimizado() {
     listaRotaFinal.innerHTML = "";
 
     rotaOtimizada.forEach((paragem, index) => {
         const item = document.createElement('div');
-        item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between space-x-3";
-        
-        // Link profundo para abrir o Google Maps no telemóvel configurado com rota real GPS
+        item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between space-x-3 animate-fade-in";
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
 
         item.innerHTML = `
             <div class="flex-1 truncate">
                 <div class="flex items-center space-x-2">
-                    <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center">
+                    <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center flex-shrink-0">
                         ${index + 1}
                     </span>
                     <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
@@ -832,21 +878,16 @@ function renderizarItinerarioOtimizado() {
     });
 }
 
-// Inicializa e desenha o mapa Leaflet gratuito de forma automática
 function desenharMapaComLeaflet() {
-    // Se o mapa ainda não foi criado na sessão do utilizador
     if (!leafletMap) {
         leafletMap = L.map('map', { zoomControl: false }).setView([partidaLocalizacao.lat, partidaLocalizacao.lng], 13);
         
-        // Camada visual do OpenStreetMap
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             attribution: '© OpenStreetMap contributors'
         }).addTo(leafletMap);
 
-        // Controladores de marcadores e polilinhas
         leafletMarkersGroup = L.layerGroup().addTo(leafletMap);
     } else {
-        // Se já existe, limpamos o mapa anterior para desenhar o novo
         leafletMarkersGroup.clearLayers();
         if (leafletRouteLine) {
             leafletMap.removeLayer(leafletRouteLine);
@@ -855,7 +896,6 @@ function desenharMapaComLeaflet() {
 
     const coordenadasPolilinha = [];
 
-    // 1. Desenhar marcador do Ponto de Partida (Vermelho/Símbolo S)
     const marcadorPartidaIcon = L.divIcon({
         className: 'bg-red-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-lg',
         html: 'P'
@@ -866,7 +906,6 @@ function desenharMapaComLeaflet() {
     
     coordenadasPolilinha.push([partidaLocalizacao.lat, partidaLocalizacao.lng]);
 
-    // 2. Desenhar marcadores das entregas ordenadas (Azul com número de ordem)
     rotaOtimizada.forEach((paragem, index) => {
         const marcadorIcon = L.divIcon({
             className: 'bg-blue-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-lg',
@@ -880,17 +919,14 @@ function desenharMapaComLeaflet() {
         coordenadasPolilinha.push([paragem.lat, paragem.lng]);
     });
 
-    // 3. Desenhar a linha que conecta os pontos sequencialmente no mapa
     leafletRouteLine = L.polyline(coordenadasPolilinha, {
-        color: '#2563EB', // Azul do Tailwind
+        color: '#2563EB', 
         weight: 4,
         opacity: 0.85
     }).addTo(leafletMap);
 
-    // 4. Enquadra o mapa automaticamente para exibir todo o caminho sem precisar de zoom manual
     leafletMap.fitBounds(leafletRouteLine.getBounds(), { padding: [30, 30] });
     
-    // Atualiza o tamanho interno do Leaflet
     setTimeout(() => {
         leafletMap.invalidateSize();
     }, 150);
