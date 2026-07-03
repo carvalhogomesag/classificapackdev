@@ -14,12 +14,11 @@ const colorPalette = [
 ];
 
 // ==========================================
-// FUNÇÃO DE UTILIDADE: SAFE JSON PARSE (BLINDAGEM DE MEMÓRIA)
+// FUNÇÃO DE UTILIDADE: SAFE JSON PARSE (BLINDAGEM)
 // ==========================================
 function safeJSONParse(key, fallback) {
     try {
         const item = localStorage.getItem(key);
-        // Filtra nulos, vazios ou o texto literal corrompido "undefined"
         if (item === null || item === "undefined" || item === "") {
             return fallback;
         }
@@ -44,7 +43,7 @@ window.lockedPrefixValue = "";
 window.selectedColor = "#2563EB";
 window.lastAnalysisResult = null;
 
-// Estados das Rotas com Recuperação de Memória Ativa e Segura contra erros de sintaxe
+// Estados das Rotas com Recuperação de Memória Ativa e Segura
 window.partidaLocalizacao = safeJSONParse('cp_partida', null);
 window.moradasEntregas = safeJSONParse('cp_entregas', []);
 window.rotaOtimizada = safeJSONParse('cp_rota_otimizada', []);
@@ -185,7 +184,7 @@ function setupRotasLogic() {
                     });
                 },
                 () => {
-                    alert("Não foi possível aceder ao GPS. Verifique as permissões.");
+                    alert("Não foi possível aceder au GPS. Verifique as permissões.");
                     statusPartida.textContent = "Partida: Permissão negada";
                 },
                 { enableHighAccuracy: true }
@@ -346,7 +345,7 @@ function otimizarItinerarioComVizinhoMaisProximo() {
         let menorDistancia = Infinity;
 
         for (let i = 0; i < restantes.length; i++) {
-            const dist = calcularDistanciaHaversine(atual.lat, atual.lng, restantes[i].lat, restantes[i].lng);
+            const dist = calcularDistanciaHaversine(atual.lat, atual.lng, parseInt(restantes[i].lat, 10) ? restantes[i].lat : parseFloat(restantes[i].lat), parseInt(restantes[i].lng, 10) ? restantes[i].lng : parseFloat(restantes[i].lng));
             if (dist < menorDistancia) {
                 menorDistancia = dist;
                 indiceMaisProximo = i;
@@ -362,20 +361,18 @@ function otimizarItinerarioComVizinhoMaisProximo() {
         }
     }
 
-    const containerMapa = document.getElementById('container-mapa');
-    const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-    if (containerMapa) containerMapa.classList.remove('hidden');
-    if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+    document.getElementById('container-mapa').classList.remove('hidden');
+    document.getElementById('container-rota-ordenada').classList.remove('hidden');
 
     renderizarItinerarioOtimizado();
-    sincronizarPersistencia();
-    
-    setTimeout(() => {
-        desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-    }, 300);
+    desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 }
 
 function renderizarItinerarioOtimizado() {
+    // CORREÇÃO: Busca do elemento dentro do escopo local
+    const listaRotaFinal = document.getElementById('lista-rota-final');
+    if (!listaRotaFinal) return;
+
     listaRotaFinal.innerHTML = "";
     window.rotaOtimizada.forEach((paragem, index) => {
         const item = document.createElement('div');
@@ -540,7 +537,6 @@ function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     modalEditarParagem.classList.remove('hidden');
 }
 
-// CORREÇÃO: Gravação correta de parâmetros para o storage.js
 function sincronizarPersistencia() {
     saveData(
         window.drivers, 
@@ -549,8 +545,8 @@ function sincronizarPersistencia() {
         window.partidaLocalizacao,
         window.moradasEntregas,
         window.rotaOtimizada,
-        window.dataRotaSelecionada, // Passagem correta do parâmetro de data
-        window.rotaIniciada // Passagem correta do parâmetro de status da rota
+        window.dataRotaSelecionada, 
+        window.rotaIniciada 
     );
 }
 
@@ -712,7 +708,6 @@ function setupResetLeituras() {
 // ==========================================
 // HISTÓRICO DE LEITURAS / RESUMO DE PRODUÇÃO
 // ==========================================
-// NOVO: RenderSummary declarada de forma segura e visível em qualquer nível
 function renderSummary() {
     const painelResumo = document.getElementById('painel-resumo');
     if (!painelResumo) return;
