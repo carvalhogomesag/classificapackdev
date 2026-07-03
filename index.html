@@ -10,10 +10,6 @@
     <meta name="theme-color" content="#2563EB">
     <link rel="apple-touch-icon" href="icon-192.png">
 
-    <!-- Leaflet.js (Mapas Gratuitos) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Ícones simples -->
@@ -21,7 +17,7 @@
 </head>
 <body class="bg-gray-100 font-sans text-gray-900 select-none">
 
-    <!-- Container Principal (Limitado para Mobile e centralizado em telas maiores) -->
+    <!-- Container Principal -->
     <div class="max-w-md mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
         <!-- Cabeçalho -->
@@ -51,7 +47,7 @@
                 </div>
             </div>
 
-            <!-- Teclado Numérico Gigante -->
+            <!-- Teclado Numérico -->
             <div class="grid grid-cols-3 gap-3 flex-1">
                 <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="1">1</button>
                 <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="2">2</button>
@@ -78,9 +74,8 @@
             </button>
         </main>
 
-        <!-- SEÇÃO 2: MOTORISTAS (COM RESUMO DE LEITURAS) -->
+        <!-- SEÇÃO 2: MOTORISTAS -->
         <main id="view-motoristas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
-            
             <!-- Painel de Estatística / Resumo das Leituras -->
             <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
                 <div class="flex justify-between items-center mb-3">
@@ -89,16 +84,10 @@
                         <i class="fa-solid fa-rotate-left"></i> <span>Reset Leituras</span>
                     </button>
                 </div>
-                
-                <!-- Lista de distribuição dos pacotes por motorista -->
-                <div id="painel-resumo" class="space-y-2">
-                    <!-- Gerado dinamicamente -->
-                </div>
+                <div id="painel-resumo" class="space-y-2"></div>
             </div>
 
             <h2 class="text-xl font-bold text-gray-800 mt-2">Registo de Motoristas</h2>
-            
-            <!-- Formulário de Registo -->
             <form id="form-motorista" class="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
                 <div>
                     <label class="block text-xs font-bold uppercase text-gray-600">Nome do Motorista</label>
@@ -107,20 +96,16 @@
                 </div>
                 <div>
                     <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
-                    <div class="grid grid-cols-6 gap-2" id="color-picker-container">
-                        <!-- Gerado por JS -->
-                    </div>
+                    <div class="grid grid-cols-6 gap-2" id="color-picker-container"></div>
                 </div>
                 <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded shadow">
                     Adicionar Motorista
                 </button>
             </form>
 
-            <!-- Lista de Motoristas Cadastrados -->
             <div>
                 <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Motoristas Ativos</h3>
                 <div id="lista-motoristas" class="space-y-2">
-                    <!-- Gerado dinamicamente -->
                     <p class="text-sm text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
                 </div>
             </div>
@@ -129,8 +114,6 @@
         <!-- SEÇÃO 3: INTERVALOS -->
         <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
             <h2 class="text-xl font-bold text-gray-800">Intervalos de Código Postal</h2>
-
-            <!-- Formulário de Intervalo -->
             <form id="form-intervalo" class="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
                 <div>
                     <label class="block text-xs font-bold uppercase text-gray-600">Atribuir ao Motorista</label>
@@ -155,21 +138,19 @@
                 </button>
             </form>
 
-            <!-- Lista de Intervalos -->
             <div>
                 <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Intervalos Atribuídos</h3>
                 <div id="lista-intervalos" class="space-y-2">
-                    <!-- Gerado dinamicamente -->
                     <p class="text-sm text-gray-400 italic text-center py-4">Nenhum intervalo registado.</p>
                 </div>
             </div>
         </main>
 
-        <!-- SEÇÃO 4: ROTAS (NOVO - MAPAS E OTIMIZAÇÃO GRATUITA) -->
+        <!-- SEÇÃO 4: ROTAS -->
         <main id="view-rotas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
             <h2 class="text-xl font-bold text-gray-800">Otimizador de Rota</h2>
 
-            <!-- 1. Ponto de Partida -->
+            <!-- Ponto de Partida -->
             <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-2">
                 <span class="block text-xs font-bold uppercase text-gray-500">1. Ponto de Partida</span>
                 <div class="flex space-x-2">
@@ -185,23 +166,14 @@
                 </div>
             </div>
 
-            <!-- 2. Adicionar Entregas -->
+            <!-- Adicionar Entregas -->
             <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-3 relative">
                 <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
                 <div class="flex space-x-2">
-                    <input type="text" id="busca-morada" placeholder="Rua, número, cidade..." 
-                           class="flex-1 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                    <button id="btn-procurar-morada" class="bg-blue-600 text-white font-bold px-3 py-2 rounded-lg text-sm">
-                        Procurar
-                    </button>
-                </div>
-                
-                <!-- Caixa de sugestões de endereços Nominatim -->
-                <div id="container-sugestoes" class="hidden absolute left-3 right-3 bg-white border shadow-lg rounded-lg max-h-48 overflow-y-auto z-30 divide-y divide-gray-100 text-sm">
-                    <!-- Sugestões via JS -->
+                    <input type="text" id="busca-morada" placeholder="Comece a digitar a morada aqui..." 
+                           class="w-full p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
 
-                <!-- Lista de paragens temporárias -->
                 <div class="border-t pt-2">
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-xs font-bold text-gray-600">Pacotes Adicionados:</span>
@@ -213,43 +185,34 @@
                 </div>
             </div>
 
-            <!-- Botão de Ação para Otimizar -->
+            <!-- Botão de Otimizar -->
             <button id="btn-otimizar-rota" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md text-base flex items-center justify-center space-x-2">
                 <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>
             </button>
 
-            <!-- 3. Mapa de Visualização -->
+            <!-- Mapa do Google Maps -->
             <div id="container-mapa" class="hidden space-y-2">
                 <span class="block text-xs font-bold uppercase text-gray-500">Mapa do Itinerário</span>
-                <!-- Contentor para o Mapa Leaflet -->
                 <div id="map" class="h-60 w-full rounded-xl border mt-1 shadow-inner z-10"></div>
             </div>
 
-            <!-- 4. Rota Ordenada de Entregas -->
+            <!-- Rota Ordenada de Entregas -->
             <div id="container-rota-ordenada" class="hidden space-y-2 pb-6">
                 <span class="block text-xs font-bold uppercase text-gray-500">Itinerário Otimizado de Entregas</span>
-                <div id="lista-rota-final" class="space-y-2">
-                    <!-- Gerado dinamicamente -->
-                </div>
+                <div id="lista-rota-final" class="space-y-2"></div>
             </div>
         </main>
 
-        <!-- OVERLAY DO RESULTADO DA ANÁLISE -->
+        <!-- OVERLAY DO RESULTADO -->
         <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-6 z-50">
             <div class="bg-white w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
-                <div class="bg-gray-100 p-4 border-b text-center font-bold text-gray-700">
-                    Resultado da Triagem
-                </div>
-                
+                <div class="bg-gray-100 p-4 border-b text-center font-bold text-gray-700">Resultado da Triagem</div>
                 <div id="resultado-cor-bg" class="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4 min-h-[250px] transition-colors duration-300">
                     <p class="text-white text-lg font-semibold tracking-wider uppercase opacity-85">Código Postal</p>
                     <h3 id="resultado-codigo" class="text-white text-4xl font-mono font-black tracking-widest bg-black/25 px-4 py-2 rounded-lg">---</h3>
-                    
                     <p class="text-white text-lg font-semibold tracking-wider uppercase opacity-85 mt-4">Motorista Designado</p>
                     <h2 id="resultado-motorista" class="text-white text-3xl font-bold tracking-wide drop-shadow-md">---</h2>
                 </div>
-
-                <!-- Caixa de Seleção para prioridade no modal -->
                 <div class="p-4 bg-gray-50 border-t border-b flex items-center justify-center">
                     <label class="flex items-center space-x-3 text-base font-bold text-gray-700 cursor-pointer">
                         <input type="checkbox" id="chk-prioridade" class="w-6 h-6 text-orange-600 rounded focus:ring-orange-500 border-gray-300">
@@ -259,16 +222,13 @@
                         </span>
                     </label>
                 </div>
-                
                 <div class="p-4 bg-gray-50">
-                    <button id="btn-confirmar-atribuir" class="w-full bg-blue-600 active:bg-blue-700 text-white font-bold text-lg py-4 rounded-xl shadow-md">
-                        Confirmar e Atribuir
-                    </button>
+                    <button id="btn-confirmar-atribuir" class="w-full bg-blue-600 active:bg-blue-700 text-white font-bold text-lg py-4 rounded-xl shadow-md">Confirmar e Atribuir</button>
                 </div>
             </div>
         </div>
 
-        <!-- Barra de Navegação Inferior (Agora com 4 opções) -->
+        <!-- Barra de Navegação Inferior -->
         <nav class="absolute bottom-0 inset-x-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20">
             <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-lg"></i>
@@ -290,7 +250,8 @@
 
     </div>
 
-    <!-- Script de Aplicação -->
+    <!-- Scripts da Aplicação -->
+    <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

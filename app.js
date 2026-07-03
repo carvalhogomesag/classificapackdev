@@ -11,15 +11,16 @@ let lockedPrefixValue = "";
 let selectedColor = "#2563EB"; 
 let lastAnalysisResult = null;
 
-// Estados das Rotas
+// Estados das Rotas (Google Maps)
 let partidaLocalizacao = null; // { lat, lng, address }
 let moradasEntregas = []; // Lista de { id, lat, lng, address }
 let rotaOtimizada = []; 
-let leafletMap = null;
-let leafletMarkersGroup = null;
-let leafletRouteLine = null;
 
-let temporizadorDigitacao = null; // Controla o autocompletar automático
+// Objetos do Google Maps
+let googleMap = null;
+let googleMarkers = [];
+let googleRoutePolyline = null;
+let autocompleteWidget = null;
 
 const colorPalette = [
     "#2563EB", "#DC2626", "#059669", "#EA580C", 
@@ -68,8 +69,6 @@ const btnGpsPartida = document.getElementById('btn-gps-partida');
 const btnBuscarPartida = document.getElementById('btn-buscar-partida');
 const statusPartida = document.getElementById('status-partida');
 const buscaMoradaInput = document.getElementById('busca-morada');
-const btnProcurarMorada = document.getElementById('btn-procurar-morada');
-const containerSugestoes = document.getElementById('container-sugestoes');
 const listaMoradasAdicionadas = document.getElementById('lista-moradas-adicionadas');
 const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
 const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
@@ -83,10 +82,7 @@ let definindoPartidaPorMorada = false;
 // EVENTOS DE INICIALIZAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.protocol === 'file:') {
-        console.warn("Classifica Pack: Está a testar localmente como ficheiro (file://). Recursos de mapas e GPS podem ser bloqueados pelo navegador. Se a busca falhar, publique no Netlify ou use o Live Server no VS Code.");
-    }
-
+    carregarGoogleMapsScript(); // Carrega o Google Maps de forma dinâmica
     setupNavigation();
     setupKeypad();
     setupPrefixLock();
@@ -96,6 +92,30 @@ document.addEventListener('DOMContentLoaded', () => {
     setupRotasLogic();
     updateVisor();
 });
+
+// NOVO: Função para carregar dinamicamente o SDK da Google usando a nossa chave segura
+function carregarGoogleMapsScript() {
+    if (typeof google !== 'undefined') return;
+
+    // Verifica se a variável do config.js existe
+    if (typeof GOOGLE_MAPS_API_KEY === 'undefined' || !GOOGLE_MAPS_API_KEY) {
+        console.error("Chave do Google Maps não foi definida no config.js");
+        return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+        console.log("Google Maps SDK carregado de forma dinâmica.");
+        inicializarGoogleAutocomplete(); // Ativa as moradas preditivas
+    };
+    script.onerror = () => {
+        console.error("Erro crítico ao tentar descarregar o Google Maps SDK.");
+    };
+    document.head.appendChild(script);
+}
 
 // ==========================================
 // LOGICA DE NAVEGAÇÃO ENTRE ABAS
@@ -140,8 +160,11 @@ function showTab(tabName) {
         navRotas.classList.remove('text-gray-400', 'font-semibold');
         
         setTimeout(() => {
-            if (leafletMap) {
-                leafletMap.invalidateSize();
+            if (googleMap) {
+                google.maps.event.trigger(googleMap, "resize");
+                if (rotaOtimizada.length > 0) {
+                    ajustarLimitesMapaGoogle();
+                }
             }
         }, 200);
     }
@@ -569,7 +592,7 @@ btnConfirmarAtribuir.addEventListener('click', () => {
 });
 
 // ==========================================
-// LOGICA DE ROTAS, MAPAS E OTIMIZAÇÃO
+// LOGICA DE ROTAS, MAPAS E OTIMIZAÇÃO (GOOGLE MAPS)
 // ==========================================
 function setupRotasLogic() {
     // Obter GPS do Telemóvel como Partida
@@ -586,7 +609,8 @@ function setupRotasLogic() {
             (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                obterEnderecoPorGPS(lat, lng);
+                // Executa georeferenciação inversa oficial da Google
+                obterEnderecoPorGPSGoogle(lat, lng);
             },
             (error) => {
                 console.error("Erro no GPS:", error);
@@ -602,39 +626,6 @@ function setupRotasLogic() {
         definindoPartidaPorMorada = true;
         buscaMoradaInput.placeholder = "Procure a morada de PARTIDA...";
         buscaMoradaInput.focus();
-    });
-
-    // Autocompletar inteligente (pesquisa automaticamente após 500ms de paragem na digitação)
-    buscaMoradaInput.addEventListener('input', () => {
-        clearTimeout(temporizadorDigitacao);
-        const query = buscaMoradaInput.value.trim();
-
-        if (query.length < 3) {
-            containerSugestoes.classList.add('hidden');
-            return;
-        }
-
-        temporizadorDigitacao = setTimeout(() => {
-            procurarMoradaNoOSM(query);
-        }, 500); 
-    });
-
-    // Botão de Procurar Morada (Manual)
-    btnProcurarMorada.addEventListener('click', () => {
-        clearTimeout(temporizadorDigitacao);
-        const query = buscaMoradaInput.value.trim();
-        if (query.length < 3) {
-            alert("Digite pelo menos 3 caracteres para procurar.");
-            return;
-        }
-        procurarMoradaNoOSM(query);
-    });
-
-    // Tecla Enter no campo de busca de morada
-    buscaMoradaInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            btnProcurarMorada.click();
-        }
     });
 
     // Limpar lista de moradas de entrega
@@ -661,30 +652,73 @@ function setupRotasLogic() {
     });
 }
 
-// Traduz coordenadas GPS em endereço real (Reverse Geocoding)
-async function obterEnderecoPorGPS(lat, lng) {
-    try {
-        const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
-        const response = await fetch(url);
+// Inicializa o autocomplete preditivo do Google Maps (PLACES)
+function inicializarGoogleAutocomplete() {
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places) return;
+
+    // Configura o preenchimento automático para o nosso input
+    autocompleteWidget = new google.maps.places.Autocomplete(buscaMoradaInput, {
+        componentRestrictions: { country: ['pt', 'es'] }, // Limita resultados a Portugal e Espanha
+        fields: ['address_components', 'geometry', 'formatted_address']
+    });
+
+    // Listener de seleção de morada nas sugestões
+    autocompleteWidget.addListener('place_changed', () => {
+        const place = autocompleteWidget.getPlace();
         
-        if (!response.ok) throw new Error("Erro na rede ao tentar traduzir o GPS.");
-        
-        const data = await response.json();
-        
-        if (data && data.display_name) {
+        if (!place.geometry || !place.geometry.location) {
+            alert("Localização não encontrada nas sugestões. Selecione uma morada da lista.");
+            return;
+        }
+
+        const latitude = place.geometry.location.lat();
+        const longitude = place.geometry.location.lng();
+        const moradaFormatada = place.formatted_address;
+
+        if (definindoPartidaPorMorada) {
+            partidaLocalizacao = {
+                lat: latitude,
+                lng: longitude,
+                address: moradaFormatada
+            };
+            statusPartida.innerHTML = `<strong>Partida:</strong> ${moradaFormatada}`;
+            definindoPartidaPorMorada = false;
+            buscaMoradaInput.placeholder = "Rua, número, cidade...";
+        } else {
+            moradasEntregas.push({
+                id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                lat: latitude,
+                lng: longitude,
+                address: moradaFormatada
+            });
+            renderMoradasAdicionadas();
+        }
+
+        // Limpa campo de entrada
+        buscaMoradaInput.value = "";
+    });
+}
+
+// Traduz coordenadas GPS em endereço real (Reverse Geocoding Google)
+function obterEnderecoPorGPSGoogle(lat, lng) {
+    if (typeof google === 'undefined' || !google.maps) {
+        usarFallbackGPS(lat, lng);
+        return;
+    }
+
+    const geocoder = new google.maps.Geocoder();
+    geocoder.geocode({ location: { lat: lat, lng: lng } }, (results, status) => {
+        if (status === "OK" && results[0]) {
             partidaLocalizacao = {
                 lat: lat,
                 lng: lng,
-                address: data.display_name
+                address: results[0].formatted_address
             };
-            statusPartida.innerHTML = `<strong>Partida:</strong> ${data.display_name}`;
+            statusPartida.innerHTML = `<strong>Partida:</strong> ${results[0].formatted_address}`;
         } else {
             usarFallbackGPS(lat, lng);
         }
-    } catch (error) {
-        console.error("Erro no Reverse Geocoding do GPS:", error);
-        usarFallbackGPS(lat, lng);
-    }
+    });
 }
 
 function usarFallbackGPS(lat, lng) {
@@ -696,111 +730,7 @@ function usarFallbackGPS(lat, lng) {
     statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 }
 
-// Conexão inteligente com o PHOTON (Komoot)
-async function procurarMoradaNoOSM(query) {
-    containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic flex items-center"><i class="fa-solid fa-spinner animate-spin mr-2"></i>A pesquisar morada de forma inteligente...</div>`;
-    containerSugestoes.classList.remove('hidden');
-
-    try {
-        // Correção de Robustez para a API do Photon pública
-        let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lang=pt&limit=6`;
-        
-        // NOVO FALLBACK DE SEGURANÇA:
-        // Apenas adicionamos lat/lon se as coordenadas forem números válidos.
-        // Adicionalmente, limitamos a precisão para evitar estouros de processamento (overload) no ElasticSearch do Komoot
-        if (partidaLocalizacao && 
-            typeof partidaLocalizacao.lat === 'number' && !isNaN(partidaLocalizacao.lat) &&
-            typeof partidaLocalizacao.lng === 'number' && !isNaN(partidaLocalizacao.lng)) {
-            
-            const latVal = parseFloat(partidaLocalizacao.lat).toFixed(4);
-            const lonVal = parseFloat(partidaLocalizacao.lng).toFixed(4);
-            url += `&lat=${latVal}&lon=${lonVal}`;
-        }
-        
-        let response = await fetch(url);
-        
-        // NOVO: Se o servidor der erro 400 (Bad Request) devido à busca em linha reta de termos amplos (ex: "rua da"),
-        // a aplicação recupera-se automaticamente removendo o filtro de proximidade e voltando a tentar a chamada!
-        if (response.status === 400 && partidaLocalizacao) {
-            console.warn("Classifica Pack: Servidor Photon devolveu 400. Tentando fallback seguro sem coordenadas...");
-            const urlFallback = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lang=pt&limit=6`;
-            response = await fetch(urlFallback);
-        }
-        
-        if (!response.ok) throw new Error(`HTTP erro! Status: ${response.status}`);
-        
-        const data = await response.json();
-        renderizarSugestoesProcura(data.features || []);
-    } catch (error) {
-        console.error("Erro detalhado na consulta ao Photon:", error);
-        containerSugestoes.innerHTML = `
-            <div class="p-3 text-xs text-red-500 font-semibold">
-                Erro ao procurar. Se persistir, simplifique a escrita da morada (ex: remova "rua" ou adicione a localidade).
-            </div>`;
-    }
-}
-
-// Processa os resultados GeoJSON do Photon e monta moradas legíveis e bonitas
-function renderizarSugestoesProcura(features) {
-    containerSugestoes.innerHTML = "";
-    
-    if (!features || features.length === 0) {
-        containerSugestoes.innerHTML = `
-            <div class="p-3 text-xs text-gray-500 italic">
-                Nenhum endereço encontrado. Tente escrever de forma diferente (ex: "Rua do Poço Novo, Negrais").
-            </div>`;
-        return;
-    }
-
-    features.forEach(feature => {
-        const props = feature.properties;
-        const coordinates = feature.geometry.coordinates; // GeoJSON armazena como [longitude, latitude]
-        const longitude = coordinates[0];
-        const latitude = coordinates[1];
-
-        const partesMorada = [];
-        if (props.name) partesMorada.push(props.name);
-        if (props.street && props.street !== props.name) partesMorada.push(props.street);
-        if (props.housenumber) partesMorada.push(props.housenumber);
-        if (props.city) partesMorada.push(props.city);
-        if (props.postcode) partesMorada.push(props.postcode);
-        if (props.country) partesMorada.push(props.country);
-        
-        const moradaFormatada = partesMorada.join(', ');
-
-        const option = document.createElement('div');
-        option.className = "p-3 hover:bg-blue-50 cursor-pointer transition-colors border-b last:border-0 text-xs text-gray-800";
-        option.textContent = moradaFormatada;
-        
-        option.addEventListener('click', () => {
-            if (definindoPartidaPorMorada) {
-                partidaLocalizacao = {
-                    lat: latitude,
-                    lng: longitude,
-                    address: moradaFormatada
-                };
-                statusPartida.innerHTML = `<strong>Partida:</strong> ${moradaFormatada}`;
-                definindoPartidaPorMorada = false;
-                buscaMoradaInput.placeholder = "Rua, número, cidade...";
-            } else {
-                moradasEntregas.push({
-                    id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
-                    lat: latitude,
-                    lng: longitude,
-                    address: moradaFormatada
-                });
-                renderMoradasAdicionadas();
-            }
-
-            buscaMoradaInput.value = "";
-            containerSugestoes.classList.add('hidden');
-        });
-
-        containerSugestoes.appendChild(option);
-    });
-}
-
-// Renderiza a lista de moradas que o motorista adicionou antes de otimizar
+// Renderiza a lista de moradas adicionadas no painel
 function renderMoradasAdicionadas() {
     listaMoradasAdicionadas.innerHTML = "";
     
@@ -811,7 +741,7 @@ function renderMoradasAdicionadas() {
 
     moradasEntregas.forEach((morada, index) => {
         const item = document.createElement('div');
-        item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs";
+        item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs animate-fade-in";
         item.innerHTML = `
             <div class="flex-1 truncate pr-2">
                 <strong class="text-gray-500 flex-shrink-0">#${index + 1}</strong> <span class="text-gray-700">${morada.address}</span>
@@ -829,6 +759,13 @@ window.removerMoradaEntrega = function(id) {
     rotaOtimizada = [];
     containerMapa.classList.add('hidden');
     containerRotaOrdenada.classList.add('hidden');
+    
+    if (googleRoutePolyline) {
+        googleRoutePolyline.setMap(null);
+        googleRoutePolyline = null;
+    }
+    limparMarcadoresGoogle();
+    
     renderMoradasAdicionadas();
 };
 
@@ -878,7 +815,7 @@ function otimizarItinerarioComVizinhoMaisProximo() {
     containerRotaOrdenada.classList.remove('hidden');
 
     renderizarItinerarioOtimizado();
-    desenharMapaComLeaflet();
+    desenharMapaGoogle();
 }
 
 function renderizarItinerarioOtimizado() {
@@ -903,7 +840,7 @@ function renderizarItinerarioOtimizado() {
                     ${paragem.address}
                 </p>
             </div>
-            <a href="${linkGoogleMaps}" target="_blank" class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center space-x-1 whitespace-nowrap shadow-sm">
+            <a href="${linkGoogleMaps}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center space-x-1 whitespace-nowrap shadow-sm">
                 <i class="fa-solid fa-location-arrow"></i> <span>Navegar</span>
             </a>
         `;
@@ -911,66 +848,107 @@ function renderizarItinerarioOtimizado() {
     });
 }
 
-function desenharMapaComLeaflet() {
-    if (!leafletMap) {
-        leafletMap = L.map('map', { zoomControl: false }).setView([partidaLocalizacao.lat, partidaLocalizacao.lng], 13);
-        
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(leafletMap);
-
-        leafletMarkersGroup = L.layerGroup().addTo(leafletMap);
-    } else {
-        leafletMarkersGroup.clearLayers();
-        if (leafletRouteLine) {
-            leafletMap.removeLayer(leafletRouteLine);
-        }
+// ==========================================
+// DESENHO NO MAPA DO GOOGLE MAPS SDK
+// ==========================================
+function desenharMapaGoogle() {
+    if (!googleMap) {
+        googleMap = new google.maps.Map(document.getElementById("map"), {
+            zoom: 13,
+            center: { lat: partidaLocalizacao.lat, lng: partidaLocalizacao.lng },
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false
+        });
     }
 
-    const coordenadasPolilinha = [];
+    // Limpar marcadores antigos
+    limparMarcadoresGoogle();
+    if (googleRoutePolyline) {
+        googleRoutePolyline.setMap(null);
+    }
 
-    const marcadorPartidaIcon = L.divIcon({
-        className: 'bg-red-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-lg',
-        html: 'P'
+    const coordenadasCaminho = [];
+    const limits = new google.maps.LatLngBounds();
+
+    // 1. Criar marcador de PONTO DE PARTIDA (Marcado como P)
+    const startLatLng = new google.maps.LatLng(partidaLocalizacao.lat, partidaLocalizacao.lng);
+    coordenadasCaminho.push(startLatLng);
+    limits.extend(startLatLng);
+
+    const partidaMarker = new google.maps.Marker({
+        position: startLatLng,
+        map: googleMap,
+        label: {
+            text: "P",
+            color: "#FFFFFF",
+            fontWeight: "bold"
+        },
+        title: "Ponto de Partida",
+        icon: {
+            path: google.maps.SymbolPath.CIRCLE,
+            scale: 14,
+            fillColor: "#DC2626", // Vermelho para a partida
+            fillOpacity: 1,
+            strokeWeight: 2,
+            strokeColor: "#FFFFFF"
+        }
     });
-    L.marker([partidaLocalizacao.lat, partidaLocalizacao.lng], { icon: marcadorPartidaIcon })
-        .addTo(leafletMarkersGroup)
-        .bindPopup(`<strong>Partida:</strong> ${partidaLocalizacao.address}`);
-    
-    coordenadasPolilinha.push([partidaLocalizacao.lat, partidaLocalizacao.lng]);
+    googleMarkers.push(partidaMarker);
 
-    rotaOtimizada.forEach((paragem, index) => {
-        const marcadorIcon = L.divIcon({
-            className: 'bg-blue-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-lg',
-            html: (index + 1).toString()
+    // 2. Criar marcadores ordenados (1, 2, 3...) de entrega
+    rotaOtimizada.forEach((ponto, idx) => {
+        const entregaLatLng = new google.maps.LatLng(ponto.lat, ponto.lng);
+        coordenadasCaminho.push(entregaLatLng);
+        limits.extend(entregaLatLng);
+
+        const entregaMarker = new google.maps.Marker({
+            position: entregaLatLng,
+            map: googleMap,
+            label: {
+                text: (idx + 1).toString(),
+                color: "#FFFFFF",
+                fontWeight: "bold"
+            },
+            title: ponto.address,
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 14,
+                fillColor: "#2563EB", // Azul para as entregas
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: "#FFFFFF"
+            }
         });
-        
-        L.marker([paragem.lat, paragem.lng], { icon: marcadorIcon })
-            .addTo(leafletMarkersGroup)
-            .bindPopup(`<strong>Paragem ${index + 1}:</strong> ${paragem.address}`);
-        
-        coordenadasPolilinha.push([paragem.lat, paragem.lng]);
+        googleMarkers.push(entregaMarker);
     });
 
-    leafletRouteLine = L.polyline(coordenadasPolilinha, {
-        color: '#2563EB', 
-        weight: 4,
-        opacity: 0.85
-    }).addTo(leafletMap);
+    // 3. Desenhar a linha sequencial que conecta a rota
+    googleRoutePolyline = new google.maps.Polyline({
+        path: coordenadasCaminho,
+        geodesic: true,
+        strokeColor: "#2563EB",
+        strokeOpacity: 0.8,
+        strokeWeight: 4
+    });
+    googleRoutePolyline.setMap(googleMap);
 
-    leafletMap.fitBounds(leafletRouteLine.getBounds(), { padding: [30, 30] });
-    
-    setTimeout(() => {
-        leafletMap.invalidateSize();
-    }, 150);
+    // Centrar o mapa de forma a enquadrar todos os pontos
+    googleMap.fitBounds(limits);
 }
 
-// Fechar sugestões ao clicar fora do ecrã de busca
-document.addEventListener('click', (e) => {
-    if (e.target !== buscaMoradaInput && e.target !== containerSugestoes) {
-        containerSugestoes.classList.add('hidden');
-    }
-});
+function ajustarLimitesMapaGoogle() {
+    if (!googleMap || !partidaLocalizacao) return;
+    const limits = new google.maps.LatLngBounds();
+    limits.extend(new google.maps.LatLng(partidaLocalizacao.lat, partidaLocalizacao.lng));
+    rotaOtimizada.forEach(p => limits.extend(new google.maps.LatLng(p.lat, p.lng)));
+    googleMap.fitBounds(limits);
+}
+
+function limparMarcadoresGoogle() {
+    googleMarkers.forEach(m => m.setMap(null));
+    googleMarkers = [];
+}
 
 // ==========================================
 // REGISTO DO SERVICE WORKER (PWA)
