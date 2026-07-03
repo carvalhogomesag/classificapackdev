@@ -9,8 +9,15 @@ let currentInput = "";
 let isPrefixLocked = false;
 let lockedPrefixValue = "";
 let selectedColor = "#2563EB"; 
-
 let lastAnalysisResult = null;
+
+// Estados das Rotas
+let partidaLocalizacao = null; // { lat, lng, address }
+let moradasEntregas = []; // Lista de { id, lat, lng, address }
+let rotaOtimizada = []; 
+let leafletMap = null;
+let leafletMarkersGroup = null;
+let leafletRouteLine = null;
 
 const colorPalette = [
     "#2563EB", "#DC2626", "#059669", "#EA580C", 
@@ -30,6 +37,7 @@ const btnAnalisar = document.getElementById('btn-analisar');
 const navTriagem = document.getElementById('nav-triagem');
 const navMotoristas = document.getElementById('nav-motoristas');
 const navIntervalos = document.getElementById('nav-intervalos');
+const navRotas = document.getElementById('nav-rotas');
 
 // Modais e Resultados
 const modalResultado = document.getElementById('modal-resultado');
@@ -37,7 +45,7 @@ const resultadoCorBg = document.getElementById('resultado-cor-bg');
 const resultadoCodigo = document.getElementById('resultado-codigo');
 const resultadoMotorista = document.getElementById('resultado-motorista');
 const btnConfirmarAtribuir = document.getElementById('btn-confirmar-atribuir');
-const chkPrioridade = document.getElementById('chk-prioridade'); // NOVO: Checkbox de prioridade
+const chkPrioridade = document.getElementById('chk-prioridade');
 
 // Formulários, Listas e Painel Estatístico
 const formMotorista = document.getElementById('form-motorista');
@@ -53,6 +61,22 @@ const intInicioInput = document.getElementById('int-inicio');
 const intFimInput = document.getElementById('int-fim');
 const listaIntervalos = document.getElementById('lista-intervalos');
 
+// Elementos Ecrã de Rotas (Moradas / Otimização)
+const btnGpsPartida = document.getElementById('btn-gps-partida');
+const btnBuscarPartida = document.getElementById('btn-buscar-partida');
+const statusPartida = document.getElementById('status-partida');
+const buscaMoradaInput = document.getElementById('busca-morada');
+const btnProcurarMorada = document.getElementById('btn-procurar-morada');
+const containerSugestoes = document.getElementById('container-sugestoes');
+const listaMoradasAdicionadas = document.getElementById('lista-moradas-adicionadas');
+const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
+const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
+const containerMapa = document.getElementById('container-mapa');
+const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+const listaRotaFinal = document.getElementById('lista-rota-final');
+
+let definindoPartidaPorMorada = false;
+
 // ==========================================
 // EVENTOS DE INICIALIZAÇÃO
 // ==========================================
@@ -63,6 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupForms();
     renderColorPicker();
     setupResetLeituras();
+    setupRotasLogic();
     updateVisor();
 });
 
@@ -73,14 +98,16 @@ function setupNavigation() {
     navTriagem.addEventListener('click', () => showTab('triagem'));
     navMotoristas.addEventListener('click', () => showTab('motoristas'));
     navIntervalos.addEventListener('click', () => showTab('intervalos'));
+    navRotas.addEventListener('click', () => showTab('rotas'));
 }
 
 function showTab(tabName) {
     document.getElementById('view-triagem').classList.add('hidden');
     document.getElementById('view-motoristas').classList.add('hidden');
     document.getElementById('view-intervalos').classList.add('hidden');
+    document.getElementById('view-rotas').classList.add('hidden');
 
-    [navTriagem, navMotoristas, navIntervalos].forEach(btn => {
+    [navTriagem, navMotoristas, navIntervalos, navRotas].forEach(btn => {
         btn.classList.remove('text-blue-600', 'font-bold');
         btn.classList.add('text-gray-400', 'font-semibold');
     });
@@ -101,6 +128,17 @@ function showTab(tabName) {
         navIntervalos.classList.remove('text-gray-400', 'font-semibold');
         renderIntervals();
         updateMotoristaSelect();
+    } else if (tabName === 'rotas') {
+        document.getElementById('view-rotas').classList.remove('hidden');
+        navRotas.classList.add('text-blue-600', 'font-bold');
+        navRotas.classList.remove('text-gray-400', 'font-semibold');
+        
+        // Recarrega o tamanho do mapa se ele já existir (corrige bugs visuais de renderização do Leaflet)
+        setTimeout(() => {
+            if (leafletMap) {
+                leafletMap.invalidateSize();
+            }
+        }, 200);
     }
 }
 
@@ -189,7 +227,6 @@ function renderSummary() {
     painelResumo.innerHTML = "";
 
     const totalLeituras = assignments.length;
-    // NOVO: Conta o total de prioritários de toda a ronda
     const totalPrioritarios = assignments.filter(a => a.priority === true).length; 
 
     const headerDiv = document.createElement('div');
@@ -210,7 +247,6 @@ function renderSummary() {
 
     drivers.forEach(driver => {
         const totalDriver = assignments.filter(a => a.driverId === driver.id).length;
-        // NOVO: Conta quantos pacotes deste motorista específico são prioridade
         const totalPrioritariosDriver = assignments.filter(a => a.driverId === driver.id && a.priority === true).length;
         const percent = totalLeituras > 0 ? Math.round((totalDriver / totalLeituras) * 100) : 0;
 
@@ -223,7 +259,6 @@ function renderSummary() {
             </div>
             <div class="flex items-center space-x-2 font-bold text-gray-900">
                 <span>${totalDriver} un</span>
-                <!-- NOVO: Badge laranja se este motorista tiver pacotes prioritários -->
                 ${totalPrioritariosDriver > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5" title="Prioritários"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalPrioritariosDriver}</span></span>` : ''}
                 <span class="text-gray-400 text-[10px] font-normal">(${percent}%)</span>
             </div>
@@ -503,7 +538,6 @@ btnAnalisar.addEventListener('click', () => {
         };
     }
 
-    // NOVO: Reseta a caixa de seleção de prioridade para vazia sempre que analisar um novo pacote
     chkPrioridade.checked = false; 
     modalResultado.classList.remove('hidden');
 });
@@ -516,7 +550,7 @@ btnConfirmarAtribuir.addEventListener('click', () => {
             driverId: lastAnalysisResult.driverId,
             driverName: lastAnalysisResult.driverName,
             timestamp: new Date().toISOString(),
-            priority: chkPrioridade.checked // NOVO: Salva se o utilizador marcou como prioridade
+            priority: chkPrioridade.checked 
         };
         
         assignments.push(record);
@@ -527,6 +561,346 @@ btnConfirmarAtribuir.addEventListener('click', () => {
     currentInput = ""; 
     lastAnalysisResult = null;
     updateVisor();     
+});
+
+// ==========================================
+// LOGICA DE ROTAS, MAPAS E OTIMIZAÇÃO (NOVO)
+// ==========================================
+function setupRotasLogic() {
+    // Obter GPS do Telemóvel como Partida
+    btnGpsPartida.addEventListener('click', () => {
+        statusPartida.textContent = "A obter geolocalização do GPS...";
+        
+        if (!navigator.geolocation) {
+            alert("O seu telemóvel não suporta Geolocalização.");
+            statusPartida.textContent = "Partida: Erro no GPS";
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                partidaLocalizacao = {
+                    lat: lat,
+                    lng: lng,
+                    address: "Localização Atual (GPS)"
+                };
+                statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+            },
+            (error) => {
+                alert("Não foi possível aceder ao GPS. Verifique as permissões de localização do seu telemóvel.");
+                statusPartida.textContent = "Partida: Permissão de GPS negada";
+            },
+            { enableHighAccuracy: true }
+        );
+    });
+
+    // Abrir procura de Morada para definir ponto de Partida
+    btnBuscarPartida.addEventListener('click', () => {
+        definindoPartidaPorMorada = true;
+        buscaMoradaInput.placeholder = "Procure a morada de PARTIDA...";
+        buscaMoradaInput.focus();
+    });
+
+    // Botão de Procurar Morada (Geral)
+    btnProcurarMorada.addEventListener('click', () => {
+        const query = buscaMoradaInput.value.trim();
+        if (query.length < 3) {
+            alert("Digite pelo menos 3 caracteres para procurar.");
+            return;
+        }
+        procurarMoradaNoOSM(query);
+    });
+
+    // Tecla Enter no campo de busca de morada
+    buscaMoradaInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            btnProcurarMorada.click();
+        }
+    });
+
+    // Limpar lista de moradas de entrega
+    btnLimparEnderecos.addEventListener('click', () => {
+        moradasEntregas = [];
+        rotaOtimizada = [];
+        containerMapa.classList.add('hidden');
+        containerRotaOrdenada.classList.add('hidden');
+        renderMoradasAdicionadas();
+    });
+
+    // Processar a Otimização da Rota (Vizinho Mais Próximo)
+    btnOtimizarRota.addEventListener('click', () => {
+        if (!partidaLocalizacao) {
+            alert("Por favor, defina um ponto de Partida (GPS ou Morada) primeiro.");
+            return;
+        }
+        if (moradasEntregas.length === 0) {
+            alert("Adicione pelo menos uma morada de entrega para otimizar.");
+            return;
+        }
+
+        otimizarItinerarioComVizinhoMaisProximo();
+    });
+}
+
+// Conexão gratuita com o OpenStreetMap (Nominatim)
+async function procurarMoradaNoOSM(query) {
+    containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic">A pesquisar morada no mapa...</div>`;
+    containerSugestoes.classList.remove('hidden');
+
+    try {
+        // Limitamos a pesquisa a Portugal (pt) e Espanha (es)
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=pt,es&limit=5`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        renderizarSugestoesProcura(data);
+    } catch (error) {
+        containerSugestoes.innerHTML = `<div class="p-3 text-xs text-red-500">Erro ao comunicar com o servidor de moradas.</div>`;
+    }
+}
+
+// Renderiza as sugestões encontradas pelo OpenStreetMap
+function renderizarSugestoesProcura(resultados) {
+    containerSugestoes.innerHTML = "";
+    
+    if (!resultados || resultados.length === 0) {
+        containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic">Nenhum endereço encontrado. Tente escrever de forma diferente.</div>`;
+        return;
+    }
+
+    resultados.forEach(item => {
+        const option = document.createElement('div');
+        option.className = "p-3 hover:bg-blue-50 cursor-pointer transition-colors";
+        option.textContent = item.display_name;
+        
+        option.addEventListener('click', () => {
+            const latitude = parseFloat(item.lat);
+            const longitude = parseFloat(item.lon);
+
+            if (definindoPartidaPorMorada) {
+                // Define o endereço como Ponto de Partida
+                partidaLocalizacao = {
+                    lat: latitude,
+                    lng: longitude,
+                    address: item.display_name
+                };
+                statusPartida.innerHTML = `<strong>Partida:</strong> ${item.display_name}`;
+                definindoPartidaPorMorada = false;
+                buscaMoradaInput.placeholder = "Rua, número, cidade...";
+            } else {
+                // Adiciona o endereço na lista de Entregas
+                moradasEntregas.push({
+                    id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
+                    lat: latitude,
+                    lng: longitude,
+                    address: item.display_name
+                });
+                renderMoradasAdicionadas();
+            }
+
+            // Limpa o ecrã de sugestões
+            buscaMoradaInput.value = "";
+            containerSugestoes.classList.add('hidden');
+        });
+
+        containerSugestoes.appendChild(option);
+    });
+}
+
+// Renderiza a lista de moradas que o motorista adicionou antes de otimizar
+function renderMoradasAdicionadas() {
+    listaMoradasAdicionadas.innerHTML = "";
+    
+    if (moradasEntregas.length === 0) {
+        listaMoradasAdicionadas.innerHTML = `<p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>`;
+        return;
+    }
+
+    moradasEntregas.forEach((morada, index) => {
+        const item = document.createElement('div');
+        item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs";
+        item.innerHTML = `
+            <div class="flex-1 truncate pr-2">
+                <strong class="text-gray-500">#${index + 1}</strong> <span class="text-gray-700">${morada.address}</span>
+            </div>
+            <button onclick="removerMoradaEntrega('${morada.id}')" class="text-red-500 font-bold px-1.5 py-0.5 hover:bg-red-50 rounded">
+                <i class="fa-solid fa-times"></i>
+            </button>
+        `;
+        listaMoradasAdicionadas.appendChild(item);
+    });
+}
+
+window.removerMoradaEntrega = function(id) {
+    moradasEntregas = moradasEntregas.filter(m => m.id !== id);
+    rotaOtimizada = [];
+    containerMapa.classList.add('hidden');
+    containerRotaOrdenada.classList.add('hidden');
+    renderMoradasAdicionadas();
+};
+
+// ==========================================
+// CÁLCULO ALGORÍTMICO TSP HAVERSINE (OTIMIZADOR)
+// ==========================================
+
+// Calcula a distância real em Linha Reta entre dois pontos geográficos (Fórmula de Haversine)
+function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Raio médio da Terra em km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; // Retorna distância em km
+}
+
+// Algoritmo de Vizinho Mais Próximo para ordenar a melhor sequência de entregas
+function otimizarItinerarioComVizinhoMaisProximo() {
+    let atual = { lat: partidaLocalizacao.lat, lng: partidaLocalizacao.lng };
+    let restantes = [...moradasEntregas];
+    rotaOtimizada = [];
+
+    while (restantes.length > 0) {
+        let indiceMaisProximo = -1;
+        let menorDistancia = Infinity;
+
+        // Procura entre as moradas restantes a que está mais perto da atual
+        for (let i = 0; i < restantes.length; i++) {
+            const dist = calcularDistanciaHaversine(atual.lat, atual.lng, restantes[i].lat, restantes[i].lng);
+            if (dist < menorDistancia) {
+                menorDistancia = dist;
+                indiceMaisProximo = i;
+            }
+        }
+
+        if (indiceMaisProximo !== -1) {
+            // Define o ponto mais próximo como a nova paragem
+            const paragem = restantes[indiceMaisProximo];
+            paragem.distanciaDoAnterior = menorDistancia; // Guarda a distância para exibição
+            rotaOtimizada.push(paragem);
+            
+            // O ponto mais próximo passa a ser o ponto de partida para calcular a próxima distância
+            atual = { lat: paragem.lat, lng: paragem.lng };
+            
+            // Remove da lista para não repetir a mesma morada
+            restantes.splice(indiceMaisProximo, 1);
+        }
+    }
+
+    // Exibe os ecrãs de resultado
+    containerMapa.classList.remove('hidden');
+    containerRotaOrdenada.classList.remove('hidden');
+
+    renderizarItinerarioOtimizado();
+    desenharMapaComLeaflet();
+}
+
+// Desenha a lista final das entregas ordenadas para o motorista navegar
+function renderizarItinerarioOtimizado() {
+    listaRotaFinal.innerHTML = "";
+
+    rotaOtimizada.forEach((paragem, index) => {
+        const item = document.createElement('div');
+        item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex items-center justify-between space-x-3";
+        
+        // Link profundo para abrir o Google Maps no telemóvel configurado com rota real GPS
+        const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
+
+        item.innerHTML = `
+            <div class="flex-1 truncate">
+                <div class="flex items-center space-x-2">
+                    <span class="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center">
+                        ${index + 1}
+                    </span>
+                    <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
+                        A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
+                    </span>
+                </div>
+                <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
+                    ${paragem.address}
+                </p>
+            </div>
+            <a href="${linkGoogleMaps}" target="_blank" class="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center space-x-1 whitespace-nowrap shadow-sm">
+                <i class="fa-solid fa-location-arrow"></i> <span>Navegar</span>
+            </a>
+        `;
+        listaRotaFinal.appendChild(item);
+    });
+}
+
+// Inicializa e desenha o mapa Leaflet gratuito de forma automática
+function desenharMapaComLeaflet() {
+    // Se o mapa ainda não foi criado na sessão do utilizador
+    if (!leafletMap) {
+        leafletMap = L.map('map', { zoomControl: false }).setView([partidaLocalizacao.lat, partidaLocalizacao.lng], 13);
+        
+        // Camada visual do OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(leafletMap);
+
+        // Controladores de marcadores e polilinhas
+        leafletMarkersGroup = L.layerGroup().addTo(leafletMap);
+    } else {
+        // Se já existe, limpamos o mapa anterior para desenhar o novo
+        leafletMarkersGroup.clearLayers();
+        if (leafletRouteLine) {
+            leafletMap.removeLayer(leafletRouteLine);
+        }
+    }
+
+    const coordenadasPolilinha = [];
+
+    // 1. Desenhar marcador do Ponto de Partida (Vermelho/Símbolo S)
+    const marcadorPartidaIcon = L.divIcon({
+        className: 'bg-red-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-lg',
+        html: 'P'
+    });
+    L.marker([partidaLocalizacao.lat, partidaLocalizacao.lng], { icon: marcadorPartidaIcon })
+        .addTo(leafletMarkersGroup)
+        .bindPopup(`<strong>Partida:</strong> ${partidaLocalizacao.address}`);
+    
+    coordenadasPolilinha.push([partidaLocalizacao.lat, partidaLocalizacao.lng]);
+
+    // 2. Desenhar marcadores das entregas ordenadas (Azul com número de ordem)
+    rotaOtimizada.forEach((paragem, index) => {
+        const marcadorIcon = L.divIcon({
+            className: 'bg-blue-600 text-white font-bold rounded-full w-6 h-6 flex items-center justify-center border-2 border-white shadow-lg',
+            html: (index + 1).toString()
+        });
+        
+        L.marker([paragem.lat, paragem.lng], { icon: marcadorIcon })
+            .addTo(leafletMarkersGroup)
+            .bindPopup(`<strong>Paragem ${index + 1}:</strong> ${paragem.address}`);
+        
+        coordenadasPolilinha.push([paragem.lat, paragem.lng]);
+    });
+
+    // 3. Desenhar a linha que conecta os pontos sequencialmente no mapa
+    leafletRouteLine = L.polyline(coordenadasPolilinha, {
+        color: '#2563EB', // Azul do Tailwind
+        weight: 4,
+        opacity: 0.85
+    }).addTo(leafletMap);
+
+    // 4. Enquadra o mapa automaticamente para exibir todo o caminho sem precisar de zoom manual
+    leafletMap.fitBounds(leafletRouteLine.getBounds(), { padding: [30, 30] });
+    
+    // Atualiza o tamanho interno do Leaflet
+    setTimeout(() => {
+        leafletMap.invalidateSize();
+    }, 150);
+}
+
+// Fechar sugestões ao clicar fora do ecrã de busca
+document.addEventListener('click', (e) => {
+    if (e.target !== buscaMoradaInput && e.target !== containerSugestoes) {
+        containerSugestoes.classList.add('hidden');
+    }
 });
 
 // ==========================================

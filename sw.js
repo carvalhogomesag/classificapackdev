@@ -1,11 +1,13 @@
-const CACHE_NAME = 'classifica-pack-v2'; // Alterado para v2
+const CACHE_NAME = 'classifica-pack-v3'; // Versão v3
 const ASSETS = [
   '/',
   '/index.html',
   '/app.js',
   '/manifest.json',
   'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
 self.addEventListener('install', (e) => {

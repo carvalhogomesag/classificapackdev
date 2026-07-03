@@ -10,6 +10,10 @@
     <meta name="theme-color" content="#2563EB">
     <link rel="apple-touch-icon" href="icon-192.png">
 
+    <!-- Leaflet.js (Mapas Gratuitos) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Ícones simples -->
@@ -17,17 +21,16 @@
 </head>
 <body class="bg-gray-100 font-sans text-gray-900 select-none">
 
-    <!-- Container Principal -->
+    <!-- Container Principal (Limitado para Mobile e centralizado em telas maiores) -->
     <div class="max-w-md mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
         <!-- Cabeçalho -->
-        <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md">
+        <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10">
             Classifica Pack
         </header>
 
         <!-- SEÇÃO 1: TRIAGEM -->
         <main id="view-triagem" class="flex-1 flex flex-col p-4 space-y-4">
-            
             <!-- Configuração de Prefixo Travado -->
             <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
                 <div class="flex items-center justify-between">
@@ -162,6 +165,75 @@
             </div>
         </main>
 
+        <!-- SEÇÃO 4: ROTAS (NOVO - MAPAS E OTIMIZAÇÃO GRATUITA) -->
+        <main id="view-rotas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
+            <h2 class="text-xl font-bold text-gray-800">Otimizador de Rota</h2>
+
+            <!-- 1. Ponto de Partida -->
+            <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-2">
+                <span class="block text-xs font-bold uppercase text-gray-500">1. Ponto de Partida</span>
+                <div class="flex space-x-2">
+                    <button id="btn-gps-partida" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-location-crosshairs"></i> <span>Usar Meu GPS</span>
+                    </button>
+                    <button id="btn-buscar-partida" class="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-magnifying-glass"></i> <span>Buscar Morada</span>
+                    </button>
+                </div>
+                <div id="status-partida" class="text-xs font-mono text-gray-500 italic bg-gray-50 p-2 rounded border">
+                    Partida: Localização não definida
+                </div>
+            </div>
+
+            <!-- 2. Adicionar Entregas -->
+            <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-3 relative">
+                <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
+                <div class="flex space-x-2">
+                    <input type="text" id="busca-morada" placeholder="Rua, número, cidade..." 
+                           class="flex-1 p-2 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    <button id="btn-procurar-morada" class="bg-blue-600 text-white font-bold px-3 py-2 rounded-lg text-sm">
+                        Procurar
+                    </button>
+                </div>
+                
+                <!-- Caixa de sugestões de endereços Nominatim -->
+                <div id="container-sugestoes" class="hidden absolute left-3 right-3 bg-white border shadow-lg rounded-lg max-h-48 overflow-y-auto z-30 divide-y divide-gray-100 text-sm">
+                    <!-- Sugestões via JS -->
+                </div>
+
+                <!-- Lista de paragens temporárias -->
+                <div class="border-t pt-2">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-gray-600">Pacotes Adicionados:</span>
+                        <button id="btn-limpar-enderecos" class="text-[10px] text-red-500 font-bold uppercase">Limpar Tudo</button>
+                    </div>
+                    <div id="lista-moradas-adicionadas" class="space-y-1.5 max-h-32 overflow-y-auto">
+                        <p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botão de Ação para Otimizar -->
+            <button id="btn-otimizar-rota" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md text-base flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>
+            </button>
+
+            <!-- 3. Mapa de Visualização -->
+            <div id="container-mapa" class="hidden space-y-2">
+                <span class="block text-xs font-bold uppercase text-gray-500">Mapa do Itinerário</span>
+                <!-- Contentor para o Mapa Leaflet -->
+                <div id="map" class="h-60 w-full rounded-xl border mt-1 shadow-inner z-10"></div>
+            </div>
+
+            <!-- 4. Rota Ordenada de Entregas -->
+            <div id="container-rota-ordenada" class="hidden space-y-2 pb-6">
+                <span class="block text-xs font-bold uppercase text-gray-500">Itinerário Otimizado de Entregas</span>
+                <div id="lista-rota-final" class="space-y-2">
+                    <!-- Gerado dinamicamente -->
+                </div>
+            </div>
+        </main>
+
         <!-- OVERLAY DO RESULTADO DA ANÁLISE -->
         <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-6 z-50">
             <div class="bg-white w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[80vh]">
@@ -177,7 +249,7 @@
                     <h2 id="resultado-motorista" class="text-white text-3xl font-bold tracking-wide drop-shadow-md">---</h2>
                 </div>
 
-                <!-- NOVO: Caixa de Seleção para prioridade no modal -->
+                <!-- Caixa de Seleção para prioridade no modal -->
                 <div class="p-4 bg-gray-50 border-t border-b flex items-center justify-center">
                     <label class="flex items-center space-x-3 text-base font-bold text-gray-700 cursor-pointer">
                         <input type="checkbox" id="chk-prioridade" class="w-6 h-6 text-orange-600 rounded focus:ring-orange-500 border-gray-300">
@@ -196,8 +268,8 @@
             </div>
         </div>
 
-        <!-- Barra de Navegação Inferior -->
-        <nav class="absolute bottom-0 inset-x-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around">
+        <!-- Barra de Navegação Inferior (Agora com 4 opções) -->
+        <nav class="absolute bottom-0 inset-x-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20">
             <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-lg"></i>
                 <span>Triagem</span>
@@ -209,6 +281,10 @@
             <button id="nav-intervalos" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
                 <i class="fa-solid fa-map-location-dot text-lg"></i>
                 <span>Zonas</span>
+            </button>
+            <button id="nav-rotas" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
+                <i class="fa-solid fa-route text-lg"></i>
+                <span>Rotas</span>
             </button>
         </nav>
 
