@@ -1,4 +1,4 @@
-const CACHE_NAME = 'classifica-pack-v3'; // Versão v3
+const CACHE_NAME = 'classifica-pack-v4'; // Versão v4
 const ASSETS = [
   '/',
   '/index.html',

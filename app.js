@@ -83,7 +83,6 @@ let definindoPartidaPorMorada = false;
 // EVENTOS DE INICIALIZAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // Alerta de segurança sobre carregar ficheiros locais (file://)
     if (window.location.protocol === 'file:') {
         console.warn("Classifica Pack: Está a testar localmente como ficheiro (file://). Recursos de mapas e GPS podem ser bloqueados pelo navegador. Se a busca falhar, publique no Netlify ou use o Live Server no VS Code.");
     }
@@ -587,7 +586,6 @@ function setupRotasLogic() {
             (position) => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
-                // NOVO: Faz o reverse geocoding para achar o nome da rua baseado no GPS
                 obterEnderecoPorGPS(lat, lng);
             },
             (error) => {
@@ -606,7 +604,7 @@ function setupRotasLogic() {
         buscaMoradaInput.focus();
     });
 
-    // NOVO: Autocompletar inteligente (pesquisa automaticamente após 500ms de paragem na digitação)
+    // Autocompletar inteligente (pesquisa automaticamente após 500ms de paragem na digitação)
     buscaMoradaInput.addEventListener('input', () => {
         clearTimeout(temporizadorDigitacao);
         const query = buscaMoradaInput.value.trim();
@@ -618,7 +616,7 @@ function setupRotasLogic() {
 
         temporizadorDigitacao = setTimeout(() => {
             procurarMoradaNoOSM(query);
-        }, 500); // 500ms de atraso (debounce)
+        }, 500); 
     });
 
     // Botão de Procurar Morada (Manual)
@@ -663,7 +661,7 @@ function setupRotasLogic() {
     });
 }
 
-// NOVO: Traduz coordenadas de latitude/longitude obtidas do GPS num endereço de rua real (Reverse Geocoding)
+// Traduz coordenadas GPS em endereço real (Reverse Geocoding)
 async function obterEnderecoPorGPS(lat, lng) {
     try {
         const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
@@ -689,7 +687,6 @@ async function obterEnderecoPorGPS(lat, lng) {
     }
 }
 
-// Fallback caso o servidor não consiga traduzir as coordenadas em morada
 function usarFallbackGPS(lat, lng) {
     partidaLocalizacao = {
         lat: lat,
@@ -699,54 +696,76 @@ function usarFallbackGPS(lat, lng) {
     statusPartida.innerHTML = `<strong>Partida:</strong> Localização GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 }
 
-// Conexão gratuita com o OpenStreetMap (Nominatim)
+// NOVO: Conexão inteligente com o PHOTON (Komoot) - Suporta autocomplete difuso e priorização de zona
 async function procurarMoradaNoOSM(query) {
-    containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic flex items-center"><i class="fa-solid fa-spinner animate-spin mr-2"></i>A pesquisar morada no mapa...</div>`;
+    containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic flex items-center"><i class="fa-solid fa-spinner animate-spin mr-2"></i>A pesquisar morada de forma inteligente...</div>`;
     containerSugestoes.classList.remove('hidden');
 
     try {
-        const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&countrycodes=pt,es&limit=5`;
-        const response = await fetch(url);
+        // Usamos o Photon para geolocalização tolerante a erros e autocomplete rápido
+        let url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lang=pt&limit=6`;
         
+        // Se já tivermos definido o ponto de partida, o sistema foca a pesquisa em redor do motorista! (Location Bias)
+        if (partidaLocalizacao) {
+            url += `&lat=${partidaLocalizacao.lat}&lon=${partidaLocalizacao.lng}`;
+        }
+        
+        const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP erro! Status: ${response.status}`);
         
         const data = await response.json();
-        renderizarSugestoesProcura(data);
+        // O Photon devolve os resultados no formato GeoJSON 'features'
+        renderizarSugestoesProcura(data.features || []);
     } catch (error) {
-        // Agora o erro é impresso detalhadamente no console F12 para ajudar no diagnóstico
-        console.error("Erro detalhado na consulta OSM Nominatim:", error);
+        console.error("Erro detalhado na consulta ao Photon:", error);
         containerSugestoes.innerHTML = `
             <div class="p-3 text-xs text-red-500 font-semibold">
-                Erro ao procurar. Se estiver a testar localmente, publique no Netlify ou use o Live Server do VS Code para evitar bloqueios de CORS.
+                Erro ao procurar. Se estiver a testar localmente, publique no Netlify ou use o Live Server do VS Code para evitar bloqueios de segurança (CORS).
             </div>`;
     }
 }
 
-// Renderiza as sugestões encontradas pelo OpenStreetMap
-function renderizarSugestoesProcura(resultados) {
+// NOVO: Processa os resultados GeoJSON do Photon e monta moradas legíveis e bonitas
+function renderizarSugestoesProcura(features) {
     containerSugestoes.innerHTML = "";
     
-    if (!resultados || resultados.length === 0) {
-        containerSugestoes.innerHTML = `<div class="p-3 text-xs text-gray-500 italic">Nenhum endereço encontrado. Tente escrever de forma diferente.</div>`;
+    if (!features || features.length === 0) {
+        containerSugestoes.innerHTML = `
+            <div class="p-3 text-xs text-gray-500 italic">
+                Nenhum endereço encontrado. Tente escrever de forma diferente (ex: "Rua do Poço Novo, Negrais").
+            </div>`;
         return;
     }
 
-    resultados.forEach(item => {
+    features.forEach(feature => {
+        const props = feature.properties;
+        const coordinates = feature.geometry.coordinates; // GeoJSON armazena como [longitude, latitude]
+        const longitude = coordinates[0];
+        const latitude = coordinates[1];
+
+        // Montamos um endereço legível juntando as informações disponíveis de forma inteligente
+        const partesMorada = [];
+        if (props.name) partesMorada.push(props.name);
+        if (props.street && props.street !== props.name) partesMorada.push(props.street);
+        if (props.housenumber) partesMorada.push(props.housenumber);
+        if (props.city) partesMorada.push(props.city);
+        if (props.postcode) partesMorada.push(props.postcode);
+        if (props.country) partesMorada.push(props.country);
+        
+        const moradaFormatada = partesMorada.join(', ');
+
         const option = document.createElement('div');
-        option.className = "p-3 hover:bg-blue-50 cursor-pointer transition-colors border-b last:border-0";
-        option.textContent = item.display_name;
+        option.className = "p-3 hover:bg-blue-50 cursor-pointer transition-colors border-b last:border-0 text-xs text-gray-800";
+        option.textContent = moradaFormatada;
         
         option.addEventListener('click', () => {
-            const latitude = parseFloat(item.lat);
-            const longitude = parseFloat(item.lon);
-
             if (definindoPartidaPorMorada) {
                 partidaLocalizacao = {
                     lat: latitude,
                     lng: longitude,
-                    address: item.display_name
+                    address: moradaFormatada
                 };
-                statusPartida.innerHTML = `<strong>Partida:</strong> ${item.display_name}`;
+                statusPartida.innerHTML = `<strong>Partida:</strong> ${moradaFormatada}`;
                 definindoPartidaPorMorada = false;
                 buscaMoradaInput.placeholder = "Rua, número, cidade...";
             } else {
@@ -754,7 +773,7 @@ function renderizarSugestoesProcura(resultados) {
                     id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
                     lat: latitude,
                     lng: longitude,
-                    address: item.display_name
+                    address: moradaFormatada
                 });
                 renderMoradasAdicionadas();
             }
