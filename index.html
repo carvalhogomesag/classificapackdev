@@ -6,7 +6,7 @@
     <title>Classifica Pack</title>
     
     <!-- Configurações PWA -->
-    <link rel="manifest" href="manifest.json">
+    <link class="manifest" rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563EB">
     <link rel="apple-touch-icon" href="icon-192.png">
 
@@ -90,6 +90,12 @@
                            class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div>
+                    <label class="block text-xs font-bold uppercase text-gray-600">Associar à Zona</label>
+                    <select id="select-zona-motorista" required class="w-full mt-1 p-2 border rounded bg-white outline-none">
+                        <option value="">Selecione uma zona...</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
                     <div class="grid grid-cols-6 gap-2" id="color-picker-container"></div>
                 </div>
@@ -106,39 +112,71 @@
             </div>
         </main>
 
-        <!-- SEÇÃO 3: INTERVALOS -->
+        <!-- SEÇÃO 3: INTERVALOS E ZONAS -->
         <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
-            <h2 class="text-xl font-bold text-gray-800">Intervalos de Código Postal</h2>
-            <form id="form-intervalo" class="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
-                <div>
-                    <label class="block text-xs font-bold uppercase text-gray-600">Atribuir ao Motorista</label>
-                    <select id="select-motorista" required class="w-full mt-1 p-2 border rounded bg-white outline-none">
-                        <option value="">Selecione um motorista...</option>
-                    </select>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
+            
+            <!-- PARTE 1: Criar Intervalo Nomeado -->
+            <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+                <h2 class="text-lg font-bold text-gray-800">1. Criar Intervalo de C.P.</h2>
+                <form id="form-intervalo" class="space-y-3">
                     <div>
-                        <label class="block text-xs font-bold uppercase text-gray-600">Código Inicial</label>
-                        <input type="text" id="int-inicio" required placeholder="Ex: 2700-000" maxlength="8"
-                               class="w-full mt-1 p-2 border rounded text-center font-mono outline-none">
+                        <label class="block text-xs font-bold uppercase text-gray-600">Nome do Intervalo</label>
+                        <input type="text" id="int-nome" required placeholder="Ex: Almargem do Bispo"
+                               class="w-full mt-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500">
                     </div>
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-gray-600">Código Final</label>
-                        <input type="text" id="int-fim" required placeholder="Ex: 2700-999" maxlength="8"
-                               class="w-full mt-1 p-2 border rounded text-center font-mono outline-none">
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-gray-600">Código Inicial</label>
+                            <input type="text" id="int-inicio" required placeholder="Ex: 2700-000" maxlength="8"
+                                   class="w-full mt-1 p-2 border rounded text-center font-mono outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold uppercase text-gray-600">Código Final</label>
+                            <input type="text" id="int-fim" required placeholder="Ex: 2700-999" maxlength="8"
+                                   class="w-full mt-1 p-2 border rounded text-center font-mono outline-none focus:ring-2 focus:ring-blue-500">
+                        </div>
                     </div>
-                </div>
-                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded shadow">
-                    Criar Intervalo
-                </button>
-            </form>
+                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded shadow">
+                        Criar Intervalo
+                    </button>
+                </form>
 
-            <div>
-                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Intervalos Atribuídos</h3>
-                <div id="lista-intervalos" class="space-y-2">
-                    <p class="text-sm text-gray-400 italic text-center py-4">Nenhum intervalo registado.</p>
+                <div class="pt-2">
+                    <h3 class="text-xs font-bold uppercase text-gray-400 mb-2">Intervalos Criados</h3>
+                    <div id="lista-intervalos" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        <p class="text-sm text-gray-400 italic text-center py-4">Nenhum intervalo registado.</p>
+                    </div>
                 </div>
             </div>
+
+            <!-- PARTE 2: Criar Zona (Agrupamento de Intervalos) -->
+            <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+                <h2 class="text-lg font-bold text-gray-800">2. Criar Zona (Grupo)</h2>
+                <form id="form-zona" class="space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-600">Nome da Zona</label>
+                        <input type="text" id="zona-nome" required placeholder="Ex: Sintra Norte"
+                               class="w-full mt-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Selecionar Intervalos</label>
+                        <div id="checkboxes-intervalos" class="border rounded p-2 max-h-32 overflow-y-auto space-y-2 bg-gray-50">
+                            <p class="text-xs text-gray-400 italic text-center py-2">Crie intervalos primeiro.</p>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-green-600 text-white font-bold py-2 rounded shadow">
+                        Criar Zona
+                    </button>
+                </form>
+
+                <div class="pt-2">
+                    <h3 class="text-xs font-bold uppercase text-gray-400 mb-2">Zonas Criadas</h3>
+                    <div id="lista-zonas" class="space-y-2 max-h-40 overflow-y-auto pr-1">
+                        <p class="text-sm text-gray-400 italic text-center py-4">Nenhuma zona registada.</p>
+                    </div>
+                </div>
+            </div>
+
         </main>
 
         <!-- SEÇÃO 4: ROTAS (ATUALIZADA) -->

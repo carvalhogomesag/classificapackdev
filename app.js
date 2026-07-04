@@ -1,7 +1,16 @@
 // app.js
 import { setupNavigation, showTab, updateVisor, setupKeypad, setupPrefixLock } from './ui.js';
 import { saveData, safeJSONParse } from './storage.js';
-import { renderDrivers, handleDriverSubmit, updateMotoristaSelect, renderIntervals, renderSummary } from './gestao.js';
+import { 
+    renderDrivers, 
+    handleDriverSubmit, 
+    updateZoneSelect, 
+    renderIntervals, 
+    renderSummary,
+    renderZones,
+    renderIntervalCheckboxes,
+    findDriverForZip
+} from './gestao.js';
 import { inicializarGoogleAutocomplete, obterEnderecoPorGPSGoogle, calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './rotas.js';
 
 // ==========================================
@@ -19,6 +28,7 @@ const colorPalette = [
 window.drivers = safeJSONParse('cp_drivers', []);
 window.intervals = safeJSONParse('cp_intervals', []);
 window.assignments = safeJSONParse('cp_assignments', []);
+window.zones = safeJSONParse('cp_zones', []); // Nova lista de agrupamentos
 
 window.currentInput = "";
 window.isPrefixLocked = false;
@@ -50,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupResetLeituras();
     setupRotasLogic();
     setupModaisEdicao();
+    setupTriagemLogic(); // Novo monitor de cliques da triagem
     
     const visorCodigo = document.getElementById('visor-codigo');
     if (visorCodigo) {
@@ -59,20 +70,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Renderizações Iniciais Seguras
     const listaMotoristas = document.getElementById('lista-motoristas');
     if (listaMotoristas) {
-        renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
+        renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
     }
     
-    const listaIntervalos = document.getElementById('lista-intervalos');
-    if (listaIntervalos) {
-        renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
-    }
-    
-    const selectMotorista = document.getElementById('select-motorista');
-    if (selectMotorista) {
-        updateMotoristaSelect(window.drivers, selectMotorista);
-    }
-    
-    renderSummary(window.assignments, window.drivers, document.getElementById('painel-resumo'));
+    renderizarZonasEIntervalosUI();
+    atualizarSummaryUI();
     sincronizarInterfaceRota();
 });
 
@@ -96,6 +98,120 @@ function carregarGoogleMapsScript() {
     };
     script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
     document.head.appendChild(script);
+}
+
+// ==========================================
+// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE DADOS
+// ==========================================
+function renderizarZonasEIntervalosUI() {
+    const listaIntervalos = document.getElementById('lista-intervalos');
+    if (listaIntervalos) {
+        renderIntervals(window.intervals, window.zones, listaIntervalos, window.deleteInterval);
+    }
+    
+    const listaZonas = document.getElementById('lista-zonas');
+    if (listaZonas) {
+        renderZones(window.zones, window.intervals, listaZonas, window.deleteZone);
+    }
+
+    const checkboxesIntervalos = document.getElementById('checkboxes-intervalos');
+    if (checkboxesIntervalos) {
+        renderIntervalCheckboxes(window.intervals, checkboxesIntervalos);
+    }
+
+    const selectZonaMotorista = document.getElementById('select-zona-motorista');
+    if (selectZonaMotorista) {
+        updateZoneSelect(window.zones, selectZonaMotorista);
+    }
+}
+
+function atualizarSummaryUI() {
+    renderSummary(window.assignments, window.drivers, document.getElementById('painel-resumo'));
+}
+
+// ==========================================
+// LÓGICA DE TRIAGEM (MÉTODO NOVO OPERACIONAL)
+// ==========================================
+function setupTriagemLogic() {
+    const btnAnalisar = document.getElementById('btn-analisar');
+    const btnConfirmarAtribuir = document.getElementById('btn-confirmar-atribuir');
+    const modalResultado = document.getElementById('modal-resultado');
+
+    if (btnAnalisar) {
+        btnAnalisar.addEventListener('click', () => {
+            let zipToAnalyze = "";
+            if (window.isPrefixLocked) {
+                zipToAnalyze = window.lockedPrefixValue + window.currentInput;
+            } else {
+                zipToAnalyze = window.currentInput;
+            }
+
+            const cleanDigits = sanitizeDigits(zipToAnalyze);
+            if (cleanDigits.length !== 7) {
+                alert("Por favor, introduza um Código Postal válido com 7 dígitos.");
+                return;
+            }
+
+            const formattedZip = `${cleanDigits.substring(0, 4)}-${cleanDigits.substring(4, 7)}`;
+            const driver = findDriverForZip(formattedZip, window.intervals, window.zones, window.drivers);
+            
+            const resultadoCodigo = document.getElementById('resultado-codigo');
+            const resultadoMotorista = document.getElementById('resultado-motorista');
+            const resultadoCorBg = document.getElementById('resultado-cor-bg');
+            const chkPrioridade = document.getElementById('chk-prioridade');
+
+            if (resultadoCodigo) resultadoCodigo.textContent = formattedZip;
+            
+            if (driver) {
+                if (resultadoMotorista) resultadoMotorista.textContent = driver.name;
+                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = driver.color;
+                window.lastAnalysisResult = { zip: formattedZip, driverId: driver.id };
+            } else {
+                if (resultadoMotorista) resultadoMotorista.textContent = "Sem Motorista";
+                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#9CA3AF"; 
+                window.lastAnalysisResult = { zip: formattedZip, driverId: null };
+            }
+
+            if (chkPrioridade) chkPrioridade.checked = false;
+            if (modalResultado) modalResultado.classList.remove('hidden');
+        });
+    }
+
+    if (btnConfirmarAtribuir && modalResultado) {
+        btnConfirmarAtribuir.addEventListener('click', () => {
+            if (!window.lastAnalysisResult) return;
+
+            const chkPrioridade = document.getElementById('chk-prioridade');
+            const isPriority = chkPrioridade ? chkPrioridade.checked : false;
+
+            window.assignments.push({
+                id: 'a_' + Date.now(),
+                zip: window.lastAnalysisResult.zip,
+                driverId: window.lastAnalysisResult.driverId,
+                priority: isPriority,
+                date: new Date().toISOString().split('T')[0]
+            });
+
+            sincronizarPersistencia();
+            atualizarSummaryUI();
+
+            modalResultado.classList.add('hidden');
+            window.currentInput = "";
+            const visorCodigo = document.getElementById('visor-codigo');
+            if (visorCodigo) {
+                updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+            }
+            window.lastAnalysisResult = null;
+        });
+    }
+
+    if (modalResultado) {
+        modalResultado.addEventListener('click', (e) => {
+            if (e.target === modalResultado) {
+                modalResultado.classList.add('hidden');
+            }
+        });
+    }
 }
 
 // ==========================================
@@ -538,7 +654,8 @@ function sincronizarPersistencia() {
         window.moradasEntregas,
         window.rotaOtimizada,
         window.dataRotaSelecionada, 
-        window.rotaIniciada 
+        window.rotaIniciada,
+        window.zones // Novo 9.º argumento persistido com sucesso
     );
 }
 
@@ -557,95 +674,25 @@ function ajustarLimitesMapaGoogleInterno() {
 }
 
 // ==========================================
-// TECLADO NUMÉRICO E VISOR
-// ==========================================
-function setupKeypad() {
-    document.querySelectorAll('.btn-key').forEach(button => {
-        button.addEventListener('click', () => {
-            const val = button.getAttribute('data-val');
-            const maxDigits = window.isPrefixLocked ? 3 : 7;
-            if (window.currentInput.length < maxDigits) {
-                window.currentInput += val;
-                const visorCodigo = document.getElementById('visor-codigo');
-                if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-            }
-        });
-    });
-
-    const btnClear = document.getElementById('btn-key-clear');
-    if (btnClear) {
-        btnClear.addEventListener('click', () => {
-            window.currentInput = "";
-            const visorCodigo = document.getElementById('visor-codigo');
-            if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-        });
-    }
-
-    const btnBackspace = document.getElementById('btn-key-backspace');
-    if (btnBackspace) {
-        btnBackspace.addEventListener('click', () => {
-            window.currentInput = window.currentInput.slice(0, -1);
-            const visorCodigo = document.getElementById('visor-codigo');
-            if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-        });
-    }
-}
-
-function setupPrefixLock() {
-    const chkFixarPrefixo = document.getElementById('chk-fixar-prefixo');
-    const inputPrefixo = document.getElementById('input-prefixo');
-    const visorCodigo = document.getElementById('visor-codigo');
-
-    if (!chkFixarPrefixo || !inputPrefixo || !visorCodigo) return;
-
-    chkFixarPrefixo.addEventListener('change', (e) => {
-        window.isPrefixLocked = e.target.checked;
-        if (window.isPrefixLocked) {
-            inputPrefixo.disabled = false;
-            inputPrefixo.classList.remove('bg-gray-200', 'text-gray-500');
-            inputPrefixo.classList.add('bg-white', 'text-gray-900');
-            inputPrefixo.focus();
-            
-            window.lockedPrefixValue = sanitizeDigits(inputPrefixo.value).substring(0, 4);
-            if (!window.lockedPrefixValue) {
-                window.lockedPrefixValue = "2700";
-                inputPrefixo.value = "2700";
-            }
-        } else {
-            inputPrefixo.disabled = true;
-            inputPrefixo.classList.add('bg-gray-200', 'text-gray-500');
-            inputPrefixo.classList.remove('bg-white', 'text-gray-900');
-        }
-        window.currentInput = ""; 
-        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-    });
-
-    inputPrefixo.addEventListener('input', (e) => {
-        let val = sanitizeDigits(e.target.value).substring(0, 4);
-        e.target.value = val;
-        window.lockedPrefixValue = val;
-        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-    });
-}
-
-// ==========================================
 // GESTÃO DE FORMULÁRIOS E DADOS
 // ==========================================
 function setupForms() {
     const formMotorista = document.getElementById('form-motorista');
     const formIntervalo = document.getElementById('form-intervalo');
+    const formZona = document.getElementById('form-zona');
+
     const listaMotoristas = document.getElementById('lista-motoristas');
-    const selectMotorista = document.getElementById('select-motorista');
+    const selectZonaMotorista = document.getElementById('select-zona-motorista');
+
     const intInicioInput = document.getElementById('int-inicio');
     const intFimInput = document.getElementById('int-fim');
-    const listaIntervalos = document.getElementById('lista-intervalos');
 
-    if (formMotorista && listaMotoristas && selectMotorista) {
+    if (formMotorista && listaMotoristas && selectZonaMotorista) {
         formMotorista.addEventListener('submit', (e) => {
             handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
-                renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
-                renderSummary();
-                updateMotoristaSelect(window.drivers, selectMotorista);
+                renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
+                atualizarSummaryUI();
+                updateZoneSelect(window.zones, selectZonaMotorista);
             });
         });
     }
@@ -653,25 +700,66 @@ function setupForms() {
     if (intInicioInput) setupIntervalInputFormatting(intInicioInput);
     if (intFimInput) setupIntervalInputFormatting(intFimInput);
 
-    if (formIntervalo && selectMotorista && intInicioInput && intFimInput && listaIntervalos) {
+    if (formIntervalo && intInicioInput && intFimInput) {
         formIntervalo.addEventListener('submit', (e) => {
             e.preventDefault();
-            const driverId = selectMotorista.value;
+            const nomeInput = document.getElementById('int-nome');
+            const name = nomeInput ? nomeInput.value.trim() : "";
             const startRaw = intInicioInput.value;
             const endRaw = intFimInput.value;
             const startClean = sanitizeDigits(startRaw);
             const endClean = sanitizeDigits(endRaw);
 
+            if (!name) return alert('Insira um nome descritivo para o intervalo.');
             if (startClean.length !== 7 || endClean.length !== 7) return alert('Insira códigos postais completos (ex: 2700-123).');
             if (parseInt(startClean, 10) > parseInt(endClean, 10)) return alert('Código inicial não pode ser maior.');
 
-            const newInterval = { id: 'i_' + Date.now(), driverId, start: `${startClean.substring(0, 4)}-${startClean.substring(4, 7)}`, end: `${endClean.substring(0, 4)}-${endClean.substring(4, 7)}` };
+            const newInterval = { 
+                id: 'i_' + Date.now(), 
+                name: name,
+                start: `${startClean.substring(0, 4)}-${startClean.substring(4, 7)}`, 
+                end: `${endClean.substring(0, 4)}-${endClean.substring(4, 7)}` 
+            };
             window.intervals.push(newInterval);
             sincronizarPersistencia();
 
-            intInicioInput.value = ""; intFimInput.value = "";
-            renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
-            alert('Intervalo criado!');
+            if (nomeInput) nomeInput.value = "";
+            intInicioInput.value = ""; 
+            intFimInput.value = "";
+            
+            renderizarZonasEIntervalosUI();
+            alert('Intervalo de códigos postais criado com sucesso!');
+        });
+    }
+
+    if (formZona) {
+        formZona.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const nomeInput = document.getElementById('zona-nome');
+            const checkboxesContainer = document.getElementById('checkboxes-intervalos');
+            
+            const name = nomeInput ? nomeInput.value.trim() : "";
+            if (!name) return alert('Insira um nome para a Zona.');
+
+            const checkedBoxes = checkboxesContainer.querySelectorAll('input[type="checkbox"]:checked');
+            const selectedIntervalIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+            if (selectedIntervalIds.length === 0) {
+                return alert('Por favor, selecione pelo menos um intervalo para compor a Zona.');
+            }
+
+            const newZone = {
+                id: 'z_' + Date.now(),
+                name: name,
+                intervalIds: selectedIntervalIds
+            };
+            window.zones.push(newZone);
+            sincronizarPersistencia();
+
+            if (nomeInput) nomeInput.value = "";
+            
+            renderizarZonasEIntervalosUI();
+            alert('Zona criada com sucesso!');
         });
     }
 }
@@ -705,42 +793,59 @@ function setupResetLeituras() {
             if (confirm("Deseja realmente limpar todas as leituras?")) {
                 window.assignments = [];
                 sincronizarPersistencia();
-                renderSummary();
+                atualizarSummaryUI();
             }
         });
     }
 }
 
-// Métodos Globais de Exclusão
+// Métodos Globais de Exclusão Adaptados
 window.deleteDriver = (id) => {
-    if (confirm("Ao apagar este motorista, os seus intervalos e contagens de pacotes também serão removidos. Confirmar?")) {
+    if (confirm("Ao apagar este motorista, as suas contagens de pacotes também serão removidas. Confirmar?")) {
         window.drivers = window.drivers.filter(d => d.id !== id);
-        window.intervals = window.intervals.filter(i => i.driverId !== id);
         window.assignments = window.assignments.filter(a => a.driverId !== id); 
         sincronizarPersistencia();
         
         const listaMotoristas = document.getElementById('lista-motoristas');
         if (listaMotoristas) {
-            renderDrivers(window.drivers, listaMotoristas, window.deleteDriver);
+            renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
         }
         
-        renderSummary();
-        
-        const selectMotorista = document.getElementById('select-motorista');
-        if (selectMotorista) {
-            updateMotoristaSelect(window.drivers, selectMotorista);
-        }
+        atualizarSummaryUI();
     }
 };
 
 window.deleteInterval = (id) => {
     if (confirm("Deseja apagar este intervalo?")) {
         window.intervals = window.intervals.filter(i => i.id !== id);
-        sincronizarPersistencia();
         
-        const listaIntervalos = document.getElementById('lista-intervalos');
-        if (listaIntervalos) {
-            renderIntervals(window.intervals, window.drivers, listaIntervalos, window.deleteInterval);
+        // Remove o intervalo removido de quaisquer zonas ativas
+        window.zones.forEach(zone => {
+            if (zone.intervalIds) {
+                zone.intervalIds = zone.intervalIds.filter(iid => iid !== id);
+            }
+        });
+
+        sincronizarPersistencia();
+        renderizarZonasEIntervalosUI();
+    }
+};
+
+window.deleteZone = (id) => {
+    if (confirm("Deseja apagar esta Zona? Os motoristas associados a ela ficarão sem atribuição.")) {
+        window.zones = window.zones.filter(z => z.id !== id);
+        
+        // Dissocia os motoristas afetados por esta remoção
+        window.drivers.forEach(drv => {
+            if (drv.zoneId === id) drv.zoneId = "";
+        });
+
+        sincronizarPersistencia();
+        renderizarZonasEIntervalosUI();
+        
+        const listaMotoristas = document.getElementById('lista-motoristas');
+        if (listaMotoristas) {
+            renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
         }
     }
 };
