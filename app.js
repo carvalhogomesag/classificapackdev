@@ -14,7 +14,7 @@ const colorPalette = [
 ];
 
 // ==========================================
-// FUNÇÃO DE UTILIDADE: SAFE JSON PARSE (BLINDAGEM)
+// FUNÇÃO DE UTILIDADE: SAFE JSON PARSE
 // ==========================================
 function safeJSONParse(key, fallback) {
     try {
@@ -53,6 +53,12 @@ window.definindoPartidaPorMorada = false;
 
 // Estado para controle de edição
 let itemSendoEditado = null; 
+
+// NOVO: Declaração global explícita das referências Google Maps no app.js
+let googleMap = null;
+let googleMarkers = [];
+let googleRoutePolyline = null;
+let autocompleteWidget = null;
 
 // ==========================================
 // INICIALIZAÇÃO DA APLICAÇÃO
@@ -454,7 +460,7 @@ function renderEstatisticasRota() {
     const estatisticasRota = document.getElementById('estatisticas-rota');
     const statTotal = document.getElementById('stat-total');
     const statEntregues = document.getElementById('stat-entregues');
-    const statFalhas = document.getElementById('stat-falhas'); // CORRIGIDO: stat-falhas correspondente ao HTML
+    const statFalhas = document.getElementById('stat-falhas'); 
     const statPendentes = document.getElementById('stat-pendentes');
 
     if (!estatisticasRota) return;
@@ -466,7 +472,6 @@ function renderEstatisticasRota() {
     const falhadas = window.rotaOtimizada.filter(p => p.status === "Failed" || p.status === "Falhou").length;
     const pendentes = window.rotaOtimizada.filter(p => !p.status || p.status === "Pendente").length;
 
-    // Proteção de escrita defensiva para evitar qualquer quebra por ID inexistente
     if (statTotal) statTotal.textContent = total;
     if (statEntregues) statEntregues.textContent = entregues;
     if (statFalhas) statFalhas.textContent = falhadas;
@@ -554,6 +559,22 @@ function sincronizarPersistencia() {
         window.dataRotaSelecionada, 
         window.rotaIniciada 
     );
+}
+
+// NOVO: Função para o menu ui.js poder forçar o ajuste do zoom globalmente
+window.ajustarLimitesMapaGoogle = () => {
+    // Redireciona de forma segura para a função de recálculo
+    if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+        ajustarLimitesMapaGoogleInterno();
+    }
+};
+
+function ajustarLimitesMapaGoogleInterno() {
+    if (typeof google === 'undefined' || !window.googleMapInstance || !window.partidaLocalizacao) return;
+    const limits = new google.maps.LatLngBounds();
+    limits.extend(new google.maps.LatLng(window.partidaLocalizacao.lat, window.partidaLocalizacao.lng));
+    window.rotaOtimizada.forEach(p => limits.extend(new google.maps.LatLng(p.lat, p.lng)));
+    window.googleMapInstance.fitBounds(limits);
 }
 
 // ==========================================
