@@ -184,7 +184,7 @@ function setupRotasLogic() {
                     });
                 },
                 () => {
-                    alert("Não foi possível aceder au GPS. Verifique as permissões.");
+                    alert("Não foi possível aceder ao GPS. Verifique as permissões.");
                     statusPartida.textContent = "Partida: Permissão negada";
                 },
                 { enableHighAccuracy: true }
@@ -345,7 +345,7 @@ function otimizarItinerarioComVizinhoMaisProximo() {
         let menorDistancia = Infinity;
 
         for (let i = 0; i < restantes.length; i++) {
-            const dist = calcularDistanciaHaversine(atual.lat, atual.lng, parseInt(restantes[i].lat, 10) ? restantes[i].lat : parseFloat(restantes[i].lat), parseInt(restantes[i].lng, 10) ? restantes[i].lng : parseFloat(restantes[i].lng));
+            const dist = calcularDistanciaHaversine(atual.lat, atual.lng, restantes[i].lat, restantes[i].lng);
             if (dist < menorDistancia) {
                 menorDistancia = dist;
                 indiceMaisProximo = i;
@@ -361,15 +361,20 @@ function otimizarItinerarioComVizinhoMaisProximo() {
         }
     }
 
-    document.getElementById('container-mapa').classList.remove('hidden');
-    document.getElementById('container-rota-ordenada').classList.remove('hidden');
+    const containerMapa = document.getElementById('container-mapa');
+    const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+    if (containerMapa) containerMapa.classList.remove('hidden');
+    if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
 
     renderizarItinerarioOtimizado();
-    desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+    sincronizarPersistencia();
+    
+    setTimeout(() => {
+        desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+    }, 300);
 }
 
 function renderizarItinerarioOtimizado() {
-    // CORREÇÃO: Busca do elemento dentro do escopo local
     const listaRotaFinal = document.getElementById('lista-rota-final');
     if (!listaRotaFinal) return;
 
@@ -449,10 +454,10 @@ function renderEstatisticasRota() {
     const estatisticasRota = document.getElementById('estatisticas-rota');
     const statTotal = document.getElementById('stat-total');
     const statEntregues = document.getElementById('stat-entregues');
-    const statFalhadas = document.getElementById('stat-falhadas');
+    const statFalhas = document.getElementById('stat-falhas'); // CORRIGIDO: stat-falhas correspondente ao HTML
     const statPendentes = document.getElementById('stat-pendentes');
 
-    if (!estatisticasRota || !statTotal) return;
+    if (!estatisticasRota) return;
 
     estatisticasRota.classList.remove('hidden');
 
@@ -461,10 +466,11 @@ function renderEstatisticasRota() {
     const falhadas = window.rotaOtimizada.filter(p => p.status === "Failed" || p.status === "Falhou").length;
     const pendentes = window.rotaOtimizada.filter(p => !p.status || p.status === "Pendente").length;
 
-    statTotal.textContent = total;
-    statEntregues.textContent = entregues;
-    statFalhadas.textContent = falhadas;
-    statPendentes.textContent = pendentes;
+    // Proteção de escrita defensiva para evitar qualquer quebra por ID inexistente
+    if (statTotal) statTotal.textContent = total;
+    if (statEntregues) statEntregues.textContent = entregues;
+    if (statFalhas) statFalhas.textContent = falhadas;
+    if (statPendentes) statPendentes.textContent = pendentes;
 }
 
 // ==========================================
