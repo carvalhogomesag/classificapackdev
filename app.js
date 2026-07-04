@@ -54,7 +54,7 @@ window.definindoPartidaPorMorada = false;
 // Estado para controle de edição
 let itemSendoEditado = null; 
 
-// NOVO: Declaração global explícita das referências Google Maps no app.js
+// Declaração das referências Google Maps
 let googleMap = null;
 let googleMarkers = [];
 let googleRoutePolyline = null;
@@ -297,13 +297,17 @@ function adicionarMorada(morada) {
         if (statusPartida) statusPartida.innerHTML = `<strong>Partida:</strong> ${morada.address}`;
         window.definindoPartidaPorMorada = false;
         if (buscaMoradaInput) buscaMoradaInput.placeholder = "Comece a digitar a morada aqui...";
+        sincronizarPersistencia();
     } else {
         morada.status = "Pendente"; 
         morada.observation = ""; 
         window.moradasEntregas.push(morada);
         renderMoradasAdicionadas();
+        sincronizarPersistencia();
+
+        // NOVO: Abre automaticamente o modal de edição/observações para a morada adicionada
+        abrirModalEdicaoParagem(morada, false);
     }
-    sincronizarPersistencia();
     if (buscaMoradaInput) buscaMoradaInput.value = "";
 }
 
@@ -395,6 +399,9 @@ function renderizarItinerarioOtimizado() {
         item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
 
+        // NOVO: Filtra e exibe apenas a primeira linha da sua observação
+        const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
+
         item.innerHTML = `
             <div class="flex items-center justify-between space-x-2">
                 <div class="flex-1 truncate">
@@ -409,7 +416,8 @@ function renderizarItinerarioOtimizado() {
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
                     </p>
-                    ${paragem.observation ? `<div class="bg-yellow-50 border border-yellow-100 p-2 rounded mt-1 text-[11px] text-gray-600 font-medium italic"><i class="fa-solid fa-comment-dots text-yellow-500 mr-1"></i> ${paragem.observation}</div>` : ''}
+                    <!-- NOVO: Apresentação da primeira linha da nota ao motorista -->
+                    ${primeiraLinhaObs ? `<div class="bg-yellow-50 border border-yellow-100 p-2 rounded mt-1 text-[11px] text-gray-600 font-medium italic truncate"><i class="fa-solid fa-comment-dots text-yellow-500 mr-1"></i> ${primeiraLinhaObs}</div>` : ''}
                 </div>
                 <div class="flex flex-col space-y-1">
                     <a href="${linkGoogleMaps}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center justify-center space-x-1 whitespace-nowrap shadow-sm">
@@ -546,6 +554,12 @@ function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     editMoradaTexto.value = paragem.address;
     editMoradaObs.value = paragem.observation || "";
     modalEditarParagem.classList.remove('hidden');
+
+    // NOVO: Foca automaticamente na caixa de texto de notas para o telemóvel abrir o teclado
+    setTimeout(() => {
+        editMoradaObs.focus();
+        editMoradaObs.select();
+    }, 150);
 }
 
 function sincronizarPersistencia() {
@@ -561,9 +575,7 @@ function sincronizarPersistencia() {
     );
 }
 
-// NOVO: Função para o menu ui.js poder forçar o ajuste do zoom globalmente
 window.ajustarLimitesMapaGoogle = () => {
-    // Redireciona de forma segura para a função de recálculo
     if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
         ajustarLimitesMapaGoogleInterno();
     }

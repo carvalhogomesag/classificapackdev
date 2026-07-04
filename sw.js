@@ -1,4 +1,4 @@
-const CACHE_NAME = 'classifica-pack-v11'; // Atualizado para a versão v11
+const CACHE_NAME = 'classifica-pack-v12'; // Atualizado para a versão v12
 const ASSETS = [
   '/',
   '/index.html',
@@ -13,7 +13,6 @@ const ASSETS = [
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
 ];
 
-// Instalação do Service Worker e gravação em cache
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -22,7 +21,6 @@ self.addEventListener('install', (e) => {
   );
 });
 
-// Ativação e limpeza de versões anteriores de cache
 self.addEventListener('activate', (e) => {
   e.waitUntil(
     caches.keys().then((keys) => {
@@ -37,7 +35,6 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Interceção de requisições de rede
 self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
