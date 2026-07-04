@@ -4,11 +4,11 @@ import { saveData, safeJSONParse } from './storage.js';
 import { 
     renderDrivers, 
     handleDriverSubmit, 
-    updateZoneSelect, 
-    renderIntervals, 
+    updateSectorSelect, 
     renderSummary,
-    renderZones,
-    renderIntervalCheckboxes,
+    renderSectors,
+    renderAreaCheckboxes,
+    handleSectorSubmit,
     findDriverForZip
 } from './gestao.js';
 import { inicializarGoogleAutocomplete, obterEnderecoPorGPSGoogle, calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './rotas.js';
@@ -26,9 +26,8 @@ const colorPalette = [
 // ESTADO GLOBAL DA APLICAÇÃO (RECUPERAÇÃO SEGURA)
 // ==========================================
 window.drivers = safeJSONParse('cp_drivers', []);
-window.intervals = safeJSONParse('cp_intervals', []);
 window.assignments = safeJSONParse('cp_assignments', []);
-window.zones = safeJSONParse('cp_zones', []); // Nova lista de agrupamentos
+window.sectors = safeJSONParse('cp_zones', []); // Setores ativos mapeados de forma retrocompatível
 
 window.currentInput = "";
 window.isPrefixLocked = false;
@@ -70,10 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Renderizações Iniciais Seguras
     const listaMotoristas = document.getElementById('lista-motoristas');
     if (listaMotoristas) {
-        renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
+        renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver);
     }
     
-    renderizarZonasEIntervalosUI();
+    renderizarSetoresUI();
     atualizarSummaryUI();
     sincronizarInterfaceRota();
 });
@@ -101,27 +100,22 @@ function carregarGoogleMapsScript() {
 }
 
 // ==========================================
-// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE DADOS
+// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES
 // ==========================================
-function renderizarZonasEIntervalosUI() {
-    const listaIntervalos = document.getElementById('lista-intervalos');
-    if (listaIntervalos) {
-        renderIntervals(window.intervals, window.zones, listaIntervalos, window.deleteInterval);
-    }
-    
-    const listaZonas = document.getElementById('lista-zonas');
-    if (listaZonas) {
-        renderZones(window.zones, window.intervals, listaZonas, window.deleteZone);
+function renderizarSetoresUI() {
+    const listaSetores = document.getElementById('lista-setores');
+    if (listaSetores) {
+        renderSectors(window.sectors, listaSetores, window.deleteSector);
     }
 
-    const checkboxesIntervalos = document.getElementById('checkboxes-intervalos');
-    if (checkboxesIntervalos) {
-        renderIntervalCheckboxes(window.intervals, checkboxesIntervalos);
+    const checkboxesAreas = document.getElementById('checkboxes-areas');
+    if (checkboxesAreas) {
+        renderAreaCheckboxes(window.sectors, checkboxesAreas);
     }
 
-    const selectZonaMotorista = document.getElementById('select-zona-motorista');
-    if (selectZonaMotorista) {
-        updateZoneSelect(window.zones, selectZonaMotorista);
+    const selectSetorMotorista = document.getElementById('select-setor-motorista');
+    if (selectSetorMotorista) {
+        updateSectorSelect(window.sectors, selectSetorMotorista);
     }
 }
 
@@ -130,7 +124,7 @@ function atualizarSummaryUI() {
 }
 
 // ==========================================
-// LÓGICA DE TRIAGEM (MÉTODO NOVO OPERACIONAL)
+// LÓGICA DE TRIAGEM (MÉTODO ATUALIZADO POR LOCALIDADE)
 // ==========================================
 function setupTriagemLogic() {
     const btnAnalisar = document.getElementById('btn-analisar');
@@ -153,7 +147,7 @@ function setupTriagemLogic() {
             }
 
             const formattedZip = `${cleanDigits.substring(0, 4)}-${cleanDigits.substring(4, 7)}`;
-            const driver = findDriverForZip(formattedZip, window.intervals, window.zones, window.drivers);
+            const driver = findDriverForZip(formattedZip, window.sectors, window.drivers);
             
             const resultadoCodigo = document.getElementById('resultado-codigo');
             const resultadoMotorista = document.getElementById('resultado-motorista');
@@ -648,14 +642,14 @@ function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
 function sincronizarPersistencia() {
     saveData(
         window.drivers, 
-        window.intervals, 
+        [], // No more custom intervals
         window.assignments,
         window.partidaLocalizacao,
         window.moradasEntregas,
         window.rotaOtimizada,
         window.dataRotaSelecionada, 
         window.rotaIniciada,
-        window.zones // Novo 9.º argumento persistido com sucesso
+        window.sectors // Stored in the 9th argument (represented as zones in storage.js)
     );
 }
 
@@ -678,88 +672,30 @@ function ajustarLimitesMapaGoogleInterno() {
 // ==========================================
 function setupForms() {
     const formMotorista = document.getElementById('form-motorista');
-    const formIntervalo = document.getElementById('form-intervalo');
-    const formZona = document.getElementById('form-zona');
+    const formSetor = document.getElementById('form-setor');
 
     const listaMotoristas = document.getElementById('lista-motoristas');
-    const selectZonaMotorista = document.getElementById('select-zona-motorista');
+    const selectSetorMotorista = document.getElementById('select-setor-motorista');
 
-    const intInicioInput = document.getElementById('int-inicio');
-    const intFimInput = document.getElementById('int-fim');
-
-    if (formMotorista && listaMotoristas && selectZonaMotorista) {
+    if (formMotorista && listaMotoristas && selectSetorMotorista) {
         formMotorista.addEventListener('submit', (e) => {
             handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
-                renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
+                renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver);
                 atualizarSummaryUI();
-                updateZoneSelect(window.zones, selectZonaMotorista);
+                updateSectorSelect(window.sectors, selectSetorMotorista);
             });
         });
     }
 
-    if (intInicioInput) setupIntervalInputFormatting(intInicioInput);
-    if (intFimInput) setupIntervalInputFormatting(intFimInput);
-
-    if (formIntervalo && intInicioInput && intFimInput) {
-        formIntervalo.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const nomeInput = document.getElementById('int-nome');
-            const name = nomeInput ? nomeInput.value.trim() : "";
-            const startRaw = intInicioInput.value;
-            const endRaw = intFimInput.value;
-            const startClean = sanitizeDigits(startRaw);
-            const endClean = sanitizeDigits(endRaw);
-
-            if (!name) return alert('Insira um nome descritivo para o intervalo.');
-            if (startClean.length !== 7 || endClean.length !== 7) return alert('Insira códigos postais completos (ex: 2700-123).');
-            if (parseInt(startClean, 10) > parseInt(endClean, 10)) return alert('Código inicial não pode ser maior.');
-
-            const newInterval = { 
-                id: 'i_' + Date.now(), 
-                name: name,
-                start: `${startClean.substring(0, 4)}-${startClean.substring(4, 7)}`, 
-                end: `${endClean.substring(0, 4)}-${endClean.substring(4, 7)}` 
-            };
-            window.intervals.push(newInterval);
-            sincronizarPersistencia();
-
-            if (nomeInput) nomeInput.value = "";
-            intInicioInput.value = ""; 
-            intFimInput.value = "";
-            
-            renderizarZonasEIntervalosUI();
-            alert('Intervalo de códigos postais criado com sucesso!');
-        });
-    }
-
-    if (formZona) {
-        formZona.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const nomeInput = document.getElementById('zona-nome');
-            const checkboxesContainer = document.getElementById('checkboxes-intervalos');
-            
-            const name = nomeInput ? nomeInput.value.trim() : "";
-            if (!name) return alert('Insira um nome para a Zona.');
-
-            const checkedBoxes = checkboxesContainer.querySelectorAll('input[type="checkbox"]:checked');
-            const selectedIntervalIds = Array.from(checkedBoxes).map(cb => cb.value);
-
-            if (selectedIntervalIds.length === 0) {
-                return alert('Por favor, selecione pelo menos um intervalo para compor a Zona.');
-            }
-
-            const newZone = {
-                id: 'z_' + Date.now(),
-                name: name,
-                intervalIds: selectedIntervalIds
-            };
-            window.zones.push(newZone);
-            sincronizarPersistencia();
-
-            if (nomeInput) nomeInput.value = "";
-            
-            renderizarZonasEIntervalosUI();
-            alert('Zona criada com sucesso!');
+    if (formSetor) {
+        formSetor.addEventListener('submit', (e) => {
+            handleSectorSubmit(e, window.sectors, () => {
+                renderizarSetoresUI();
+                const listaMotoristas = document.getElementById('lista-motoristas');
+                if (listaMotoristas) {
+                    renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver);
+                }
+            });
         });
     }
 }
@@ -808,56 +744,30 @@ window.deleteDriver = (id) => {
         
         const listaMotoristas = document.getElementById('lista-motoristas');
         if (listaMotoristas) {
-            renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
+            renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver);
         }
         
         atualizarSummaryUI();
     }
 };
 
-window.deleteInterval = (id) => {
-    if (confirm("Deseja apagar este intervalo?")) {
-        window.intervals = window.intervals.filter(i => i.id !== id);
-        
-        // Remove o intervalo removido de quaisquer zonas ativas
-        window.zones.forEach(zone => {
-            if (zone.intervalIds) {
-                zone.intervalIds = zone.intervalIds.filter(iid => iid !== id);
-            }
-        });
-
-        sincronizarPersistencia();
-        renderizarZonasEIntervalosUI();
-    }
-};
-
-window.deleteZone = (id) => {
-    if (confirm("Deseja apagar esta Zona? Os motoristas associados a ela ficarão sem atribuição.")) {
-        window.zones = window.zones.filter(z => z.id !== id);
+window.deleteSector = (id) => {
+    if (confirm("Deseja apagar este Setor? As localidades associadas ficarão novamente livres e os motoristas associados a ele ficarão sem atribuição.")) {
+        window.sectors = window.sectors.filter(s => s.id !== id);
         
         // Dissocia os motoristas afetados por esta remoção
         window.drivers.forEach(drv => {
-            if (drv.zoneId === id) drv.zoneId = "";
+            if (drv.sectorId === id) drv.sectorId = "";
         });
 
         sincronizarPersistencia();
-        renderizarZonasEIntervalosUI();
+        renderizarSetoresUI();
         
         const listaMotoristas = document.getElementById('lista-motoristas');
         if (listaMotoristas) {
-            renderDrivers(window.drivers, window.zones, listaMotoristas, window.deleteDriver);
+            renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver);
         }
     }
 };
-
-function setupIntervalInputFormatting(inputElement) {
-    inputElement.addEventListener('input', (e) => {
-        let val = sanitizeDigits(e.target.value);
-        if (val.length > 4) {
-            val = val.substring(0, 4) + '-' + val.substring(4, 7);
-        }
-        e.target.value = val;
-    });
-}
 
 function sanitizeDigits(str) { return str.replace(/\D/g, ''); }
