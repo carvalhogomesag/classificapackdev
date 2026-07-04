@@ -1,7 +1,7 @@
 // app.js
-import { setupNavigation, showTab, updateVisor } from './ui.js';
-import { saveData } from './storage.js';
-import { renderDrivers, handleDriverSubmit, updateMotoristaSelect, renderIntervals } from './gestao.js';
+import { setupNavigation, showTab, updateVisor, setupKeypad, setupPrefixLock } from './ui.js';
+import { saveData, safeJSONParse } from './storage.js';
+import { renderDrivers, handleDriverSubmit, updateMotoristaSelect, renderIntervals, renderSummary } from './gestao.js';
 import { inicializarGoogleAutocomplete, obterEnderecoPorGPSGoogle, calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './rotas.js';
 
 // ==========================================
@@ -12,23 +12,6 @@ const colorPalette = [
     "#7C3AED", "#DB2777", "#0891B2", "#D97706", 
     "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
 ];
-
-// ==========================================
-// FUNÇÃO DE UTILIDADE: SAFE JSON PARSE
-// ==========================================
-function safeJSONParse(key, fallback) {
-    try {
-        const item = localStorage.getItem(key);
-        if (item === null || item === "undefined" || item === "") {
-            return fallback;
-        }
-        return JSON.parse(item);
-    } catch (error) {
-        console.warn(`Classifica Pack (LocalStorage): Chave corrompida '${key}'. Limpando registo.`, error);
-        localStorage.removeItem(key);
-        return fallback;
-    }
-}
 
 // ==========================================
 // ESTADO GLOBAL DA APLICAÇÃO (RECUPERAÇÃO SEGURA)
@@ -53,12 +36,6 @@ window.definindoPartidaPorMorada = false;
 
 // Estado para controle de edição
 let itemSendoEditado = null; 
-
-// Declaração das referências Google Maps
-let googleMap = null;
-let googleMarkers = [];
-let googleRoutePolyline = null;
-let autocompleteWidget = null;
 
 // ==========================================
 // INICIALIZAÇÃO DA APLICAÇÃO
@@ -95,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateMotoristaSelect(window.drivers, selectMotorista);
     }
     
-    renderSummary();
+    renderSummary(window.assignments, window.drivers, document.getElementById('painel-resumo'));
     sincronizarInterfaceRota();
 });
 
@@ -174,6 +151,7 @@ function setupRotasLogic() {
                 statusPartida.textContent = "Partida: Erro no GPS";
                 return;
             }
+
             navigator.geolocation.getCurrentPosition(
                 (position) => {
                     const lat = position.coords.latitude;
@@ -210,15 +188,9 @@ function setupRotasLogic() {
         btnLimparEnderecos.addEventListener('click', () => {
             window.moradasEntregas = [];
             window.rotaOtimizada = [];
-            
-            const containerMapa = document.getElementById('container-mapa');
-            const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-            const estatisticasRota = document.getElementById('estatisticas-rota');
-            
-            if (containerMapa) containerMapa.classList.add('hidden');
-            if (containerRotaOrdenada) containerRotaOrdenada.classList.add('hidden');
-            if (estatisticasRota) estatisticasRota.classList.add('hidden');
-            
+            document.getElementById('container-mapa').classList.add('hidden');
+            document.getElementById('container-rota-ordenada').classList.add('hidden');
+            document.getElementById('estatisticas-rota').classList.add('hidden');
             limparMapaVisual();
             renderMoradasAdicionadas();
             sincronizarPersistencia();
@@ -304,8 +276,6 @@ function adicionarMorada(morada) {
         window.moradasEntregas.push(morada);
         renderMoradasAdicionadas();
         sincronizarPersistencia();
-
-        // NOVO: Abre automaticamente o modal de edição/observações para a morada adicionada
         abrirModalEdicaoParagem(morada, false);
     }
     if (buscaMoradaInput) buscaMoradaInput.value = "";
@@ -399,7 +369,6 @@ function renderizarItinerarioOtimizado() {
         item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
 
-        // NOVO: Filtra e exibe apenas a primeira linha da sua observação
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
         item.innerHTML = `
@@ -416,7 +385,6 @@ function renderizarItinerarioOtimizado() {
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
                     </p>
-                    <!-- NOVO: Apresentação da primeira linha da nota ao motorista -->
                     ${primeiraLinhaObs ? `<div class="bg-yellow-50 border border-yellow-100 p-2 rounded mt-1 text-[11px] text-gray-600 font-medium italic truncate"><i class="fa-solid fa-comment-dots text-yellow-500 mr-1"></i> ${primeiraLinhaObs}</div>` : ''}
                 </div>
                 <div class="flex flex-col space-y-1">
@@ -555,7 +523,6 @@ function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     editMoradaObs.value = paragem.observation || "";
     modalEditarParagem.classList.remove('hidden');
 
-    // NOVO: Foca automaticamente na caixa de texto de notas para o telemóvel abrir o teclado
     setTimeout(() => {
         editMoradaObs.focus();
         editMoradaObs.select();
@@ -741,77 +708,6 @@ function setupResetLeituras() {
                 renderSummary();
             }
         });
-    }
-}
-
-// ==========================================
-// HISTÓRICO DE LEITURAS / RESUMO DE PRODUÇÃO
-// ==========================================
-function renderSummary() {
-    const painelResumo = document.getElementById('painel-resumo');
-    if (!painelResumo) return;
-
-    painelResumo.innerHTML = "";
-
-    const totalLeituras = window.assignments.length;
-    const totalPrioritarios = window.assignments.filter(a => a.priority === true).length; 
-
-    const headerDiv = document.createElement('div');
-    headerDiv.className = "flex justify-between items-center pb-2 border-b text-sm font-semibold text-gray-700";
-    headerDiv.innerHTML = `
-        <span>Total Processado:</span>
-        <div class="flex items-center space-x-1.5">
-            <span class="bg-blue-600 text-white px-2.5 py-0.5 rounded-full text-xs font-bold" title="Total de encomendas">${totalLeituras} un</span>
-            ${totalPrioritarios > 0 ? `<span class="bg-orange-500 text-white px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center space-x-1" title="Prioritárias"><i class="fa-solid fa-circle-exclamation"></i> <span>${totalPrioritarios}</span></span>` : ''}
-        </div>
-    `;
-    painelResumo.appendChild(headerDiv);
-
-    if (window.drivers.length === 0) {
-        painelResumo.innerHTML += `<p class="text-xs text-gray-400 italic text-center py-2">Registe motoristas para ver o resumo.</p>`;
-        return;
-    }
-
-    window.drivers.forEach(driver => {
-        const totalDriver = window.assignments.filter(a => a.driverId === driver.id).length;
-        const totalPrioritariosDriver = window.assignments.filter(a => a.driverId === driver.id && a.priority === true).length;
-        const percent = totalLeituras > 0 ? Math.round((totalDriver / totalLeituras) * 100) : 0;
-
-        const row = document.createElement('div');
-        row.className = "flex items-center justify-between text-xs py-1";
-        row.innerHTML = `
-            <div class="flex items-center space-x-2">
-                <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${driver.color}"></span>
-                <span class="font-medium text-gray-700">${driver.name}</span>
-            </div>
-            <div class="flex items-center space-x-2 font-bold text-gray-900">
-                <span>${totalDriver} un</span>
-                ${totalPrioritariosDriver > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5" title="Prioritários"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalPrioritariosDriver}</span></span>` : ''}
-                <span class="text-gray-400 text-[10px] font-normal">(${percent}%)</span>
-            </div>
-        `;
-        painelResumo.appendChild(row);
-    });
-
-    const totalSemMotorista = window.assignments.filter(a => a.driverId === null).length;
-    const totalSemMotoristaPrioridade = window.assignments.filter(a => a.driverId === null && a.priority === true).length;
-    
-    if (totalSemMotorista > 0) {
-        const percentSem = Math.round((totalSemMotorista / totalLeituras) * 100);
-        const rowSem = document.createElement('div');
-        rowSem.className = "flex items-center justify-between text-xs py-1 border-t border-dashed mt-1 pt-1";
-        rowSem.innerHTML = `
-            <div class="flex items-center space-x-2 text-gray-500">
-                <span class="w-3.5 h-3.5 rounded-full bg-gray-400"></span>
-                <span class="font-medium italic">Sem Motorista</span>
-            </div>
-            <div class="flex items-center space-x-2 font-bold text-red-600">
-                <span>${totalSemMotorista} un</span>
-                ${totalSemMotoristaPrioridade > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalSemMotoristaPrioridade}</span></span>` : ''}
-                <span class="text-gray-400 text-[10px] font-normal">(${percentSem}%)</span>
-            </div>
-        `;
-        painelResumo.appendChild(rowSem);
     }
 }
 
