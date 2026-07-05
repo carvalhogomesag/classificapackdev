@@ -27,7 +27,7 @@ const colorPalette = [
 // ==========================================
 window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
-window.sectors = safeJSONParse('cp_zones', []); // Setores em memória recuperados de cp_zones
+window.sectors = safeJSONParse('cp_zones', []); // Setores em memória
 
 window.currentInput = "";
 window.isPrefixLocked = false;
@@ -131,6 +131,64 @@ window.cancelarEdicaoSector = () => {
 };
 
 // ==========================================
+// INICIALIZAÇÃO DA APLICAÇÃO
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    carregarGoogleMapsScript();
+    setupNavigation(showTab);
+    setupKeypad();
+    setupPrefixLock();
+    setupForms();
+    renderColorPicker();
+    setupResetLeituras();
+    setupRotasLogic();
+    setupModaisEdicao();
+    setupTriagemLogic();
+    setupCancelButtons(); // Ativa os ouvintes dos botões "Cancelar" das edições
+    setupVozLogic(); // Ativa o reconhecimento por voz
+    
+    const visorCodigo = document.getElementById('visor-codigo');
+    if (visorCodigo) {
+        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+    }
+    
+    // Renderizações Iniciais Seguras
+    const listaMotoristas = document.getElementById('lista-motoristas');
+    if (listaMotoristas) {
+        renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
+    }
+    
+    renderizarSetoresUI();
+    atualizarSummaryUI();
+    sincronizarInterfaceRota();
+});
+
+// ==========================================
+// CARREGAMENTO SEGURO DO SDK GOOGLE MAPS
+// ==========================================
+function carregarGoogleMapsScript() {
+    if (typeof google !== 'undefined') return;
+    if (typeof GOOGLE_MAPS_API_KEY === 'undefined' || !GOOGLE_MAPS_API_KEY) {
+        console.error("Chave de API do Google Maps não foi definida no config.js.");
+        return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+        console.log("Google Maps SDK carregado.");
+        const buscaMoradaInput = document.getElementById('busca-morada');
+        if (buscaMoradaInput) {
+            inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
+        }
+    };
+    script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
+    document.head.appendChild(script);
+}
+
+// ==========================================
 // CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES
 // ==========================================
 function renderizarSetoresUI() {
@@ -157,39 +215,6 @@ function atualizarSummaryUI() {
 }
 
 // ==========================================
-// INICIALIZAÇÃO DA APLICAÇÃO
-// ==========================================
-document.addEventListener('DOMContentLoaded', () => {
-    carregarGoogleMapsScript();
-    setupNavigation(showTab);
-    setupKeypad();
-    setupPrefixLock();
-    setupForms();
-    renderColorPicker();
-    setupResetLeituras();
-    setupRotasLogic();
-    setupModaisEdicao();
-    setupTriagemLogic();
-    setupCancelButtons(); // Ativa os ouvintes de cancelar edições
-    setupVozLogic(); // Ativa o reconhecimento por voz
-    
-    const visorCodigo = document.getElementById('visor-codigo');
-    if (visorCodigo) {
-        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-    }
-    
-    // Renderizações Iniciais Seguras
-    const listaMotoristas = document.getElementById('lista-motoristas');
-    if (listaMotoristas) {
-        renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
-    }
-    
-    renderizarSetoresUI();
-    atualizarSummaryUI();
-    sincronizarInterfaceRota();
-});
-
-// ==========================================
 // LÓGICA DE RECONHECIMENTO DE VOZ (MICROFONE)
 // ==========================================
 function setupVozLogic() {
@@ -200,7 +225,6 @@ function setupVozLogic() {
 
     if (!btnVoz || !buscaMoradaInput) return;
 
-    // Deteta se o navegador suporta SpeechRecognition
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         btnVoz.classList.add('hidden'); // Oculta o microfone se o browser não suportar
@@ -688,15 +712,15 @@ function renderizarItinerarioOtimizado() {
 // PAINEL DE ESTATÍSTICAS DO TURNO (À PROVA DE FALHAS)
 // ==========================================
 function renderEstatisticasRota() {
-    const estatisticasRota = document.getElementById('estatisticas-rota');
+    const htmlEl = document.getElementById('estatisticas-rota');
     const statTotal = document.getElementById('stat-total');
     const statEntregues = document.getElementById('stat-entregues');
     const statFalhas = document.getElementById('stat-falhas'); 
     const statPendentes = document.getElementById('stat-pendentes');
 
-    if (!estatisticasRota) return;
+    if (!htmlEl) return;
 
-    estatisticasRota.classList.remove('hidden');
+    htmlEl.classList.remove('hidden');
 
     const total = window.rotaOtimizada.length;
     const entregues = window.rotaOtimizada.filter(p => p.status === "Entregue").length;
@@ -794,7 +818,7 @@ function sincronizarPersistencia() {
         window.rotaOtimizada,
         window.dataRotaSelecionada, 
         window.rotaIniciada,
-        window.sectors // os setores são salvos na nona posição
+        window.sectors // os setores são salvos na posição original de zonas
     );
 }
 
