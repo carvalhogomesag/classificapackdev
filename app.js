@@ -302,7 +302,15 @@ function setupCancelButtons() {
 function setupTriagemLogic() {
     const btnAnalisar = document.getElementById('btn-analisar');
     const btnConfirmarAtribuir = document.getElementById('btn-confirmar-atribuir');
+    const btnCancelarAtribuir = document.getElementById('btn-cancelar-atribuir');
     const modalResultado = document.getElementById('modal-resultado');
+
+    // Fecha o modal de resultado sem gravar a atribuição, mantendo o código
+    // já digitado no visor para que o utilizador possa corrigi-lo se necessário.
+    function cancelarAtribuicao() {
+        if (modalResultado) modalResultado.classList.add('hidden');
+        window.lastAnalysisResult = null;
+    }
 
     if (btnAnalisar) {
         btnAnalisar.addEventListener('click', () => {
@@ -372,10 +380,14 @@ function setupTriagemLogic() {
         });
     }
 
+    if (btnCancelarAtribuir) {
+        btnCancelarAtribuir.addEventListener('click', cancelarAtribuicao);
+    }
+
     if (modalResultado) {
         modalResultado.addEventListener('click', (e) => {
             if (e.target === modalResultado) {
-                modalResultado.classList.add('hidden');
+                cancelarAtribuicao();
             }
         });
     }
