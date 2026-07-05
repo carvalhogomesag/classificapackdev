@@ -99,9 +99,14 @@
                     <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
                     <div class="grid grid-cols-6 gap-2" id="color-picker-container"></div>
                 </div>
-                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2 rounded shadow">
-                    Adicionar Motorista
-                </button>
+                <div class="flex space-x-2">
+                    <button type="button" id="btn-cancelar-motorista" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded shadow">
+                        Cancelar
+                    </button>
+                    <button type="submit" id="btn-submit-motorista" class="flex-1 bg-blue-600 text-white font-bold py-2 rounded shadow">
+                        Adicionar Motorista
+                    </button>
+                </div>
             </form>
 
             <div>
@@ -112,7 +117,7 @@
             </div>
         </main>
 
-        <!-- SEÇÃO 3: SETORES E ÁREAS (ATUALIZADA) -->
+        <!-- SEÇÃO 3: SETORES E ÁREAS -->
         <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
             
             <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
@@ -129,13 +134,17 @@
                             <span class="text-[9px] text-gray-400 font-semibold italic">*Área única por setor</span>
                         </div>
                         <div id="checkboxes-areas" class="border rounded p-2 max-h-56 overflow-y-auto space-y-2 bg-gray-50">
-                            <!-- Injetado via JS: Checkboxes de áreas com bloqueio de exclusividade -->
                             <p class="text-xs text-gray-400 italic text-center py-2">A carregar áreas do sistema...</p>
                         </div>
                     </div>
-                    <button type="submit" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700 transition">
-                        Criar Setor
-                    </button>
+                    <div class="flex space-x-2">
+                        <button type="button" id="btn-cancelar-setor" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg shadow">
+                            Cancelar
+                        </button>
+                        <button type="submit" id="btn-submit-setor" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700 transition">
+                            Criar Setor
+                        </button>
+                    </div>
                 </form>
             </div>
 
