@@ -23,7 +23,19 @@ filesToInclude.forEach(file => {
         outputContent += `=========================================\n`;
         outputContent += `ARQUIVO: ${file}\n`;
         outputContent += `=========================================\n\n`;
-        outputContent += fs.readFileSync(filePath, 'utf8');
+        
+        let fileContent = fs.readFileSync(filePath, 'utf8');
+        
+        // Se for o ficheiro config.js, removemos a chave de API real por segurança
+        if (file === 'config.js') {
+            // Esta Regex identifica GOOGLE_MAPS_API_KEY seguido de aspas (simples ou duplas) e oculta o valor real
+            fileContent = fileContent.replace(
+                /(GOOGLE_MAPS_API_KEY\s*=\s*['"])[^'"]*(['"])/g, 
+                '$1[CHAVE_OCULTADA_POR_SEGURANCA]$2'
+            );
+        }
+        
+        outputContent += fileContent;
         outputContent += `\n\n`;
     } else {
         outputContent += `=========================================\n`;
@@ -33,4 +45,4 @@ filesToInclude.forEach(file => {
 });
 
 fs.writeFileSync(outputFileName, outputContent, 'utf8');
-console.log(`Sucesso! O ficheiro "${outputFileName}" foi gerado com todo o código do seu PWA.`);
+console.log(`Sucesso! O ficheiro "${outputFileName}" foi gerado com segurança e sem chaves expostas.`);
