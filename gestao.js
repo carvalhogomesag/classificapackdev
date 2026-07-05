@@ -26,8 +26,9 @@ export const AREAS_POSTAL_CODES = {
 
 /**
  * Renderiza a lista de motoristas cadastrados com a indicação do seu Setor
+ * CORRIGIDO: agora recebe e usa o parâmetro "editDriver" para desenhar o botão de editar
  */
-export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver) {
+export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, editDriver) {
     if (!listaMotoristas) return;
     listaMotoristas.innerHTML = drivers.length === 0 ? '<p class="text-sm text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>' : '';
     
@@ -47,20 +48,28 @@ export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver) {
                     <i class="fa-solid fa-map-location-dot"></i> Setor: <span class="font-medium text-gray-600">${sectorName}</span>
                 </div>
             </div>
-            <button class="text-red-500 hover:text-red-700 font-bold p-1"><i class="fa-solid fa-trash-can"></i></button>
+            <div class="flex items-center space-x-1 flex-shrink-0">
+                <button class="btn-edit-motorista text-blue-500 hover:text-blue-700 font-bold p-1.5"><i class="fa-solid fa-pen"></i></button>
+                <button class="btn-del-motorista text-red-500 hover:text-red-700 font-bold p-1.5"><i class="fa-solid fa-trash-can"></i></button>
+            </div>
         `;
-        div.querySelector('button').onclick = () => deleteDriver(driver.id);
+        div.querySelector('.btn-edit-motorista').onclick = () => editDriver(driver);
+        div.querySelector('.btn-del-motorista').onclick = () => deleteDriver(driver.id);
         listaMotoristas.appendChild(div);
     });
 }
 
 /**
- * Processa a submissão de cadastro de um novo motorista associado a um Setor
+ * Processa a submissão do formulário de motorista.
+ * CORRIGIDO: agora verifica window.driverSendoEditado. Se existir, ATUALIZA o motorista
+ * existente em vez de criar sempre um novo registo duplicado.
  */
 export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     e.preventDefault();
     const nomeInput = document.getElementById('nome-motorista');
     const setorSelect = document.getElementById('select-setor-motorista');
+    const btnSubmit = document.getElementById('btn-submit-motorista');
+    const btnCancelar = document.getElementById('btn-cancelar-motorista');
     
     const nome = nomeInput.value.trim();
     const sectorId = setorSelect ? setorSelect.value : "";
@@ -71,12 +80,25 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
         return;
     }
 
-    drivers.push({ 
-        id: 'd_' + Date.now(), 
-        name: nome, 
-        color: selectedColor,
-        sectorId: sectorId 
-    });
+    const emEdicao = window.driverSendoEditado;
+
+    if (emEdicao) {
+        // Atualiza o motorista existente (mesmo id), em vez de criar um novo
+        const driverIndex = drivers.findIndex(d => d.id === emEdicao.id);
+        if (driverIndex !== -1) {
+            drivers[driverIndex].name = nome;
+            drivers[driverIndex].color = selectedColor;
+            drivers[driverIndex].sectorId = sectorId;
+        }
+        window.driverSendoEditado = null;
+    } else {
+        drivers.push({ 
+            id: 'd_' + Date.now(), 
+            name: nome, 
+            color: selectedColor,
+            sectorId: sectorId 
+        });
+    }
 
     saveData(
         drivers, 
@@ -92,20 +114,33 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     
     nomeInput.value = "";
     if (setorSelect) setorSelect.value = "";
+    if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
+    if (btnCancelar) btnCancelar.classList.add('hidden');
+
     renderCallback();
-    alert('Motorista registado com sucesso!');
+    alert(emEdicao ? 'Motorista atualizado com sucesso!' : 'Motorista registado com sucesso!');
 }
 
 /**
- * Atualiza as opções de escolha de Setores no formulário de motoristas
+ * Atualiza as opções de escolha de Setores no formulário de motoristas.
+ * CORRIGIDO: agora recebe "drivers" e "editingDriverId" para aplicar a exclusividade
+ * (1 setor = 1 motorista), libertando a vaga do próprio motorista quando em edição.
  */
-export function updateSectorSelect(sectors, selectSector) {
+export function updateSectorSelect(sectors, selectSector, drivers = [], editingDriverId = null) {
     if (!selectSector) return;
-    selectSector.innerHTML = `<option value="">Selecione um sector...</option>`;
+    selectSector.innerHTML = `<option value="">Selecione um setor...</option>`;
     sectors.forEach(sector => {
+        // Verifica se este setor já está ocupado por OUTRO motorista
+        const driverOwner = drivers.find(d => d.sectorId === sector.id && d.id !== editingDriverId);
+
         const opt = document.createElement('option');
         opt.value = sector.id;
-        opt.textContent = sector.name;
+        if (driverOwner) {
+            opt.textContent = `${sector.name} (ocupado por ${driverOwner.name})`;
+            opt.disabled = true;
+        } else {
+            opt.textContent = sector.name;
+        }
         selectSector.appendChild(opt);
     });
 }
@@ -114,12 +149,17 @@ export function updateSectorSelect(sectors, selectSector) {
 export const updateZoneSelect = updateSectorSelect;
 
 /**
- * Processa a submissão de um novo Setor de Entrega com regras de exclusividade estritas
+ * Processa a submissão de um Setor de Entrega com regras de exclusividade estritas.
+ * CORRIGIDO: agora verifica window.sectorSendoEditado. Se existir, ATUALIZA o setor
+ * existente em vez de criar sempre um novo registo duplicado, e a validação de área
+ * duplicada ignora corretamente o próprio setor em edição.
  */
 export function handleSectorSubmit(e, sectors, renderCallback) {
     e.preventDefault();
     const nomeInput = document.getElementById('setor-nome');
     const checkboxesContainer = document.getElementById('checkboxes-areas');
+    const btnSubmit = document.getElementById('btn-submit-setor');
+    const btnCancelar = document.getElementById('btn-cancelar-setor');
     
     const name = nomeInput.value.trim();
     if (!name) return;
@@ -132,9 +172,12 @@ export function handleSectorSubmit(e, sectors, renderCallback) {
         return;
     }
 
-    // Validação de segurança redundante: garante em JS que nenhuma área já está noutro setor
+    const emEdicao = window.sectorSendoEditado;
+
+    // Validação de segurança redundante: garante que nenhuma área já está noutro setor
+    // (ignora o próprio setor, se estivermos em modo de edição)
     const areaDuplicada = selectedAreas.find(area => 
-        sectors.some(s => s.areaNames && s.areaNames.includes(area))
+        sectors.some(s => s.areaNames && s.areaNames.includes(area) && (!emEdicao || s.id !== emEdicao.id))
     );
 
     if (areaDuplicada) {
@@ -142,11 +185,21 @@ export function handleSectorSubmit(e, sectors, renderCallback) {
         return;
     }
 
-    sectors.push({
-        id: 's_' + Date.now(),
-        name: name,
-        areaNames: selectedAreas
-    });
+    if (emEdicao) {
+        // Atualiza o setor existente (mesmo id), em vez de criar um novo
+        const sectorIndex = sectors.findIndex(s => s.id === emEdicao.id);
+        if (sectorIndex !== -1) {
+            sectors[sectorIndex].name = name;
+            sectors[sectorIndex].areaNames = selectedAreas;
+        }
+        window.sectorSendoEditado = null;
+    } else {
+        sectors.push({
+            id: 's_' + Date.now(),
+            name: name,
+            areaNames: selectedAreas
+        });
+    }
 
     saveData(
         JSON.parse(localStorage.getItem('cp_drivers')) || [],
@@ -161,17 +214,21 @@ export function handleSectorSubmit(e, sectors, renderCallback) {
     );
 
     nomeInput.value = "";
+    if (btnSubmit) btnSubmit.textContent = "Criar Setor";
+    if (btnCancelar) btnCancelar.classList.add('hidden');
+
     renderCallback();
-    alert('Setor criado com sucesso!');
+    alert(emEdicao ? 'Setor atualizado com sucesso!' : 'Setor criado com sucesso!');
 }
 
 // Manter alias para evitar quebras de importação de arquivos legados
 export const handleZoneSubmit = handleSectorSubmit;
 
 /**
- * Renderiza a lista de Setores criados e as suas áreas geográficas associadas
+ * Renderiza a lista de Setores criados e as suas áreas geográficas associadas.
+ * CORRIGIDO: agora recebe e usa o parâmetro "editSector" para desenhar o botão de editar
  */
-export function renderSectors(sectors, listaSetores, deleteSector) {
+export function renderSectors(sectors, listaSetores, deleteSector, editSector) {
     if (!listaSetores) return;
     listaSetores.innerHTML = sectors.length === 0 ? '<p class="text-sm text-gray-400 italic text-center py-4">Nenhum sector registado.</p>' : '';
 
@@ -185,13 +242,17 @@ export function renderSectors(sectors, listaSetores, deleteSector) {
         div.innerHTML = `
             <div class="flex items-center justify-between font-bold text-gray-800 border-b pb-1.5">
                 <span class="text-sm"><i class="fa-solid fa-map-location-dot text-blue-500 mr-1"></i> ${sector.name}</span>
-                <button class="text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                <div class="flex items-center space-x-2">
+                    <button class="btn-edit-setor text-blue-500 hover:text-blue-700 p-1"><i class="fa-solid fa-pen text-xs"></i></button>
+                    <button class="btn-del-setor text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
+                </div>
             </div>
             <div class="flex flex-wrap gap-1">
                 ${subAreasHtml || '<div class="italic text-gray-400">Nenhuma área associada.</div>'}
             </div>
         `;
-        div.querySelector('button').onclick = () => deleteSector(sector.id);
+        div.querySelector('.btn-edit-setor').onclick = () => editSector(sector);
+        div.querySelector('.btn-del-setor').onclick = () => deleteSector(sector.id);
         listaSetores.appendChild(div);
     });
 }
@@ -200,17 +261,22 @@ export function renderSectors(sectors, listaSetores, deleteSector) {
 export const renderZones = renderSectors;
 
 /**
- * Renderiza caixas de seleção com controle estrito de exclusividade de setor
+ * Renderiza caixas de seleção com controle estrito de exclusividade de setor.
+ * CORRIGIDO: agora recebe "editingId" para ignorar o próprio setor na verificação
+ * de área já ocupada, e pré-marca (checked) as áreas que já pertencem a esse setor.
  */
-export function renderAreaCheckboxes(sectors, container) {
+export function renderAreaCheckboxes(sectors, container, editingId = null) {
     if (!container) return;
     container.innerHTML = "";
 
     const areasList = Object.keys(AREAS_POSTAL_CODES).sort();
 
     areasList.forEach(areaName => {
-        // Verifica se a localidade já está associada a algum outro setor
-        const parentSector = sectors.find(s => s.areaNames && s.areaNames.includes(areaName));
+        // Verifica se a localidade já está associada a algum OUTRO setor (ignora o próprio, se em edição)
+        const parentSector = sectors.find(s => s.areaNames && s.areaNames.includes(areaName) && s.id !== editingId);
+        // Verifica se esta área já pertence ao setor que está a ser editado, para vir pré-selecionada
+        const belongsToEditingSector = !!(editingId && sectors.some(s => s.id === editingId && s.areaNames && s.areaNames.includes(areaName)));
+
         const label = document.createElement('label');
         
         if (parentSector) {
@@ -226,11 +292,11 @@ export function renderAreaCheckboxes(sectors, container) {
                 </span>
             `;
         } else {
-            // Área livre (disponível para seleção)
+            // Área livre (disponível para seleção) — ou pertence ao próprio setor em edição
             label.className = "flex items-center justify-between p-2 rounded hover:bg-gray-100 cursor-pointer text-xs";
             label.innerHTML = `
                 <div class="flex items-center space-x-2 text-gray-700">
-                    <input type="checkbox" value="${areaName}" class="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
+                    <input type="checkbox" value="${areaName}" ${belongsToEditingSector ? 'checked' : ''} class="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
                     <span class="font-bold">${areaName}</span>
                 </div>
                 <span class="text-[9px] bg-green-50 text-green-700 font-bold px-1.5 py-0.5 rounded border border-green-200">
