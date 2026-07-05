@@ -27,7 +27,7 @@ const colorPalette = [
 // ==========================================
 window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
-window.sectors = safeJSONParse('cp_zones', []); // Setores em memória
+window.sectors = safeJSONParse('cp_zones', []); // Setores em memória recuperados de cp_zones
 
 window.currentInput = "";
 window.isPrefixLocked = false;
@@ -51,6 +51,112 @@ window.definindoPartidaPorMorada = false;
 let itemSendoEditado = null; 
 
 // ==========================================
+// FUNÇÕES GLOBAIS DE EDIÇÃO E CANCELAMENTO (DECLARAÇÃO ANTECIPADA)
+// ==========================================
+window.editDriver = (driver) => {
+    window.driverSendoEditado = driver;
+
+    const nomeInput = document.getElementById('nome-motorista');
+    const btnSubmit = document.getElementById('btn-submit-motorista');
+    const btnCancelar = document.getElementById('btn-cancelar-motorista');
+
+    if (nomeInput) nomeInput.value = driver.name;
+    if (btnSubmit) btnSubmit.textContent = "Guardar Alterações";
+    if (btnCancelar) btnCancelar.classList.remove('hidden');
+
+    // Sincroniza a cor do motorista na palete visual
+    window.selectedColor = driver.color;
+    const colorPickerContainer = document.getElementById('color-picker-container');
+    if (colorPickerContainer) {
+        Array.from(colorPickerContainer.children).forEach(btn => {
+            if (btn.style.backgroundColor === driver.color || btn.style.backgroundColor.replace(/\s/g, "") === driver.color.toLowerCase()) {
+                btn.classList.add('border-black', 'scale-110');
+            } else {
+                btn.classList.remove('border-black', 'scale-110');
+            }
+        });
+    }
+
+    // Recarrega o dropdown libertando a vaga do seu próprio setor
+    renderizarSetoresUI();
+    
+    // Seleciona o setor atual dele no dropdown
+    const selectSetorMotorista = document.getElementById('select-setor-motorista');
+    if (selectSetorMotorista) selectSetorMotorista.value = driver.sectorId;
+};
+
+window.cancelarEdicaoDriver = () => {
+    window.driverSendoEditado = null;
+
+    const nomeInput = document.getElementById('nome-motorista');
+    const selectSetorMotorista = document.getElementById('select-setor-motorista');
+    const btnSubmit = document.getElementById('btn-submit-motorista');
+    const btnCancelar = document.getElementById('btn-cancelar-motorista');
+
+    if (nomeInput) nomeInput.value = "";
+    if (selectSetorMotorista) selectSetorMotorista.value = "";
+    if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
+    if (btnCancelar) btnCancelar.classList.add('hidden');
+
+    renderizarSetoresUI();
+};
+
+window.editSector = (sector) => {
+    window.sectorSendoEditado = sector;
+
+    const nomeInput = document.getElementById('setor-nome');
+    const btnSubmit = document.getElementById('btn-submit-setor');
+    const btnCancelar = document.getElementById('btn-cancelar-setor');
+
+    if (nomeInput) nomeInput.value = sector.name;
+    if (btnSubmit) btnSubmit.textContent = "Guardar Alterações";
+    if (btnCancelar) btnCancelar.classList.remove('hidden');
+
+    // Recarrega as checkboxes libertando as áreas deste setor para edição
+    renderizarSetoresUI();
+};
+
+window.cancelarEdicaoSector = () => {
+    window.sectorSendoEditado = null;
+
+    const nomeInput = document.getElementById('setor-nome');
+    const btnSubmit = document.getElementById('btn-submit-setor');
+    const btnCancelar = document.getElementById('btn-cancelar-setor');
+
+    if (nomeInput) nomeInput.value = "";
+    if (btnSubmit) btnSubmit.textContent = "Criar Setor";
+    if (btnCancelar) btnCancelar.classList.add('hidden');
+
+    renderizarSetoresUI();
+};
+
+// ==========================================
+// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES
+// ==========================================
+function renderizarSetoresUI() {
+    const listaSetores = document.getElementById('lista-setores');
+    if (listaSetores) {
+        renderSectors(window.sectors, listaSetores, window.deleteSector, window.editSector);
+    }
+
+    const checkboxesAreas = document.getElementById('checkboxes-areas');
+    if (checkboxesAreas) {
+        const editingId = window.sectorSendoEditado ? window.sectorSendoEditado.id : null;
+        renderAreaCheckboxes(window.sectors, checkboxesAreas, editingId);
+    }
+
+    const selectSetorMotorista = document.getElementById('select-setor-motorista');
+    if (selectSetorMotorista) {
+        const editingDriverId = window.driverSendoEditado ? window.driverSendoEditado.id : null;
+        updateSectorSelect(window.sectors, selectSetorMotorista, window.drivers, editingDriverId);
+    }
+}
+
+function atualizarSummaryUI() {
+    renderSummary(window.assignments, window.drivers, document.getElementById('painel-resumo'));
+}
+
+// ==========================================
 // INICIALIZAÇÃO DA APLICAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -64,7 +170,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setupRotasLogic();
     setupModaisEdicao();
     setupTriagemLogic();
-    setupCancelButtons(); // Ativa os ouvintes dos botões "Cancelar" das edições
+    setupCancelButtons(); // Ativa os ouvintes de cancelar edições
+    setupVozLogic(); // Ativa o reconhecimento por voz
     
     const visorCodigo = document.getElementById('visor-codigo');
     if (visorCodigo) {
@@ -82,54 +189,63 @@ document.addEventListener('DOMContentLoaded', () => {
     sincronizarInterfaceRota();
 });
 
-function carregarGoogleMapsScript() {
-    if (typeof google !== 'undefined') return;
-    if (typeof GOOGLE_MAPS_API_KEY === 'undefined' || !GOOGLE_MAPS_API_KEY) {
-        console.error("Chave de API do Google Maps não foi definida no config.js.");
+// ==========================================
+// LÓGICA DE RECONHECIMENTO DE VOZ (MICROFONE)
+// ==========================================
+function setupVozLogic() {
+    const btnVoz = document.getElementById('btn-voz');
+    const buscaMoradaInput = document.getElementById('busca-morada');
+    const micAtivo = document.getElementById('microfone-ativo');
+    const micInativo = document.getElementById('microfone-inativo');
+
+    if (!btnVoz || !buscaMoradaInput) return;
+
+    // Deteta se o navegador suporta SpeechRecognition
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        btnVoz.classList.add('hidden'); // Oculta o microfone se o browser não suportar
         return;
     }
 
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-        console.log("Google Maps SDK carregado.");
-        const buscaMoradaInput = document.getElementById('busca-morada');
-        if (buscaMoradaInput) {
-            inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-PT'; // Configurado para Português de Portugal
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    btnVoz.addEventListener('click', () => {
+        try {
+            recognition.start();
+        } catch (err) {
+            console.warn("Reconhecimento de voz já em execução:", err);
         }
+    });
+
+    recognition.onstart = () => {
+        if (micAtivo) micAtivo.classList.remove('hidden');
+        if (micInativo) micInativo.classList.add('hidden');
+        btnVoz.classList.remove('bg-blue-50', 'text-blue-700');
+        btnVoz.classList.add('bg-red-500', 'text-white');
     };
-    script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
-    document.head.appendChild(script);
-}
 
-// ==========================================
-// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES
-// ==========================================
-function renderizarSetoresUI() {
-    const listaSetores = document.getElementById('lista-setores');
-    if (listaSetores) {
-        renderSectors(window.sectors, listaSetores, window.deleteSector, window.editSector);
-    }
+    recognition.onend = () => {
+        if (micAtivo) micAtivo.classList.add('hidden');
+        if (micInativo) micInativo.classList.remove('hidden');
+        btnVoz.classList.add('bg-blue-50', 'text-blue-700');
+        btnVoz.classList.remove('bg-red-500', 'text-white');
+    };
 
-    const checkboxesAreas = document.getElementById('checkboxes-areas');
-    if (checkboxesAreas) {
-        // Se estivermos em modo edição de setor, passamos o ID para desbloquear as áreas dele
-        const editingId = window.sectorSendoEditado ? window.sectorSendoEditado.id : null;
-        renderAreaCheckboxes(window.sectors, checkboxesAreas, editingId);
-    }
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        buscaMoradaInput.value = transcript;
+        
+        // Simula a digitação para abrir o menu do Google Autocomplete automaticamente
+        buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
+        buscaMoradaInput.focus();
+    };
 
-    const selectSetorMotorista = document.getElementById('select-setor-motorista');
-    if (selectSetorMotorista) {
-        // Se estivermos em modo edição de motorista, passamos o ID dele para libertar a vaga do setor dele
-        const editingDriverId = window.driverSendoEditado ? window.driverSendoEditado.id : null;
-        updateSectorSelect(window.sectors, selectSetorMotorista, window.drivers, editingDriverId);
-    }
-}
-
-function atualizarSummaryUI() {
-    renderSummary(window.assignments, window.drivers, document.getElementById('painel-resumo'));
+    recognition.onerror = (event) => {
+        console.error("Erro no reconhecimento de voz:", event.error);
+    };
 }
 
 // ==========================================
@@ -797,86 +913,6 @@ window.deleteSector = (id) => {
             renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
         }
     }
-};
-
-// ==========================================
-// FUNÇÕES GLOBAIS DE EDIÇÃO (LIGAÇÃO DEFINITIVA)
-// ==========================================
-window.editDriver = (driver) => {
-    window.driverSendoEditado = driver;
-
-    const nomeInput = document.getElementById('nome-motorista');
-    const btnSubmit = document.getElementById('btn-submit-motorista');
-    const btnCancelar = document.getElementById('btn-cancelar-motorista');
-
-    if (nomeInput) nomeInput.value = driver.name;
-    if (btnSubmit) btnSubmit.textContent = "Guardar Alterações";
-    if (btnCancelar) btnCancelar.classList.remove('hidden');
-
-    // Sincroniza a cor na palete
-    window.selectedColor = driver.color;
-    const colorPickerContainer = document.getElementById('color-picker-container');
-    if (colorPickerContainer) {
-        Array.from(colorPickerContainer.children).forEach(btn => {
-            if (btn.style.backgroundColor === driver.color || btn.style.backgroundColor.replace(/\s/g, "") === driver.color.toLowerCase()) {
-                btn.classList.add('border-black', 'scale-110');
-            } else {
-                btn.classList.remove('border-black', 'scale-110');
-            }
-        });
-    }
-
-    // Recarrega o dropdown libertando a vaga do seu próprio setor
-    renderizarSetoresUI();
-    
-    // Seleciona o setor atual dele no dropdown
-    const selectSetorMotorista = document.getElementById('select-setor-motorista');
-    if (selectSetorMotorista) selectSetorMotorista.value = driver.sectorId;
-};
-
-window.cancelarEdicaoDriver = () => {
-    window.driverSendoEditado = null;
-
-    const nomeInput = document.getElementById('nome-motorista');
-    const selectSetorMotorista = document.getElementById('select-setor-motorista');
-    const btnSubmit = document.getElementById('btn-submit-motorista');
-    const btnCancelar = document.getElementById('btn-cancelar-motorista');
-
-    if (nomeInput) nomeInput.value = "";
-    if (selectSetorMotorista) selectSetorMotorista.value = "";
-    if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
-    if (btnCancelar) btnCancelar.classList.add('hidden');
-
-    renderizarSetoresUI();
-};
-
-window.editSector = (sector) => {
-    window.sectorSendoEditado = sector;
-
-    const nomeInput = document.getElementById('setor-nome');
-    const btnSubmit = document.getElementById('btn-submit-setor');
-    const btnCancelar = document.getElementById('btn-cancelar-setor');
-
-    if (nomeInput) nomeInput.value = sector.name;
-    if (btnSubmit) btnSubmit.textContent = "Guardar Alterações";
-    if (btnCancelar) btnCancelar.classList.remove('hidden');
-
-    // Recarrega as checkboxes libertando as áreas deste setor para edição
-    renderizarSetoresUI();
-};
-
-window.cancelarEdicaoSector = () => {
-    window.sectorSendoEditado = null;
-
-    const nomeInput = document.getElementById('setor-nome');
-    const btnSubmit = document.getElementById('btn-submit-setor');
-    const btnCancelar = document.getElementById('btn-cancelar-setor');
-
-    if (nomeInput) nomeInput.value = "";
-    if (btnSubmit) btnSubmit.textContent = "Criar Setor";
-    if (btnCancelar) btnCancelar.classList.add('hidden');
-
-    renderizarSetoresUI();
 };
 
 function sanitizeDigits(str) { return str.replace(/\D/g, ''); }

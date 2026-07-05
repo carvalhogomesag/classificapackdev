@@ -1,4 +1,5 @@
-const CACHE_NAME = 'classifica-pack-v12'; // Atualizado para a versão v12
+// sw.js (Versão v13)
+const CACHE_NAME = 'classificapack-v13';
 const ASSETS = [
   '/',
   '/index.html',
@@ -9,15 +10,15 @@ const ASSETS = [
   '/gestao.js',
   '/rotas.js',
   '/manifest.json',
-  'https://cdn.tailwindcss.com',
-  'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css'
+  '/icon-192.png',
+  '/icon-512.png'
 ];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.addAll(ASSETS);
-    })
+    }).then(() => self.skipWaiting())
   );
 });
 
@@ -31,11 +32,15 @@ self.addEventListener('activate', (e) => {
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
 });
 
 self.addEventListener('fetch', (e) => {
+  // Evitar caching de chamadas de API (como Google Maps ou geocodificação)
+  if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google')) {
+    return;
+  }
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
       return cachedResponse || fetch(e.request);

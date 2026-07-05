@@ -204,11 +204,17 @@
                     </div>
                 </div>
 
-                <!-- Adicionar Entregas -->
+                <!-- Adicionar Entregas (COM BOTÃO DE VOZ INTEGRADO) -->
                 <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-3 relative shadow-sm">
                     <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
-                    <input type="text" id="busca-morada" placeholder="Comece a digitar a morada aqui..." 
-                           class="w-full p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    <div class="flex space-x-2">
+                        <input type="text" id="busca-morada" placeholder="Comece a digitar ou use a voz..." 
+                               class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="button" id="btn-voz" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm">
+                            <i class="fa-solid fa-microphone text-lg animate-pulse hidden" id="microfone-ativo"></i>
+                            <i class="fa-solid fa-microphone text-lg" id="microfone-inativo"></i>
+                        </button>
+                    </div>
 
                     <div class="border-t pt-2">
                         <div class="flex justify-between items-center mb-2">
