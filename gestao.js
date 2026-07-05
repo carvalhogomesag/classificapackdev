@@ -25,16 +25,23 @@ export const AREAS_POSTAL_CODES = {
 };
 
 /**
- * Renderiza a lista de motoristas cadastrados com a indicação do seu Setor
- * CORRIGIDO: agora recebe e usa o parâmetro "editDriver" para desenhar o botão de editar
+ * Renderiza a lista de motoristas cadastrados com a indicação dos seus Setores.
+ * ATUALIZADO: um motorista pode agora ter VÁRIOS setores (driver.sectorIds é um array).
  */
 export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, editDriver) {
     if (!listaMotoristas) return;
     listaMotoristas.innerHTML = drivers.length === 0 ? '<p class="text-sm text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>' : '';
     
     drivers.forEach(driver => {
-        const sector = sectors.find(s => s.id === driver.sectorId);
-        const sectorName = sector ? sector.name : "Sem Setor associado";
+        const driverSectorIds = Array.isArray(driver.sectorIds) ? driver.sectorIds : [];
+        const sectorNames = driverSectorIds
+            .map(sid => sectors.find(s => s.id === sid))
+            .filter(Boolean)
+            .map(s => s.name);
+
+        const sectorBadgesHtml = sectorNames.length > 0
+            ? sectorNames.map(name => `<span class="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100 text-[9px] font-bold">${name}</span>`).join('')
+            : '<span class="italic text-gray-400">Sem Setor associado</span>';
 
         const div = document.createElement('div');
         div.className = "flex items-center justify-between p-3 bg-gray-50 border rounded-lg text-xs animate-fade-in";
@@ -44,8 +51,8 @@ export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, e
                     <span class="w-4 h-4 rounded-full border shadow-sm" style="background-color: ${driver.color}"></span>
                     <span class="font-semibold text-gray-700">${driver.name}</span>
                 </div>
-                <div class="text-[10px] text-gray-400 mt-1">
-                    <i class="fa-solid fa-map-location-dot"></i> Setor: <span class="font-medium text-gray-600">${sectorName}</span>
+                <div class="text-[10px] text-gray-400 mt-1.5 flex items-center flex-wrap gap-1">
+                    <i class="fa-solid fa-map-location-dot mr-0.5"></i> ${sectorBadgesHtml}
                 </div>
             </div>
             <div class="flex items-center space-x-1 flex-shrink-0">
@@ -61,26 +68,40 @@ export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, e
 
 /**
  * Processa a submissão do formulário de motorista.
- * CORRIGIDO: agora verifica window.driverSendoEditado. Se existir, ATUALIZA o motorista
+ * ATUALIZADO: lê os setores marcados nas checkboxes (um motorista pode ter VÁRIOS
+ * setores). Verifica window.driverSendoEditado — se existir, ATUALIZA o motorista
  * existente em vez de criar sempre um novo registo duplicado.
  */
 export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     e.preventDefault();
     const nomeInput = document.getElementById('nome-motorista');
-    const setorSelect = document.getElementById('select-setor-motorista');
+    const checkboxesContainer = document.getElementById('checkboxes-setores-motorista');
     const btnSubmit = document.getElementById('btn-submit-motorista');
     const btnCancelar = document.getElementById('btn-cancelar-motorista');
     
     const nome = nomeInput.value.trim();
-    const sectorId = setorSelect ? setorSelect.value : "";
-    
     if (!nome) return;
-    if (!sectorId) {
-        alert('Por favor, selecione um Setor para o motorista.');
+
+    const checkedBoxes = checkboxesContainer ? checkboxesContainer.querySelectorAll('input[type="checkbox"]:checked') : [];
+    const sectorIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+    if (sectorIds.length === 0) {
+        alert('Por favor, selecione pelo menos um Setor para o motorista.');
         return;
     }
 
     const emEdicao = window.driverSendoEditado;
+
+    // Validação de segurança redundante: garante que nenhum setor selecionado já
+    // pertence a OUTRO motorista (ignora o próprio, se estivermos em modo de edição)
+    const setorDuplicado = sectorIds.find(sid =>
+        drivers.some(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(sid) && (!emEdicao || d.id !== emEdicao.id))
+    );
+
+    if (setorDuplicado) {
+        alert('Erro de Segurança: um dos setores selecionados já está atribuído a outro motorista.');
+        return;
+    }
 
     if (emEdicao) {
         // Atualiza o motorista existente (mesmo id), em vez de criar um novo
@@ -88,7 +109,7 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
         if (driverIndex !== -1) {
             drivers[driverIndex].name = nome;
             drivers[driverIndex].color = selectedColor;
-            drivers[driverIndex].sectorId = sectorId;
+            drivers[driverIndex].sectorIds = sectorIds;
         }
         window.driverSendoEditado = null;
     } else {
@@ -96,7 +117,7 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
             id: 'd_' + Date.now(), 
             name: nome, 
             color: selectedColor,
-            sectorId: sectorId 
+            sectorIds: sectorIds 
         });
     }
 
@@ -113,7 +134,6 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     );
     
     nomeInput.value = "";
-    if (setorSelect) setorSelect.value = "";
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
@@ -122,31 +142,55 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
 }
 
 /**
- * Atualiza as opções de escolha de Setores no formulário de motoristas.
- * CORRIGIDO: agora recebe "drivers" e "editingDriverId" para aplicar a exclusividade
- * (1 setor = 1 motorista), libertando a vaga do próprio motorista quando em edição.
+ * Renderiza checkboxes de Setores para associar a um motorista.
+ * REGRA: um motorista pode ter VÁRIOS setores, mas cada setor só pode pertencer
+ * a UM motorista de cada vez (exclusividade do lado do setor).
  */
-export function updateSectorSelect(sectors, selectSector, drivers = [], editingDriverId = null) {
-    if (!selectSector) return;
-    selectSector.innerHTML = `<option value="">Selecione um setor...</option>`;
-    sectors.forEach(sector => {
-        // Verifica se este setor já está ocupado por OUTRO motorista
-        const driverOwner = drivers.find(d => d.sectorId === sector.id && d.id !== editingDriverId);
+export function renderSectorCheckboxes(sectors, container, drivers = [], editingDriverId = null) {
+    if (!container) return;
+    container.innerHTML = "";
 
-        const opt = document.createElement('option');
-        opt.value = sector.id;
+    if (sectors.length === 0) {
+        container.innerHTML = '<p class="text-xs text-gray-400 italic text-center py-2">Nenhum setor registado. Crie um setor primeiro.</p>';
+        return;
+    }
+
+    sectors.forEach(sector => {
+        // Verifica se este setor já pertence a OUTRO motorista
+        const driverOwner = drivers.find(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(sector.id) && d.id !== editingDriverId);
+        // Verifica se este setor já pertence ao motorista atualmente em edição (vem pré-marcado)
+        const belongsToEditingDriver = !!(editingDriverId && drivers.some(d => d.id === editingDriverId && Array.isArray(d.sectorIds) && d.sectorIds.includes(sector.id)));
+
+        const label = document.createElement('label');
+
         if (driverOwner) {
-            opt.textContent = `${sector.name} (ocupado por ${driverOwner.name})`;
-            opt.disabled = true;
+            // Setor indisponível (já pertence a outro motorista)
+            label.className = "flex items-center justify-between p-2 rounded bg-gray-100/50 text-gray-400 cursor-not-allowed select-none";
+            label.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-4 h-4 cursor-not-allowed">
+                    <span class="font-bold text-gray-400 line-through">${sector.name}</span>
+                </div>
+                <span class="text-[9px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded border">
+                    Com: ${driverOwner.name}
+                </span>
+            `;
         } else {
-            opt.textContent = sector.name;
+            // Setor livre (ou já pertence ao próprio motorista em edição)
+            label.className = "flex items-center justify-between p-2 rounded hover:bg-gray-100 cursor-pointer text-xs";
+            label.innerHTML = `
+                <div class="flex items-center space-x-2 text-gray-700">
+                    <input type="checkbox" value="${sector.id}" ${belongsToEditingDriver ? 'checked' : ''} class="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
+                    <span class="font-bold">${sector.name}</span>
+                </div>
+                <span class="text-[9px] bg-green-50 text-green-700 font-bold px-1.5 py-0.5 rounded border border-green-200">
+                    Livre
+                </span>
+            `;
         }
-        selectSector.appendChild(opt);
+        container.appendChild(label);
     });
 }
-
-// Manter alias para evitar quebras de importação de arquivos legados
-export const updateZoneSelect = updateSectorSelect;
 
 /**
  * Processa a submissão de um Setor de Entrega com regras de exclusividade estritas.
@@ -333,8 +377,8 @@ export function findDriverForZip(zip, sectors, drivers) {
     const matchedSector = sectors.find(s => s.areaNames && s.areaNames.includes(matchedAreaName));
     if (!matchedSector) return null;
 
-    // 3. Encontrar o motorista atribuído a este Setor
-    const matchedDriver = drivers.find(d => d.sectorId === matchedSector.id);
+    // 3. Encontrar o motorista atribuído a este Setor (agora entre a lista de setores dele)
+    const matchedDriver = drivers.find(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(matchedSector.id));
     return matchedDriver || null; 
 }
 

@@ -90,10 +90,13 @@
                            class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold uppercase text-gray-600">Associar ao Setor</label>
-                    <select id="select-setor-motorista" required class="w-full mt-1 p-2 border rounded bg-white outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="">Selecione um setor...</option>
-                    </select>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-xs font-bold uppercase text-gray-600">Associar Setor(es)</label>
+                        <span class="text-[9px] text-gray-400 font-semibold italic">*Um setor só pode ter 1 motorista</span>
+                    </div>
+                    <div id="checkboxes-setores-motorista" class="border rounded p-2 max-h-56 overflow-y-auto space-y-2 bg-gray-50">
+                        <p class="text-xs text-gray-400 italic text-center py-2">A carregar setores do sistema...</p>
+                    </div>
                 </div>
                 <div>
                     <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>

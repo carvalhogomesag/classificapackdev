@@ -4,7 +4,7 @@ import { saveData, safeJSONParse } from './storage.js';
 import { 
     renderDrivers, 
     handleDriverSubmit, 
-    updateSectorSelect, 
+    renderSectorCheckboxes, 
     renderSummary,
     renderSectors,
     renderAreaCheckboxes,
@@ -28,6 +28,15 @@ const colorPalette = [
 window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
 window.sectors = safeJSONParse('cp_zones', []); // Setores em memória
+
+// MIGRAÇÃO DE DADOS: converte motoristas antigos (sectorId único) para o novo
+// modelo (sectorIds: array), já que agora um motorista pode ter vários setores.
+window.drivers.forEach(driver => {
+    if (!Array.isArray(driver.sectorIds)) {
+        driver.sectorIds = driver.sectorId ? [driver.sectorId] : [];
+    }
+    delete driver.sectorId;
+});
 
 window.currentInput = "";
 window.isPrefixLocked = false;
@@ -77,24 +86,19 @@ window.editDriver = (driver) => {
         });
     }
 
-    // Recarrega o dropdown libertando a vaga do seu próprio setor
+    // Recarrega as checkboxes de setores, libertando a(s) vaga(s) do seu próprio motorista
+    // e pré-marcando os setores que já lhe pertencem
     renderizarSetoresUI();
-    
-    // Seleciona o setor atual dele no dropdown
-    const selectSetorMotorista = document.getElementById('select-setor-motorista');
-    if (selectSetorMotorista) selectSetorMotorista.value = driver.sectorId;
 };
 
 window.cancelarEdicaoDriver = () => {
     window.driverSendoEditado = null;
 
     const nomeInput = document.getElementById('nome-motorista');
-    const selectSetorMotorista = document.getElementById('select-setor-motorista');
     const btnSubmit = document.getElementById('btn-submit-motorista');
     const btnCancelar = document.getElementById('btn-cancelar-motorista');
 
     if (nomeInput) nomeInput.value = "";
-    if (selectSetorMotorista) selectSetorMotorista.value = "";
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
@@ -203,10 +207,10 @@ function renderizarSetoresUI() {
         renderAreaCheckboxes(window.sectors, checkboxesAreas, editingId);
     }
 
-    const selectSetorMotorista = document.getElementById('select-setor-motorista');
-    if (selectSetorMotorista) {
+    const checkboxesSetoresMotorista = document.getElementById('checkboxes-setores-motorista');
+    if (checkboxesSetoresMotorista) {
         const editingDriverId = window.driverSendoEditado ? window.driverSendoEditado.id : null;
-        updateSectorSelect(window.sectors, selectSetorMotorista, window.drivers, editingDriverId);
+        renderSectorCheckboxes(window.sectors, checkboxesSetoresMotorista, window.drivers, editingDriverId);
     }
 }
 
@@ -844,14 +848,13 @@ function setupForms() {
     const formSetor = document.getElementById('form-setor');
 
     const listaMotoristas = document.getElementById('lista-motoristas');
-    const selectSetorMotorista = document.getElementById('select-setor-motorista');
 
-    if (formMotorista && listaMotoristas && selectSetorMotorista) {
+    if (formMotorista && listaMotoristas) {
         formMotorista.addEventListener('submit', (e) => {
             handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
                 renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
                 atualizarSummaryUI();
-                renderizarSetoresUI(); // Atualiza os setores livres no dropdown do motorista
+                renderizarSetoresUI(); // Atualiza os setores livres nas checkboxes do motorista
             });
         });
     }
@@ -921,12 +924,14 @@ window.deleteDriver = (id) => {
 };
 
 window.deleteSector = (id) => {
-    if (confirm("Deseja apagar este Setor? As localidades associadas ficarão novamente livres e os motoristas associados a ele ficarão sem atribuição.")) {
+    if (confirm("Deseja apagar este Setor? As localidades associadas ficarão novamente livres e os motoristas associados a ele perderão essa atribuição.")) {
         window.sectors = window.sectors.filter(s => s.id !== id);
         
-        // Dissocia os motoristas afetados por esta remoção
+        // Remove o setor apagado da lista de setores de cada motorista afetado
         window.drivers.forEach(drv => {
-            if (drv.sectorId === id) drv.sectorId = "";
+            if (Array.isArray(drv.sectorIds)) {
+                drv.sectorIds = drv.sectorIds.filter(sid => sid !== id);
+            }
         });
 
         sincronizarPersistencia();
@@ -940,3 +945,4 @@ window.deleteSector = (id) => {
 };
 
 function sanitizeDigits(str) { return str.replace(/\D/g, ''); }
+
