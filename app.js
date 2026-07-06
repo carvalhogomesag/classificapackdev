@@ -648,9 +648,28 @@ function renderMoradasAdicionadas() {
         `;
         
         item.querySelector('.btn-edit-morada').onclick = () => abrirModalEdicaoParagem(morada, false);
+        
+        // CORRIGIDO: Remover um pacote atualiza imediatamente o planeamento, a rota otimizada, o mapa e os dados
         item.querySelector('.btn-del-morada').onclick = () => {
             window.moradasEntregas = window.moradasEntregas.filter(m => m.id !== morada.id);
+            window.rotaOtimizada = window.rotaOtimizada.filter(m => m.id !== morada.id); // Sincroniza a remoção na rota ativa
+            
             renderMoradasAdicionadas();
+            
+            // Re-renderiza a rota ativa e o mapa se houver pacotes restantes, caso contrário esconde-os
+            if (window.rotaOtimizada.length > 0) {
+                renderizarItinerarioOtimizado();
+                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+            } else {
+                const containerMapa = document.getElementById('container-mapa');
+                const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+                const estatisticasRota = document.getElementById('estatisticas-rota');
+                if (containerMapa) containerMapa.classList.add('hidden');
+                if (containerRotaOrdenada) containerRotaOrdenada.classList.add('hidden');
+                if (estatisticasRota) estatisticasRota.classList.add('hidden');
+                limparMapaVisual();
+            }
+            
             sincronizarPersistencia();
         };
 
@@ -778,10 +797,17 @@ function renderizarItinerarioOtimizado() {
             window.open(linkGoogleMaps, '_blank');
         };
 
+        // CORRIGIDO: Sincroniza a alteração de estado no planeamento e na rota ativa para preservar o progresso na reotimização
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
                 const novoStatus = btn.getAttribute('data-status');
                 paragem.status = novoStatus;
+                
+                // Grava o mesmo estado no array original para que não se perca ao reotimizar
+                const idx = window.moradasEntregas.findIndex(m => m.id === paragem.id);
+                if (idx !== -1) {
+                    window.moradasEntregas[idx].status = novoStatus;
+                }
                 
                 sincronizarPersistencia();
                 renderizarItinerarioOtimizado();
