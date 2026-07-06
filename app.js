@@ -165,6 +165,10 @@ document.addEventListener('DOMContentLoaded', () => {
     renderizarSetoresUI();
     atualizarSummaryUI();
     sincronizarInterfaceRota();
+
+    // RESTAURAÇÃO DE SEPARADOR ATIVO (Evita que o PWA volte para a triagem ao reabrir)
+    const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
+    showTab(activeTab);
 });
 
 // ==========================================
@@ -394,6 +398,35 @@ function setupTriagemLogic() {
 }
 
 // ==========================================
+// CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO
+// ==========================================
+function alternarModoRota(modo) {
+    const btnPlaneamento = document.getElementById('btn-modo-planeamento');
+    const btnConducao = document.getElementById('btn-modo-conducao');
+    const planningControls = document.getElementById('planning-controls');
+
+    if (!btnPlaneamento || !btnConducao || !planningControls) return;
+
+    if (modo === 'conducao') {
+        planningControls.classList.add('hidden');
+        
+        // Atualização estética dos botões seletores
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        
+        localStorage.setItem('cp_modo_rota', 'conducao');
+    } else {
+        planningControls.classList.remove('hidden');
+        
+        // Atualização estética dos botões seletores
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        
+        localStorage.setItem('cp_modo_rota', 'planeamento');
+    }
+}
+
+// ==========================================
 // LÓGICA DAS ROTAS DO TURNO
 // ==========================================
 function setupRotasLogic() {
@@ -406,6 +439,15 @@ function setupRotasLogic() {
     const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
     const statusPartida = document.getElementById('status-partida');
     const buscaMoradaInput = document.getElementById('busca-morada');
+
+    // Seletores de modo de ecrã
+    const btnPlaneamento = document.getElementById('btn-modo-planeamento');
+    const btnConducao = document.getElementById('btn-modo-conducao');
+
+    if (btnPlaneamento && btnConducao) {
+        btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
+        btnConducao.addEventListener('click', () => alternarModoRota('conducao'));
+    }
 
     if (btnIniciarRota && dataRotaInput) {
         btnIniciarRota.addEventListener('click', () => {
@@ -431,6 +473,7 @@ function setupRotasLogic() {
                 window.rotaOtimizada = [];
                 window.dataRotaSelecionada = "";
                 window.rotaIniciada = false;
+                localStorage.removeItem('cp_last_navigated_id'); // Limpa registo da última paragem
                 limparMapaVisual();
                 sincronizarPersistencia();
                 sincronizarInterfaceRota();
@@ -483,6 +526,7 @@ function setupRotasLogic() {
         btnLimparEnderecos.addEventListener('click', () => {
             window.moradasEntregas = [];
             window.rotaOtimizada = [];
+            localStorage.removeItem('cp_last_navigated_id');
             document.getElementById('container-mapa').classList.add('hidden');
             document.getElementById('container-rota-ordenada').classList.add('hidden');
             document.getElementById('estatisticas-rota').classList.add('hidden');
@@ -524,6 +568,10 @@ function sincronizarInterfaceRota() {
         }
 
         renderMoradasAdicionadas();
+
+        // Recupera o modo ativo de visualização (Planeamento vs Condução)
+        const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
+        alternarModoRota(modoSalvo);
 
         if (window.rotaOtimizada.length > 0) {
             const containerMapa = document.getElementById('container-mapa');
@@ -647,6 +695,9 @@ function otimizarItinerarioComVizinhoMaisProximo() {
     setTimeout(() => {
         desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
     }, 300);
+
+    // MUDANÇA AUTOMÁTICA DE MODO: Otimizou? Entra logo em Modo Condução (ecrã focado)
+    alternarModoRota('conducao');
 }
 
 function renderizarItinerarioOtimizado() {
@@ -654,16 +705,28 @@ function renderizarItinerarioOtimizado() {
     if (!listaRotaFinal) return;
 
     listaRotaFinal.innerHTML = "";
+    
+    // Recupera a última paragem onde o motorista clicou em "Navegar"
+    const lastNavigatedId = localStorage.getItem('cp_last_navigated_id');
+
     window.rotaOtimizada.forEach((paragem, index) => {
         const item = document.createElement('div');
+        item.id = `paragem-${paragem.id}`; // Define ID para podermos focar por scroll
         
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
         if (paragem.status === "Falhou") statusColor = "bg-red-500";
 
-        item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
-        const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
+        const isLastNavigated = paragem.id === lastNavigatedId;
 
+        // Visual estético diferenciado e destacado para o item ativo que está em navegação
+        if (isLastNavigated) {
+            item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-blue-500 bg-blue-50/70 shadow-md ring-4 ring-blue-100";
+        } else {
+            item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
+        }
+
+        const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
         item.innerHTML = `
@@ -676,6 +739,7 @@ function renderizarItinerarioOtimizado() {
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
+                        ${isLastNavigated ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
@@ -683,9 +747,9 @@ function renderizarItinerarioOtimizado() {
                     ${primeiraLinhaObs ? `<div class="bg-yellow-50 border border-yellow-100 p-2 rounded mt-1 text-[11px] text-gray-600 font-medium italic truncate"><i class="fa-solid fa-comment-dots text-yellow-500 mr-1"></i> ${primeiraLinhaObs}</div>` : ''}
                 </div>
                 <div class="flex flex-col space-y-1">
-                    <a href="${linkGoogleMaps}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center justify-center space-x-1 whitespace-nowrap shadow-sm">
+                    <button class="btn-navegar bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center justify-center space-x-1 whitespace-nowrap shadow-sm">
                         <i class="fa-solid fa-location-arrow"></i> <span>Navegar</span>
-                    </a>
+                    </button>
                     <button class="btn-edit-otimizada bg-gray-50 border hover:bg-gray-100 text-gray-700 font-bold px-3 py-1.5 rounded-lg text-[10px] text-center">
                         Editar Info
                     </button>
@@ -707,6 +771,13 @@ function renderizarItinerarioOtimizado() {
 
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
+        // AÇÃO DO BOTÃO NAVEGAR: Regista a ação antes de lançar o Maps
+        item.querySelector('.btn-navegar').onclick = () => {
+            localStorage.setItem('cp_last_navigated_id', paragem.id);
+            renderizarItinerarioOtimizado(); // Força o destaque instantâneo na UI
+            window.open(linkGoogleMaps, '_blank');
+        };
+
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
                 const novoStatus = btn.getAttribute('data-status');
@@ -722,6 +793,16 @@ function renderizarItinerarioOtimizado() {
     });
 
     renderEstatisticasRota();
+
+    // CENTRAÇÃO AUTOMÁTICA: Faz o scroll suave do telemóvel para a paragem atual
+    if (lastNavigatedId) {
+        setTimeout(() => {
+            const elementoAlvo = document.getElementById(`paragem-${lastNavigatedId}`);
+            if (elementoAlvo) {
+                elementoAlvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 150);
+    }
 }
 
 // ==========================================
@@ -957,4 +1038,3 @@ window.deleteSector = (id) => {
 };
 
 function sanitizeDigits(str) { return str.replace(/\D/g, ''); }
-

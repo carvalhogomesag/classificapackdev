@@ -11,9 +11,12 @@ export function setupNavigation(showTab) {
 }
 
 /**
- * Controla a alternância visual entre os ecrãs
+ * Controla a alternância visual entre os ecrãs e persiste a escolha por segurança
  */
 export function showTab(tabName) {
+    // Guarda o separador ativo para que ao reabrir/regressar, a app continue onde estava
+    localStorage.setItem('cp_active_tab', tabName);
+
     const views = ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas'];
     views.forEach(id => {
         const el = document.getElementById(id);
