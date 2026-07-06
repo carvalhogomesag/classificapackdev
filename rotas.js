@@ -4,9 +4,10 @@ let googleMap = null;
 let googleMarkers = [];
 let googleRoutePolyline = null;
 let autocompleteWidget = null;
+let autocompleteWidgetTriagem = null; // Autocomplete específico para triagem
 
 /**
- * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha
+ * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha (Rotas)
  */
 export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
@@ -28,6 +29,38 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
         const address = place.formatted_address;
 
         callback({ id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5), lat, lng, address });
+    });
+}
+
+/**
+ * Inicializa o widget do Google Places Autocomplete para procurar Códigos Postais por moradas (Triagem)
+ */
+export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback) {
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
+
+    // Focado em obter os componentes de morada onde o Código Postal reside
+    autocompleteWidgetTriagem = new google.maps.places.Autocomplete(buscaMoradaInput, {
+        componentRestrictions: { country: ['pt', 'es'] },
+        fields: ['address_components', 'formatted_address']
+    });
+
+    autocompleteWidgetTriagem.addListener('place_changed', () => {
+        const place = autocompleteWidgetTriagem.getPlace();
+        if (!place.address_components) {
+            callback(null, null);
+            return;
+        }
+
+        let postalCode = "";
+        // Procura pelo componente "postal_code" na morada selecionada
+        for (const component of place.address_components) {
+            if (component.types.includes('postal_code')) {
+                postalCode = component.long_name; // Formato padrão do Google: "2655-319"
+                break;
+            }
+        }
+
+        callback(postalCode, place.formatted_address);
     });
 }
 

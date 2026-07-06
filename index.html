@@ -45,6 +45,15 @@
                 </div>
             </div>
 
+            <!-- NOVO: Procura de morada alternativa na Triagem -->
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <label class="block text-xs font-bold uppercase text-blue-800 mb-1">
+                    <i class="fa-solid fa-magnifying-glass-location mr-1"></i> Procurar Código por Morada:
+                </label>
+                <input type="text" id="busca-morada-triagem" placeholder="Ex: Rua Almirante Reis, Ericeira..." 
+                       class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+            </div>
+
             <div class="grid grid-cols-3 gap-3 flex-1">
                 <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="1">1</button>
                 <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="2">2</button>
@@ -123,7 +132,7 @@
         <!-- SEÇÃO 3: SETORES E ÁREAS -->
         <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
             
-            <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                 <h2 class="text-xl font-bold text-gray-800">Criar Setor de Entrega</h2>
                 <form id="form-setor" class="space-y-3">
                     <div>
@@ -151,7 +160,7 @@
                 </form>
             </div>
 
-            <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                 <h3 class="text-sm font-bold uppercase text-gray-500 mb-1">Setores Ativos</h3>
                 <div id="lista-setores" class="space-y-2 max-h-64 overflow-y-auto pr-1">
                     <p class="text-sm text-gray-400 italic text-center py-4">Nenhum setor registado.</p>
@@ -166,7 +175,7 @@
             <!-- SUB-ECRÃ A: PREPARAÇÃO/INICIALIZAÇÃO DA ROTA -->
             <div id="container-setup-rota" class="space-y-4">
                 <h2 class="text-xl font-bold text-gray-800">Iniciar Novo Itinerário</h2>
-                <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                     <div>
                         <label class="block text-xs font-bold uppercase text-gray-500">Data de Trabalho</label>
                         <input type="date" id="data-rota" class="w-full mt-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
@@ -204,7 +213,7 @@
                 <!-- GRUPO DE CONTROLOS DE PLANEAMENTO (Podem ser ocultados no Modo Condução) -->
                 <div id="planning-controls" class="space-y-4">
                     <!-- Ponto de Partida -->
-                    <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-2 shadow-sm">
+                    <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
                         <span class="block text-xs font-bold uppercase text-gray-500">1. Ponto de Partida</span>
                         <div class="flex space-x-2">
                             <button id="btn-gps-partida" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
@@ -220,7 +229,7 @@
                     </div>
 
                     <!-- Adicionar Entregas -->
-                    <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-3 relative shadow-sm">
+                    <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-3 relative">
                         <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
                         <div class="flex space-x-2">
                             <input type="text" id="busca-morada" placeholder="Comece a digitar ou use a voz..." 
@@ -341,8 +350,8 @@
             </div>
         </div>
 
-        <!-- Barra de Navegação Inferior -->
-        <nav class="absolute bottom-0 inset-x-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20">
+        <!-- MODALMENTE FIXO: Barra de Navegação Inferior (Fixed) -->
+        <nav class="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
             <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-lg"></i>
                 <span>Triagem</span>

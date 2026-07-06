@@ -11,7 +11,14 @@ import {
     handleSectorSubmit,
     findDriverForZip
 } from './gestao.js';
-import { inicializarGoogleAutocomplete, obterEnderecoPorGPSGoogle, calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './rotas.js';
+import { 
+    inicializarGoogleAutocomplete, 
+    inicializarGoogleAutocompleteTriagem, // NOVO: Carrega o localizador de códigos postais por morada
+    obterEnderecoPorGPSGoogle, 
+    calcularDistanciaHaversine, 
+    desenharMapaGoogle, 
+    limparMapaVisual 
+} from './rotas.js';
 
 // ==========================================
 // PALETE DE CORES GLOBAL
@@ -187,9 +194,37 @@ function carregarGoogleMapsScript() {
     script.defer = true;
     script.onload = () => {
         console.log("Google Maps SDK carregado.");
+        
+        // Autocomplete para o planeador de rotas (Aba Rotas)
         const buscaMoradaInput = document.getElementById('busca-morada');
         if (buscaMoradaInput) {
             inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
+        }
+
+        // NOVO: Autocomplete específico para encontrar o código postal (Aba Triagem)
+        const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
+        if (buscaMoradaTriagemInput) {
+            inicializarGoogleAutocompleteTriagem(buscaMoradaTriagemInput, (postalCode, formattedAddress) => {
+                if (postalCode) {
+                    // Limpa traços do código postal e guarda-o sem caracteres especiais
+                    const cleanCode = postalCode.replace(/\D/g, '');
+                    
+                    if (cleanCode.length >= 4) {
+                        window.currentInput = cleanCode;
+                        
+                        const visorCodigo = document.getElementById('visor-codigo');
+                        if (visorCodigo) {
+                            updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                        }
+                        console.log(`Código Postal extraído com sucesso: ${postalCode}`);
+                    }
+                } else {
+                    alert("A Google encontrou o endereço mas não encontrou um Código Postal específico. Por favor, introduza manualmente.");
+                }
+                
+                // Limpa o input de pesquisa após encontrar o código
+                buscaMoradaTriagemInput.value = "";
+            });
         }
     };
     script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
