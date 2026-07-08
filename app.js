@@ -67,7 +67,7 @@ window.definindoPartidaPorMorada = false;
 let itemSendoEditado = null; 
 
 // ==========================================
-// CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO (DEFINIDA NO INÍCIO)
+// CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO
 // ==========================================
 function alternarModoRota(modo) {
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
@@ -93,6 +93,111 @@ function alternarModoRota(modo) {
         
         localStorage.setItem('cp_modo_rota', 'planeamento');
     }
+}
+
+// ==========================================
+// LÓGICA DE OCR (CÂMARA / LEITURA DE ETIQUETA COM IA)
+// ==========================================
+function setupCameraOcrLogic() {
+    const btnCamera = document.getElementById('btn-camera-triagem');
+    const inputCamera = document.getElementById('input-camera-captura');
+
+    if (!btnCamera || !inputCamera) return;
+
+    btnCamera.addEventListener('click', () => {
+        // Verifica se a biblioteca Tesseract.js foi carregada no index.html
+        if (typeof Tesseract === 'undefined') {
+            alert("Erro: A biblioteca de leitura de imagem (OCR) ainda não foi descarregada. Verifique a ligação à Internet.");
+            return;
+        }
+        // Dispara o input de ficheiro nativo com captura de câmara
+        inputCamera.click();
+    });
+
+    inputCamera.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        // Feedback visual no botão enquanto processa
+        btnCamera.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-lg"></i>';
+        btnCamera.disabled = true;
+
+        console.log("Iniciando leitura OCR na imagem selecionada...");
+
+        // Executa o motor Tesseract.js localmente no telemóvel
+        Tesseract.recognize(
+            file,
+            'por', // Reconhecer em Português
+            { logger: m => console.log(m) }
+        ).then(({ data: { text } }) => {
+            console.log("Texto extraído da etiqueta:", text);
+
+            if (!text || !text.trim()) {
+                alert("Não foi possível detetar nenhum texto legível na fotografia. Aproxime mais a câmara e garanta que há boa iluminação.");
+                return;
+            }
+
+            // Remove quebras de linha e limpa espaços extras para enviar à Google
+            const cleanAddress = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+            // Usamos a API de Geocodificação da Google para pesquisar o endereço detetado e extrair o código postal estruturado
+            if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+                const geocoder = new google.maps.Geocoder();
+                geocoder.geocode({ address: cleanAddress, componentRestrictions: { country: 'PT' } }, (results, status) => {
+                    if (status === "OK" && results[0]) {
+                        const matchedPlace = results[0];
+                        let postalCode = "";
+
+                        // Procura o código postal de 7 dígitos nos componentes
+                        for (const component of matchedPlace.address_components) {
+                            if (component.types.includes('postal_code')) {
+                                postalCode = component.long_name;
+                                break;
+                            }
+                        }
+
+                        if (postalCode) {
+                            const cleanCode = postalCode.replace(/\D/g, '');
+                            if (cleanCode.length === 7) {
+                                window.currentInput = cleanCode;
+                                
+                                const visorCodigo = document.getElementById('visor-codigo');
+                                if (visorCodigo) {
+                                    updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                                }
+
+                                alert(`Morada detetada com sucesso:\n"${matchedPlace.formatted_address}"\n\nCódigo Postal: ${postalCode}`);
+
+                                // Dispara a triagem automática
+                                const btnAnalisar = document.getElementById('btn-analisar');
+                                if (btnAnalisar) btnAnalisar.click();
+                            } else {
+                                alert(`Encontrámos a morada:\n"${matchedPlace.formatted_address}"\n\nMas o Código Postal está incompleto: ${postalCode}. Digite os dígitos em falta.`);
+                            }
+                        } else {
+                            alert(`Encontrámos a morada:\n"${matchedPlace.formatted_address}"\n\nMas não conseguimos extrair o Código Postal de 7 dígitos. Digite manualmente.`);
+                        }
+                    } else {
+                        // Fallback: Coloca o texto extraído no campo de busca para o utilizador ajustar
+                        document.getElementById('busca-morada-triagem').value = cleanAddress;
+                        alert("Não foi possível geolocalizar automaticamente. Colocámos o texto detetado no campo de pesquisa para poder ajustar.");
+                    }
+                });
+            } else {
+                // Fallback sem Google Maps Geocoder ativo
+                document.getElementById('busca-morada-triagem').value = cleanAddress;
+                alert("Texto extraído com sucesso! Ajuste-o na caixa de pesquisa.");
+            }
+        }).catch(err => {
+            console.error("Erro no processamento OCR:", err);
+            alert("Falha ao ler a imagem. Tente tirar a foto novamente com foco no texto.");
+        }).finally(() => {
+            // Repõe o estado original do botão
+            btnCamera.innerHTML = '<i class="fa-solid fa-camera text-lg"></i>';
+            btnCamera.disabled = false;
+            inputCamera.value = ""; // Limpa o ficheiro para permitir novos cliques
+        });
+    });
 }
 
 // ==========================================
@@ -268,6 +373,7 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTriagemLogic();
     setupCancelButtons(); // Ativa os ouvintes dos botões "Cancelar" das edições
     setupVozLogic(); // Ativa o reconhecimento por voz
+    setupCameraOcrLogic(); // NOVO: Ativa o leitor inteligente de câmara
     
     const visorCodigo = document.getElementById('visor-codigo');
     if (visorCodigo) {
@@ -363,8 +469,8 @@ function setupVozLogic() {
     recognition.onend = () => {
         if (micAtivo) micAtivo.classList.add('hidden');
         if (micInativo) micInativo.classList.remove('hidden');
-        btnVoz.classList.add('bg-blue-50', 'text-blue-700');
-        btnVoz.classList.remove('bg-red-500', 'text-white');
+        btnVoz.classList.remove('bg-blue-50', 'text-blue-700');
+        btnVoz.classList.add('bg-red-500', 'text-white');
     };
 
     recognition.onresult = (event) => {

@@ -8,12 +8,15 @@
     <!-- Configurações PWA -->
     <link class="manifest" rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#2563EB">
-    <link rel="apple-touch-icon" href="icon-192.png">
+    <link class="apple-touch-icon" href="icon-192.png">
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Ícones simples -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Tesseract.js para processamento OCR local na câmara do telemóvel -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <!-- CORREÇÕES VISUAIS PARA O AUTOCOMPLETE DO GOOGLE MAPS -->
     <style>
@@ -72,13 +75,20 @@
                 </div>
             </div>
 
-            <!-- Procurar Código por Morada -->
-            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <label class="block text-xs font-bold uppercase text-blue-800 mb-1">
+            <!-- NOVO: Procurar Código por Morada (Campo de Texto + Botão Câmara para OCR) -->
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 space-y-2">
+                <label class="block text-xs font-bold uppercase text-blue-800">
                     <i class="fa-solid fa-magnifying-glass-location mr-1"></i> Procurar Código por Morada:
                 </label>
-                <input type="text" id="busca-morada-triagem" placeholder="Ex: Rua Almirante Reis, Ericeira..." 
-                       class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                <div class="flex space-x-2">
+                    <input type="text" id="busca-morada-triagem" placeholder="Ex: Rua Almirante Reis, Ericeira..." 
+                           class="flex-1 p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                    <button type="button" id="btn-camera-triagem" class="bg-blue-600 active:bg-blue-700 hover:bg-blue-700 text-white rounded-lg px-4 flex items-center justify-center shadow-sm transition" title="Abrir Câmara para ler etiqueta">
+                        <i class="fa-solid fa-camera text-lg"></i>
+                    </button>
+                </div>
+                <!-- Input oculto para ativar a câmara física do telemóvel de forma automática -->
+                <input type="file" id="input-camera-captura" accept="image/*" capture="environment" class="hidden">
             </div>
 
             <div class="grid grid-cols-3 gap-3 flex-1">
