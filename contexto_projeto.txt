@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 06/07/2026, 20:54:47
+Gerado em: 06/07/2026, 21:45:08
 
 =========================================
 ARQUIVO: index.html
@@ -50,6 +50,15 @@ ARQUIVO: index.html
                 <div id="visor-codigo" class="text-4xl font-mono font-bold tracking-widest mt-1 text-yellow-400">
                     - - - - - - -
                 </div>
+            </div>
+
+            <!-- NOVO: Procura de morada alternativa na Triagem -->
+            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                <label class="block text-xs font-bold uppercase text-blue-800 mb-1">
+                    <i class="fa-solid fa-magnifying-glass-location mr-1"></i> Procurar Código por Morada:
+                </label>
+                <input type="text" id="busca-morada-triagem" placeholder="Ex: Rua Almirante Reis, Ericeira..." 
+                       class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
             </div>
 
             <div class="grid grid-cols-3 gap-3 flex-1">
@@ -130,7 +139,7 @@ ARQUIVO: index.html
         <!-- SEÇÃO 3: SETORES E ÁREAS -->
         <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
             
-            <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                 <h2 class="text-xl font-bold text-gray-800">Criar Setor de Entrega</h2>
                 <form id="form-setor" class="space-y-3">
                     <div>
@@ -158,7 +167,7 @@ ARQUIVO: index.html
                 </form>
             </div>
 
-            <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                 <h3 class="text-sm font-bold uppercase text-gray-500 mb-1">Setores Ativos</h3>
                 <div id="lista-setores" class="space-y-2 max-h-64 overflow-y-auto pr-1">
                     <p class="text-sm text-gray-400 italic text-center py-4">Nenhum setor registado.</p>
@@ -173,7 +182,7 @@ ARQUIVO: index.html
             <!-- SUB-ECRÃ A: PREPARAÇÃO/INICIALIZAÇÃO DA ROTA -->
             <div id="container-setup-rota" class="space-y-4">
                 <h2 class="text-xl font-bold text-gray-800">Iniciar Novo Itinerário</h2>
-                <div class="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-sm">
+                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
                     <div>
                         <label class="block text-xs font-bold uppercase text-gray-500">Data de Trabalho</label>
                         <input type="date" id="data-rota" class="w-full mt-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
@@ -198,49 +207,62 @@ ARQUIVO: index.html
                     </button>
                 </div>
 
-                <!-- Ponto de Partida -->
-                <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-2 shadow-sm">
-                    <span class="block text-xs font-bold uppercase text-gray-500">1. Ponto de Partida</span>
-                    <div class="flex space-x-2">
-                        <button id="btn-gps-partida" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
-                            <i class="fa-solid fa-location-crosshairs"></i> <span>Usar Meu GPS</span>
-                        </button>
-                        <button id="btn-buscar-partida" class="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
-                            <i class="fa-solid fa-magnifying-glass"></i> <span>Buscar Morada</span>
-                        </button>
-                    </div>
-                    <div id="status-partida" class="text-xs font-mono text-gray-500 italic bg-gray-50 p-2 rounded border">
-                        Partida: Localização não definida
-                    </div>
+                <!-- SELETOR DE MODO (Planeamento vs Modo Condução) -->
+                <div class="flex space-x-1 bg-gray-100 p-1 rounded-xl mb-3 shadow-inner">
+                    <button type="button" id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
+                        <i class="fa-solid fa-sliders mr-1"></i> Planeamento
+                    </button>
+                    <button type="button" id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
+                        <i class="fa-solid fa-truck-steering mr-1"></i> Condução
+                    </button>
                 </div>
 
-                <!-- Adicionar Entregas (COM BOTÃO DE VOZ INTEGRADO) -->
-                <div class="bg-white p-3 rounded-lg border border-gray-200 space-y-3 relative shadow-sm">
-                    <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
-                    <div class="flex space-x-2">
-                        <input type="text" id="busca-morada" placeholder="Comece a digitar ou use a voz..." 
-                               class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                        <button type="button" id="btn-voz" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm">
-                            <i class="fa-solid fa-microphone text-lg animate-pulse hidden" id="microfone-ativo"></i>
-                            <i class="fa-solid fa-microphone text-lg" id="microfone-inativo"></i>
-                        </button>
+                <!-- GRUPO DE CONTROLOS DE PLANEAMENTO (Podem ser ocultados no Modo Condução) -->
+                <div id="planning-controls" class="space-y-4">
+                    <!-- Ponto de Partida -->
+                    <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
+                        <span class="block text-xs font-bold uppercase text-gray-500">1. Ponto de Partida</span>
+                        <div class="flex space-x-2">
+                            <button id="btn-gps-partida" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
+                                <i class="fa-solid fa-location-crosshairs"></i> <span>Usar Meu GPS</span>
+                            </button>
+                            <button id="btn-buscar-partida" class="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
+                                <i class="fa-solid fa-magnifying-glass"></i> <span>Buscar Morada</span>
+                            </button>
+                        </div>
+                        <div id="status-partida" class="text-xs font-mono text-gray-500 italic bg-gray-50 p-2 rounded border">
+                            Partida: Localização não definida
+                        </div>
                     </div>
 
-                    <div class="border-t pt-2">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-xs font-bold text-gray-600">Pacotes Adicionados:</span>
-                            <button id="btn-limpar-enderecos" class="text-[10px] text-red-500 font-bold uppercase">Limpar Tudo</button>
+                    <!-- Adicionar Entregas -->
+                    <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-3 relative">
+                        <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
+                        <div class="flex space-x-2">
+                            <input type="text" id="busca-morada" placeholder="Comece a digitar ou use a voz..." 
+                                   class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                            <button type="button" id="btn-voz" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm">
+                                <i class="fa-solid fa-microphone text-lg animate-pulse hidden" id="microfone-ativo"></i>
+                                <i class="fa-solid fa-microphone text-lg" id="microfone-inativo"></i>
+                            </button>
                         </div>
-                        <div id="lista-moradas-adicionadas" class="space-y-1.5 max-h-32 overflow-y-auto">
-                            <p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>
+
+                        <div class="border-t pt-2">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-xs font-bold text-gray-600">Pacotes Adicionados:</span>
+                                <button id="btn-limpar-enderecos" class="text-[10px] text-red-500 font-bold uppercase">Limpar Tudo</button>
+                            </div>
+                            <div id="lista-moradas-adicionadas" class="space-y-1.5 max-h-32 overflow-y-auto">
+                                <p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>
+                            </div>
                         </div>
                     </div>
+
+                    <!-- Botão de Otimizar -->
+                    <button id="btn-otimizar-rota" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md text-base flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>
+                    </button>
                 </div>
-
-                <!-- Botão de Otimizar -->
-                <button id="btn-otimizar-rota" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md text-base flex items-center justify-center space-x-2">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>
-                </button>
 
                 <!-- Mapa do Google Maps -->
                 <div id="container-mapa" class="hidden space-y-2">
@@ -335,8 +357,8 @@ ARQUIVO: index.html
             </div>
         </div>
 
-        <!-- Barra de Navegação Inferior -->
-        <nav class="absolute bottom-0 inset-x-0 bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20">
+        <!-- MODALMENTE FIXO: Barra de Navegação Inferior (Fixed) -->
+        <nav class="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
             <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-lg"></i>
                 <span>Triagem</span>
@@ -380,7 +402,14 @@ import {
     handleSectorSubmit,
     findDriverForZip
 } from './gestao.js';
-import { inicializarGoogleAutocomplete, obterEnderecoPorGPSGoogle, calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './rotas.js';
+import { 
+    inicializarGoogleAutocomplete, 
+    inicializarGoogleAutocompleteTriagem, // NOVO: Carrega o localizador de códigos postais por morada
+    obterEnderecoPorGPSGoogle, 
+    calcularDistanciaHaversine, 
+    desenharMapaGoogle, 
+    limparMapaVisual 
+} from './rotas.js';
 
 // ==========================================
 // PALETE DE CORES GLOBAL
@@ -534,6 +563,10 @@ document.addEventListener('DOMContentLoaded', () => {
     renderizarSetoresUI();
     atualizarSummaryUI();
     sincronizarInterfaceRota();
+
+    // RESTAURAÇÃO DE SEPARADOR ATIVO (Evita que o PWA volte para a triagem ao reabrir)
+    const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
+    showTab(activeTab);
 });
 
 // ==========================================
@@ -552,9 +585,37 @@ function carregarGoogleMapsScript() {
     script.defer = true;
     script.onload = () => {
         console.log("Google Maps SDK carregado.");
+        
+        // Autocomplete para o planeador de rotas (Aba Rotas)
         const buscaMoradaInput = document.getElementById('busca-morada');
         if (buscaMoradaInput) {
             inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
+        }
+
+        // NOVO: Autocomplete específico para encontrar o código postal (Aba Triagem)
+        const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
+        if (buscaMoradaTriagemInput) {
+            inicializarGoogleAutocompleteTriagem(buscaMoradaTriagemInput, (postalCode, formattedAddress) => {
+                if (postalCode) {
+                    // Limpa traços do código postal e guarda-o sem caracteres especiais
+                    const cleanCode = postalCode.replace(/\D/g, '');
+                    
+                    if (cleanCode.length >= 4) {
+                        window.currentInput = cleanCode;
+                        
+                        const visorCodigo = document.getElementById('visor-codigo');
+                        if (visorCodigo) {
+                            updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                        }
+                        console.log(`Código Postal extraído com sucesso: ${postalCode}`);
+                    }
+                } else {
+                    alert("A Google encontrou o endereço mas não encontrou um Código Postal específico. Por favor, introduza manualmente.");
+                }
+                
+                // Limpa o input de pesquisa após encontrar o código
+                buscaMoradaTriagemInput.value = "";
+            });
         }
     };
     script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
@@ -763,6 +824,35 @@ function setupTriagemLogic() {
 }
 
 // ==========================================
+// CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO
+// ==========================================
+function alternarModoRota(modo) {
+    const btnPlaneamento = document.getElementById('btn-modo-planeamento');
+    const btnConducao = document.getElementById('btn-modo-conducao');
+    const planningControls = document.getElementById('planning-controls');
+
+    if (!btnPlaneamento || !btnConducao || !planningControls) return;
+
+    if (modo === 'conducao') {
+        planningControls.classList.add('hidden');
+        
+        // Atualização estética dos botões seletores
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        
+        localStorage.setItem('cp_modo_rota', 'conducao');
+    } else {
+        planningControls.classList.remove('hidden');
+        
+        // Atualização estética dos botões seletores
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        
+        localStorage.setItem('cp_modo_rota', 'planeamento');
+    }
+}
+
+// ==========================================
 // LÓGICA DAS ROTAS DO TURNO
 // ==========================================
 function setupRotasLogic() {
@@ -775,6 +865,15 @@ function setupRotasLogic() {
     const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
     const statusPartida = document.getElementById('status-partida');
     const buscaMoradaInput = document.getElementById('busca-morada');
+
+    // Seletores de modo de ecrã
+    const btnPlaneamento = document.getElementById('btn-modo-planeamento');
+    const btnConducao = document.getElementById('btn-modo-conducao');
+
+    if (btnPlaneamento && btnConducao) {
+        btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
+        btnConducao.addEventListener('click', () => alternarModoRota('conducao'));
+    }
 
     if (btnIniciarRota && dataRotaInput) {
         btnIniciarRota.addEventListener('click', () => {
@@ -800,6 +899,7 @@ function setupRotasLogic() {
                 window.rotaOtimizada = [];
                 window.dataRotaSelecionada = "";
                 window.rotaIniciada = false;
+                localStorage.removeItem('cp_last_navigated_id'); // Limpa registo da última paragem
                 limparMapaVisual();
                 sincronizarPersistencia();
                 sincronizarInterfaceRota();
@@ -852,6 +952,7 @@ function setupRotasLogic() {
         btnLimparEnderecos.addEventListener('click', () => {
             window.moradasEntregas = [];
             window.rotaOtimizada = [];
+            localStorage.removeItem('cp_last_navigated_id');
             document.getElementById('container-mapa').classList.add('hidden');
             document.getElementById('container-rota-ordenada').classList.add('hidden');
             document.getElementById('estatisticas-rota').classList.add('hidden');
@@ -893,6 +994,10 @@ function sincronizarInterfaceRota() {
         }
 
         renderMoradasAdicionadas();
+
+        // Recupera o modo ativo de visualização (Planeamento vs Condução)
+        const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
+        alternarModoRota(modoSalvo);
 
         if (window.rotaOtimizada.length > 0) {
             const containerMapa = document.getElementById('container-mapa');
@@ -969,9 +1074,28 @@ function renderMoradasAdicionadas() {
         `;
         
         item.querySelector('.btn-edit-morada').onclick = () => abrirModalEdicaoParagem(morada, false);
+        
+        // CORRIGIDO: Remover um pacote atualiza imediatamente o planeamento, a rota otimizada, o mapa e os dados
         item.querySelector('.btn-del-morada').onclick = () => {
             window.moradasEntregas = window.moradasEntregas.filter(m => m.id !== morada.id);
+            window.rotaOtimizada = window.rotaOtimizada.filter(m => m.id !== morada.id); // Sincroniza a remoção na rota ativa
+            
             renderMoradasAdicionadas();
+            
+            // Re-renderiza a rota ativa e o mapa se houver pacotes restantes, caso contrário esconde-os
+            if (window.rotaOtimizada.length > 0) {
+                renderizarItinerarioOtimizado();
+                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+            } else {
+                const containerMapa = document.getElementById('container-mapa');
+                const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+                const estatisticasRota = document.getElementById('estatisticas-rota');
+                if (containerMapa) containerMapa.classList.add('hidden');
+                if (containerRotaOrdenada) containerRotaOrdenada.classList.add('hidden');
+                if (estatisticasRota) estatisticasRota.classList.add('hidden');
+                limparMapaVisual();
+            }
+            
             sincronizarPersistencia();
         };
 
@@ -1016,6 +1140,9 @@ function otimizarItinerarioComVizinhoMaisProximo() {
     setTimeout(() => {
         desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
     }, 300);
+
+    // MUDANÇA AUTOMÁTICA DE MODO: Otimizou? Entra logo em Modo Condução (ecrã focado)
+    alternarModoRota('conducao');
 }
 
 function renderizarItinerarioOtimizado() {
@@ -1023,16 +1150,28 @@ function renderizarItinerarioOtimizado() {
     if (!listaRotaFinal) return;
 
     listaRotaFinal.innerHTML = "";
+    
+    // Recupera a última paragem onde o motorista clicou em "Navegar"
+    const lastNavigatedId = localStorage.getItem('cp_last_navigated_id');
+
     window.rotaOtimizada.forEach((paragem, index) => {
         const item = document.createElement('div');
+        item.id = `paragem-${paragem.id}`; // Define ID para podermos focar por scroll
         
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
         if (paragem.status === "Falhou") statusColor = "bg-red-500";
 
-        item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
-        const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
+        const isLastNavigated = paragem.id === lastNavigatedId;
 
+        // Visual estético diferenciado e destacado para o item ativo que está em navegação
+        if (isLastNavigated) {
+            item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-blue-500 bg-blue-50/70 shadow-md ring-4 ring-blue-100";
+        } else {
+            item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
+        }
+
+        const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
         item.innerHTML = `
@@ -1045,6 +1184,7 @@ function renderizarItinerarioOtimizado() {
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
+                        ${isLastNavigated ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
@@ -1052,9 +1192,9 @@ function renderizarItinerarioOtimizado() {
                     ${primeiraLinhaObs ? `<div class="bg-yellow-50 border border-yellow-100 p-2 rounded mt-1 text-[11px] text-gray-600 font-medium italic truncate"><i class="fa-solid fa-comment-dots text-yellow-500 mr-1"></i> ${primeiraLinhaObs}</div>` : ''}
                 </div>
                 <div class="flex flex-col space-y-1">
-                    <a href="${linkGoogleMaps}" target="_blank" class="bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center justify-center space-x-1 whitespace-nowrap shadow-sm">
+                    <button class="btn-navegar bg-green-600 hover:bg-green-700 text-white font-bold px-3 py-2 rounded-lg text-xs flex items-center justify-center space-x-1 whitespace-nowrap shadow-sm">
                         <i class="fa-solid fa-location-arrow"></i> <span>Navegar</span>
-                    </a>
+                    </button>
                     <button class="btn-edit-otimizada bg-gray-50 border hover:bg-gray-100 text-gray-700 font-bold px-3 py-1.5 rounded-lg text-[10px] text-center">
                         Editar Info
                     </button>
@@ -1076,10 +1216,24 @@ function renderizarItinerarioOtimizado() {
 
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
+        // AÇÃO DO BOTÃO NAVEGAR: Regista a ação antes de lançar o Maps
+        item.querySelector('.btn-navegar').onclick = () => {
+            localStorage.setItem('cp_last_navigated_id', paragem.id);
+            renderizarItinerarioOtimizado(); // Força o destaque instantâneo na UI
+            window.open(linkGoogleMaps, '_blank');
+        };
+
+        // CORRIGIDO: Sincroniza a alteração de estado no planeamento e na rota ativa para preservar o progresso na reotimização
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
                 const novoStatus = btn.getAttribute('data-status');
                 paragem.status = novoStatus;
+                
+                // Grava o mesmo estado no array original para que não se perca ao reotimizar
+                const idx = window.moradasEntregas.findIndex(m => m.id === paragem.id);
+                if (idx !== -1) {
+                    window.moradasEntregas[idx].status = novoStatus;
+                }
                 
                 sincronizarPersistencia();
                 renderizarItinerarioOtimizado();
@@ -1091,6 +1245,16 @@ function renderizarItinerarioOtimizado() {
     });
 
     renderEstatisticasRota();
+
+    // CENTRAÇÃO AUTOMÁTICA: Faz o scroll suave do telemóvel para a paragem atual
+    if (lastNavigatedId) {
+        setTimeout(() => {
+            const elementoAlvo = document.getElementById(`paragem-${lastNavigatedId}`);
+            if (elementoAlvo) {
+                elementoAlvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 150);
+    }
 }
 
 // ==========================================
@@ -1327,8 +1491,6 @@ window.deleteSector = (id) => {
 
 function sanitizeDigits(str) { return str.replace(/\D/g, ''); }
 
-
-
 =========================================
 ARQUIVO: ui.js
 =========================================
@@ -1346,9 +1508,12 @@ export function setupNavigation(showTab) {
 }
 
 /**
- * Controla a alternância visual entre os ecrãs
+ * Controla a alternância visual entre os ecrãs e persiste a escolha por segurança
  */
 export function showTab(tabName) {
+    // Guarda o separador ativo para que ao reabrir/regressar, a app continue onde estava
+    localStorage.setItem('cp_active_tab', tabName);
+
     const views = ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas'];
     views.forEach(id => {
         const el = document.getElementById(id);
@@ -1986,9 +2151,10 @@ let googleMap = null;
 let googleMarkers = [];
 let googleRoutePolyline = null;
 let autocompleteWidget = null;
+let autocompleteWidgetTriagem = null; // Autocomplete específico para triagem
 
 /**
- * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha
+ * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha (Rotas)
  */
 export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
@@ -2010,6 +2176,38 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
         const address = place.formatted_address;
 
         callback({ id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5), lat, lng, address });
+    });
+}
+
+/**
+ * Inicializa o widget do Google Places Autocomplete para procurar Códigos Postais por moradas (Triagem)
+ */
+export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback) {
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
+
+    // Focado em obter os componentes de morada onde o Código Postal reside
+    autocompleteWidgetTriagem = new google.maps.places.Autocomplete(buscaMoradaInput, {
+        componentRestrictions: { country: ['pt', 'es'] },
+        fields: ['address_components', 'formatted_address']
+    });
+
+    autocompleteWidgetTriagem.addListener('place_changed', () => {
+        const place = autocompleteWidgetTriagem.getPlace();
+        if (!place.address_components) {
+            callback(null, null);
+            return;
+        }
+
+        let postalCode = "";
+        // Procura pelo componente "postal_code" na morada selecionada
+        for (const component of place.address_components) {
+            if (component.types.includes('postal_code')) {
+                postalCode = component.long_name; // Formato padrão do Google: "2655-319"
+                break;
+            }
+        }
+
+        callback(postalCode, place.formatted_address);
     });
 }
 

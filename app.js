@@ -13,7 +13,7 @@ import {
 } from './gestao.js';
 import { 
     inicializarGoogleAutocomplete, 
-    inicializarGoogleAutocompleteTriagem, // NOVO: Carrega o localizador de códigos postais por morada
+    inicializarGoogleAutocompleteTriagem, // Carrega o localizador de códigos postais por morada
     obterEnderecoPorGPSGoogle, 
     calcularDistanciaHaversine, 
     desenharMapaGoogle, 
@@ -201,7 +201,7 @@ function carregarGoogleMapsScript() {
             inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
         }
 
-        // NOVO: Autocomplete específico para encontrar o código postal (Aba Triagem)
+        // Autocomplete específico para encontrar o código postal (Aba Triagem)
         const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
         if (buscaMoradaTriagemInput) {
             inicializarGoogleAutocompleteTriagem(buscaMoradaTriagemInput, (postalCode, formattedAddress) => {
@@ -209,20 +209,36 @@ function carregarGoogleMapsScript() {
                     // Limpa traços do código postal e guarda-o sem caracteres especiais
                     const cleanCode = postalCode.replace(/\D/g, '');
                     
-                    if (cleanCode.length >= 4) {
+                    // Se tivermos os 7 dígitos completos do Código Postal
+                    if (cleanCode.length === 7) {
                         window.currentInput = cleanCode;
                         
                         const visorCodigo = document.getElementById('visor-codigo');
                         if (visorCodigo) {
                             updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
                         }
-                        console.log(`Código Postal extraído com sucesso: ${postalCode}`);
+                        
+                        console.log(`Código Postal extraído com sucesso: ${postalCode}. A iniciar triagem automática...`);
+                        
+                        // DISPARO AUTOMÁTICO: clica no botão Analisar para poupar um toque ao operador!
+                        const btnAnalisar = document.getElementById('btn-analisar');
+                        if (btnAnalisar) {
+                            btnAnalisar.click();
+                        }
+                    } else if (cleanCode.length >= 4) {
+                        // Se for um código parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
+                        window.currentInput = cleanCode;
+                        const visorCodigo = document.getElementById('visor-codigo');
+                        if (visorCodigo) {
+                            updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                        }
+                        alert(`A morada selecionada contém apenas um código postal parcial (${postalCode}). Por favor, complete os 3 dígitos restantes usando o teclado.`);
                     }
                 } else {
-                    alert("A Google encontrou o endereço mas não encontrou um Código Postal específico. Por favor, introduza manualmente.");
+                    alert("O Google encontrou o endereço mas não extraiu um Código Postal de 7 dígitos específico. Por favor, introduza manualmente.");
                 }
                 
-                // Limpa o input de pesquisa após encontrar o código
+                // Limpa o input de pesquisa de triagem para a próxima leitura
                 buscaMoradaTriagemInput.value = "";
             });
         }
@@ -684,14 +700,12 @@ function renderMoradasAdicionadas() {
         
         item.querySelector('.btn-edit-morada').onclick = () => abrirModalEdicaoParagem(morada, false);
         
-        // CORRIGIDO: Remover um pacote atualiza imediatamente o planeamento, a rota otimizada, o mapa e os dados
         item.querySelector('.btn-del-morada').onclick = () => {
             window.moradasEntregas = window.moradasEntregas.filter(m => m.id !== morada.id);
             window.rotaOtimizada = window.rotaOtimizada.filter(m => m.id !== morada.id); // Sincroniza a remoção na rota ativa
             
             renderMoradasAdicionadas();
             
-            // Re-renderiza a rota ativa e o mapa se houver pacotes restantes, caso contrário esconde-os
             if (window.rotaOtimizada.length > 0) {
                 renderizarItinerarioOtimizado();
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
@@ -832,13 +846,11 @@ function renderizarItinerarioOtimizado() {
             window.open(linkGoogleMaps, '_blank');
         };
 
-        // CORRIGIDO: Sincroniza a alteração de estado no planeamento e na rota ativa para preservar o progresso na reotimização
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
                 const novoStatus = btn.getAttribute('data-status');
                 paragem.status = novoStatus;
                 
-                // Grava o mesmo estado no array original para que não se perca ao reotimizar
                 const idx = window.moradasEntregas.findIndex(m => m.id === paragem.id);
                 if (idx !== -1) {
                     window.moradasEntregas[idx].status = novoStatus;
