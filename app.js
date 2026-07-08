@@ -66,6 +66,9 @@ window.definindoPartidaPorMorada = false;
 // Estado para controle de edição de paragens
 let itemSendoEditado = null; 
 
+// Variável para guardar o convite de instalação automático do PWA (Android/Chrome)
+let deferredInstallPrompt = null;
+
 // ==========================================
 // CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO
 // ==========================================
@@ -97,7 +100,6 @@ function alternarModoRota(modo) {
 
 // ==========================================
 // PRÉ-PROCESSAMENTO DIGITAL DE IMAGEM PARA OCR
-// Converte para alto contraste (binário) e escala de cinzentos para leituras precisas
 // ==========================================
 function preprocessarImagemParaOCR(file, callback) {
     const reader = new FileReader();
@@ -107,7 +109,6 @@ function preprocessarImagemParaOCR(file, callback) {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
             
-            // Redimensionamento inteligente para não travar o telemóvel com imagens gigantes de 12MP
             const maxDim = 1000;
             let width = img.width;
             let height = img.height;
@@ -125,22 +126,17 @@ function preprocessarImagemParaOCR(file, callback) {
             canvas.height = height;
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Filtro de Limiarização (Binarização Preto e Branco) para nitidez absoluta das letras
             const imgData = ctx.getImageData(0, 0, width, height);
             const data = imgData.data;
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i];
                 const g = data[i + 1];
                 const b = data[i + 2];
-                
-                // Conversão para escala de cinzas por luminosidade
                 const v = 0.299 * r + 0.587 * g + 0.114 * b;
-                
-                // Binarização: se for cinza escuro vira preto (0), se for claro vira branco (255)
                 const finalColor = v > 125 ? 255 : 0;
-                data[i] = finalColor;     // Vermelho
-                data[i + 1] = finalColor; // Verde
-                data[i + 2] = finalColor; // Azul
+                data[i] = finalColor;
+                data[i + 1] = finalColor;
+                data[i + 2] = finalColor;
             }
             ctx.putImageData(imgData, 0, 0);
             
@@ -155,42 +151,33 @@ function preprocessarImagemParaOCR(file, callback) {
 
 // ==========================================
 // ALGORITMO DE EXTRAÇÃO E LIMPEZA DE MORADAS (REGEX FILTRO)
-// Descarta códigos de barras, tracking e foca apenas nas ruas de Portugal
 // ==========================================
 function extrairMoradaFocada(text) {
     const lines = text.split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 2);
 
-    // Palavras-chave que indicam elementos típicos de lixo nas etiquetas de encomendas
     const regexFiltroLixo = /\b(63300|63369|paq24|meest|ref:|exp:|portes|pagado|bultos|peso|reembolso|eur|fecha|sender|recipient|remetente|destinatario)\b/i;
-    
-    // Palavras-chave que identificam ruas, estradas, lotes e localidades de Mafra e arredores
     const regexMoradaTermos = /(rua|caminho|av|avenida|travessa|beco|largo|praca|nº|n\.\d|lote|casal|quinta|urbanizacao|mafra|ericeira|sintra|encarnacao|carvoeira|cheleiros|gradil|malveira|milharado|sobral|alcainca|venda\s+do\s+pinheiro)/i;
 
     let moradaCandidata = "";
 
     const linhasLimpas = lines.filter(line => {
-        // Se a linha contiver números muito longos (como códigos de barras de mais de 8 dígitos), remove
         if (/\d{8,}/.test(line)) return false;
-        // Se contiver elementos de transporte ou lixo de expedição, remove
         if (regexFiltroLixo.test(line)) return false;
         return true;
     });
 
-    // Procura por linhas que descrevem uma rua ou vila
     for (let line of linhasLimpas) {
         if (regexMoradaTermos.test(line)) {
             moradaCandidata += line + " ";
         }
     }
 
-    // Se detetámos texto limpo estruturado
     if (moradaCandidata.trim().length > 6) {
         return moradaCandidata.trim() + ", Mafra, Portugal";
     }
 
-    // Se falhar o filtro refinado, junta as 2 maiores linhas não numéricas como fallback
     return linhasLimpas.slice(0, 2).join(', ') + ", Mafra, Portugal";
 }
 
@@ -199,7 +186,7 @@ function extrairMoradaFocada(text) {
 // Pré-instalada e pronta para ativação
 // ==========================================
 function setupCameraOcrLogic() {
-    const btnCamera = document.getElementById('btn-camera-triagem'); // Inativo na v16
+    const btnCamera = document.getElementById('btn-camera-triagem'); // Inativo por omissão na v16/v17
     const inputCamera = document.getElementById('input-camera-captura');
 
     if (!btnCamera || !inputCamera) return;
@@ -262,6 +249,59 @@ function setupCameraOcrLogic() {
                 inputCamera.value = "";
             });
         });
+    });
+}
+
+// ==========================================
+// CONFIGURAÇÃO DE INSTALAÇÃO MANUAL DO PWA
+// Suporte nativo Android/Chrome e assistente iOS (Safari)
+// ==========================================
+function setupPWAInstallationLogic() {
+    const banner = document.getElementById('banner-pwa-instalacao');
+    const btnInstalar = document.getElementById('btn-instalar-pwa');
+
+    if (!banner || !btnInstalar) return;
+
+    // Deteta se o PWA já se encontra em modo nativo (instalado)
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+    // Se já estiver instalado no ecrã principal, nunca exibe o banner
+    if (isStandalone) {
+        banner.classList.add('hidden');
+        return;
+    }
+
+    // No iPhone, como não há evento automático, mostramos o banner de ajuda manual imediatamente
+    if (isIOS) {
+        banner.classList.remove('hidden');
+    }
+
+    // Ouvinte nativo para navegadores compatíveis (Android, Chrome, Samsung, etc)
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault(); // Previne que o prompt do browser salte desordenadamente
+        deferredInstallPrompt = e; // Guarda o evento para acionar no clique
+        banner.classList.remove('hidden'); // Exibe o nosso banner no topo da Triagem
+    });
+
+    btnInstalar.addEventListener('click', () => {
+        if (isIOS) {
+            // Guia didático passo-a-passo para iPhones
+            alert("Como instalar o Classifica Pack no seu iPhone:\n\n1. Toque no botão 'Partilhar' (o ícone de um quadrado com uma seta para cima, no Safari).\n2. Deslize a lista e selecione 'Adicionar ao Ecrã Principal'.\n3. Confirme clicando em 'Adicionar' no canto superior direito.");
+        } else if (deferredInstallPrompt) {
+            // Dispara o pop-up nativo de instalação no Android/Chrome
+            deferredInstallPrompt.prompt();
+            deferredInstallPrompt.userChoice.then((choiceResult) => {
+                if (choiceResult.outcome === 'accepted') {
+                    console.log('Utilizador instalou o PWA com sucesso.');
+                    banner.classList.add('hidden');
+                }
+                deferredInstallPrompt = null;
+            });
+        } else {
+            // Fallback genérico para outros navegadores
+            alert("Para instalar:\nToque no ícone de 3 pontos do seu navegador e escolha 'Instalar aplicação' ou 'Adicionar ao ecrã principal'.");
+        }
     });
 }
 
@@ -344,21 +384,17 @@ window.cancelarEdicaoSector = () => {
 // INICIALIZAÇÃO DOS AUTOCOMPLETES DO GOOGLE
 // ==========================================
 function inicializarTodosAutocompletes() {
-    // Autocomplete para o planeador de rotas (Aba Rotas)
     const buscaMoradaInput = document.getElementById('busca-morada');
     if (buscaMoradaInput) {
         inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
     }
 
-    // Autocomplete específico para encontrar o código postal (Aba Triagem)
     const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
     if (buscaMoradaTriagemInput) {
         inicializarGoogleAutocompleteTriagem(buscaMoradaTriagemInput, (postalCode, formattedAddress) => {
             if (postalCode) {
-                // Limpa traços do código postal e guarda-o sem caracteres especiais
                 const cleanCode = postalCode.replace(/\D/g, '');
                 
-                // Se tivermos os 7 dígitos completos do Código Postal
                 if (cleanCode.length === 7) {
                     window.currentInput = cleanCode;
                     
@@ -369,13 +405,11 @@ function inicializarTodosAutocompletes() {
                     
                     console.log(`Código Postal extraído com sucesso: ${postalCode}. A iniciar triagem automática...`);
                     
-                    // DISPARO AUTOMÁTICO: clica no botão Analisar para poupar um toque ao operador!
                     const btnAnalisar = document.getElementById('btn-analisar');
                     if (btnAnalisar) {
                         btnAnalisar.click();
                     }
                 } else if (cleanCode.length >= 4) {
-                    // Se o código foi parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
                     window.currentInput = cleanCode;
                     const visorCodigo = document.getElementById('visor-codigo');
                     if (visorCodigo) {
@@ -387,7 +421,6 @@ function inicializarTodosAutocompletes() {
                 alert("O Google encontrou o endereço mas não extraiu um Código Postal de 7 dígitos específico. Por favor, introduza manualmente.");
             }
             
-            // Limpa o input de pesquisa de triagem para a próxima leitura
             buscaMoradaTriagemInput.value = "";
         });
     }
@@ -434,12 +467,12 @@ function setupVozTriagemLogic() {
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        btnVoz.classList.add('hidden'); // Oculta o microfone se o browser não for compatível
+        btnVoz.classList.add('hidden');
         return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'pt-PT'; // Português de Portugal
+    recognition.lang = 'pt-PT';
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -471,10 +504,8 @@ function setupVozTriagemLogic() {
         
         console.log("Voz captada na Triagem:", transcript);
 
-        // Geocodificação silenciosa automática para extrair o código de 7 dígitos correspondente
         if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
             const geocoder = new google.maps.Geocoder();
-            // Adiciona Mafra e Portugal para dar contexto à inteligência de pesquisa da Google
             geocoder.geocode({ address: transcript + ", Mafra, Portugal", componentRestrictions: { country: 'PT' } }, (results, status) => {
                 if (status === "OK" && results[0]) {
                     const matchedPlace = results[0];
@@ -498,7 +529,6 @@ function setupVozTriagemLogic() {
                             
                             console.log(`Morada ditada detetada com sucesso! Código: ${postalCode}`);
                             
-                            // Dispara a triagem do motorista de imediato
                             const btnAnalisar = document.getElementById('btn-analisar');
                             if (btnAnalisar) btnAnalisar.click();
                         } else {
@@ -508,7 +538,6 @@ function setupVozTriagemLogic() {
                         alert(`Encontrámos a morada ditada: "${matchedPlace.formatted_address}".\nMas não conseguimos extrair o Código Postal de 7 dígitos.`);
                     }
                 } else {
-                    // Fallback se não conseguir geolocalizar de imediato
                     buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
                     buscaMoradaInput.focus();
                 }
@@ -540,8 +569,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupTriagemLogic();
     setupCancelButtons(); // Ativa os ouvintes dos botões "Cancelar" das edições
     setupVozLogic(); // Ativa o reconhecimento por voz da aba Rotas
-    setupVozTriagemLogic(); // NOVO: Ativa o comando de voz no ecrã de Triagem
+    setupVozTriagemLogic(); // Ativa o comando de voz no ecrã de Triagem
     setupCameraOcrLogic(); // IA de câmara pré-instalada offline
+    setupPWAInstallationLogic(); // NOVO: Ativa o gestor de instalação PWA manual
     
     const visorCodigo = document.getElementById('visor-codigo');
     if (visorCodigo) {
@@ -610,12 +640,12 @@ function setupVozLogic() {
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        btnVoz.classList.add('hidden'); // Oculta o microfone se o browser não suportar
+        btnVoz.classList.add('hidden');
         return;
     }
 
     const recognition = new SpeechRecognition();
-    recognition.lang = 'pt-PT'; // Configurado para Português de Portugal
+    recognition.lang = 'pt-PT';
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -637,15 +667,13 @@ function setupVozLogic() {
     recognition.onend = () => {
         if (micAtivo) micAtivo.classList.add('hidden');
         if (micInativo) micInativo.classList.remove('hidden');
-        btnVoz.classList.add('bg-blue-50', 'text-blue-700');
-        btnVoz.classList.remove('bg-red-500', 'text-white');
+        btnVoz.classList.remove('bg-blue-50', 'text-blue-700');
+        btnVoz.classList.add('bg-red-500', 'text-white');
     };
 
     recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         buscaMoradaInput.value = transcript;
-        
-        // Simula a digitação para abrir o menu do Google Autocomplete automaticamente
         buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
         buscaMoradaInput.focus();
     };
@@ -684,8 +712,6 @@ function setupTriagemLogic() {
     const btnCancelarAtribuir = document.getElementById('btn-cancelar-atribuir');
     const modalResultado = document.getElementById('modal-resultado');
 
-    // Fecha o modal de resultado sem gravar a atribuição, mantendo o código
-    // já digitado no visor para que o utilizador possa corrigi-lo se necessário.
     function cancelarAtribuicao() {
         if (modalResultado) modalResultado.classList.add('hidden');
         window.lastAnalysisResult = null;
@@ -786,7 +812,6 @@ function setupRotasLogic() {
     const statusPartida = document.getElementById('status-partida');
     const buscaMoradaInput = document.getElementById('busca-morada');
 
-    // Seletores de modo de ecrã
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
@@ -819,7 +844,7 @@ function setupRotasLogic() {
                 window.rotaOtimizada = [];
                 window.dataRotaSelecionada = "";
                 window.rotaIniciada = false;
-                localStorage.removeItem('cp_last_navigated_id'); // Limpa registo da última paragem
+                localStorage.removeItem('cp_last_navigated_id');
                 limparMapaVisual();
                 sincronizarPersistencia();
                 sincronizarInterfaceRota();
@@ -915,7 +940,6 @@ function sincronizarInterfaceRota() {
 
         renderMoradasAdicionadas();
 
-        // Recupera o modo ativo de visualização (Planeamento vs Condução)
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
         alternarModoRota(modoSalvo);
 
