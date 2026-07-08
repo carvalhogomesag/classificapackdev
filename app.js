@@ -96,6 +96,105 @@ function alternarModoRota(modo) {
 }
 
 // ==========================================
+// PRÉ-PROCESSAMENTO DIGITAL DE IMAGEM PARA OCR
+// Converte para alto contraste (binário) e escala de cinzentos para leituras precisas
+// ==========================================
+function preprocessarImagemParaOCR(file, callback) {
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Redimensionamento inteligente para não travar o telemóvel com imagens gigantes de 12MP
+            const maxDim = 1000;
+            let width = img.width;
+            let height = img.height;
+            if (width > maxDim || height > maxDim) {
+                if (width > height) {
+                    height = Math.round((height * maxDim) / width);
+                    width = maxDim;
+                } else {
+                    width = Math.round((width * maxDim) / height);
+                    height = maxDim;
+                }
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Filtro de Limiarização (Binarização Preto e Branco) para nitidez absoluta das letras
+            const imgData = ctx.getImageData(0, 0, width, height);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                
+                // Conversão para escala de cinzas por luminosidade
+                const v = 0.299 * r + 0.587 * g + 0.114 * b;
+                
+                // Binarização: se for cinza escuro vira preto (0), se for claro vira branco (255)
+                const finalColor = v > 125 ? 255 : 0;
+                data[i] = finalColor;     // Vermelho
+                data[i + 1] = finalColor; // Verde
+                data[i + 2] = finalColor; // Azul
+            }
+            ctx.putImageData(imgData, 0, 0);
+            
+            canvas.toBlob((blob) => {
+                callback(blob);
+            }, 'image/jpeg', 0.90);
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+// ==========================================
+// ALGORITMO DE EXTRAÇÃO E LIMPEZA DE MORADAS (REGEX FILTRO)
+// Descarta códigos de barras, tracking e foca apenas nas ruas de Portugal
+// ==========================================
+function extrairMoradaFocada(text) {
+    const lines = text.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 2);
+
+    // Palavras-chave que indicam elementos típicos de lixo nas etiquetas de encomendas
+    const regexFiltroLixo = /\b(63300|63369|paq24|meest|ref:|exp:|portes|pagado|bultos|peso|reembolso|eur|fecha|sender|recipient|remetente|destinatario)\b/i;
+    
+    // Palavras-chave que identificam ruas, estradas, lotes e localidades de Mafra e arredores
+    const regexMoradaTermos = /(rua|caminho|av|avenida|travessa|beco|largo|praca|nº|n\.\d|lote|casal|quinta|urbanizacao|mafra|ericeira|sintra|encarnacao|carvoeira|cheleiros|gradil|malveira|milharado|sobral|alcainca|venda\s+do\s+pinheiro)/i;
+
+    let moradaCandidata = "";
+
+    const linhasLimpas = lines.filter(line => {
+        // Se a linha contiver números muito longos (como códigos de barras de mais de 8 dígitos), remove
+        if (/\d{8,}/.test(line)) return false;
+        // Se contiver elementos de transporte ou lixo de expedição, remove
+        if (regexFiltroLixo.test(line)) return false;
+        return true;
+    });
+
+    // Procura por linhas que descrevem uma rua ou vila
+    for (let line of linhasLimpas) {
+        if (regexMoradaTermos.test(line)) {
+            moradaCandidata += line + " ";
+        }
+    }
+
+    // Se detetámos texto limpo estruturado
+    if (moradaCandidata.trim().length > 6) {
+        return moradaCandidata.trim() + ", Mafra, Portugal";
+    }
+
+    // Se falhar o filtro refinado, junta as 2 maiores linhas não numéricas como fallback
+    return linhasLimpas.slice(0, 2).join(', ') + ", Mafra, Portugal";
+}
+
+// ==========================================
 // LÓGICA DE OCR (CÂMARA / LEITURA DE ETIQUETA COM IA)
 // ==========================================
 function setupCameraOcrLogic() {
@@ -105,12 +204,10 @@ function setupCameraOcrLogic() {
     if (!btnCamera || !inputCamera) return;
 
     btnCamera.addEventListener('click', () => {
-        // Verifica se a biblioteca Tesseract.js foi carregada no index.html
         if (typeof Tesseract === 'undefined') {
-            alert("Erro: A biblioteca de leitura de imagem (OCR) ainda não foi descarregada. Verifique a ligação à Internet.");
+            alert("A carregar motor de leitura de imagem. Aguarde 2 segundos e tente novamente.");
             return;
         }
-        // Dispara o input de ficheiro nativo com captura de câmara
         inputCamera.click();
     });
 
@@ -118,90 +215,91 @@ function setupCameraOcrLogic() {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Feedback visual no botão enquanto processa
+        // Feedback visual de processamento ativo
         btnCamera.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-lg"></i>';
         btnCamera.disabled = true;
 
         console.log("Iniciando leitura OCR na imagem selecionada...");
 
-        // Executa o motor Tesseract.js localmente no telemóvel
-        Tesseract.recognize(
-            file,
-            'por', // Reconhecer em Português
-            { logger: m => console.log(m) }
-        ).then(({ data: { text } }) => {
-            console.log("Texto extraído da etiqueta:", text);
+        // 1. Processa a foto tirada para obter escala de cinzentos e binarização de alto contraste
+        preprocessarImagemParaOCR(file, (processedBlob) => {
+            
+            // 2. Envia a imagem limpa para o motor de IA Tesseract
+            Tesseract.recognize(
+                processedBlob,
+                'por',
+                { logger: m => console.log(m.status, Math.round(m.progress * 100) + "%") }
+            ).then(({ data: { text } }) => {
+                console.log("Texto Bruto Extraído:", text);
 
-            if (!text || !text.trim()) {
-                alert("Não foi possível detetar nenhum texto legível na fotografia. Aproxime mais a câmara e garanta que há boa iluminação.");
-                return;
-            }
+                if (!text || !text.trim()) {
+                    alert("Não foi possível ler texto na etiqueta. Aproxime mais a câmara do endereço do destinatário e garanta boa iluminação.");
+                    return;
+                }
 
-            // Remove quebras de linha e limpa espaços extras para enviar à Google
-            const cleanAddress = text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+                // 3. Limpa o texto, eliminando tracking numbers e isolando a morada física do destinatário
+                const moradaFiltrada = extrairMoradaFocada(text);
+                console.log("Morada Filtrada Segura para Google:", moradaFiltrada);
 
-            // Usamos a API de Geocodificação da Google para pesquisar o endereço detetado e extrair o código postal estruturado
-            if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
-                const geocoder = new google.maps.Geocoder();
-                geocoder.geocode({ address: cleanAddress, componentRestrictions: { country: 'PT' } }, (results, status) => {
-                    if (status === "OK" && results[0]) {
-                        const matchedPlace = results[0];
-                        let postalCode = "";
+                // 4. Executa a geolocalização exata usando o Google Geocoder para obter o código de 7 dígitos estruturado
+                if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+                    const geocoder = new google.maps.Geocoder();
+                    geocoder.geocode({ address: moradaFiltrada, componentRestrictions: { country: 'PT' } }, (results, status) => {
+                        if (status === "OK" && results[0]) {
+                            const matchedPlace = results[0];
+                            let postalCode = "";
 
-                        // Procura o código postal de 7 dígitos nos componentes
-                        for (const component of matchedPlace.address_components) {
-                            if (component.types.includes('postal_code')) {
-                                postalCode = component.long_name;
-                                break;
-                            }
-                        }
-
-                        if (postalCode) {
-                            const cleanCode = postalCode.replace(/\D/g, '');
-                            if (cleanCode.length === 7) {
-                                window.currentInput = cleanCode;
-                                
-                                const visorCodigo = document.getElementById('visor-codigo');
-                                if (visorCodigo) {
-                                    updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                            for (const component of matchedPlace.address_components) {
+                                if (component.types.includes('postal_code')) {
+                                    postalCode = component.long_name;
+                                    break;
                                 }
+                            }
 
-                                alert(`Morada detetada com sucesso:\n"${matchedPlace.formatted_address}"\n\nCódigo Postal: ${postalCode}`);
+                            if (postalCode) {
+                                const cleanCode = postalCode.replace(/\D/g, '');
+                                if (cleanCode.length === 7) {
+                                    window.currentInput = cleanCode;
+                                    const visorCodigo = document.getElementById('visor-codigo');
+                                    if (visorCodigo) {
+                                        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                                    }
 
-                                // Dispara a triagem automática
-                                const btnAnalisar = document.getElementById('btn-analisar');
-                                if (btnAnalisar) btnAnalisar.click();
+                                    alert(`✅ Morada Identificada com Sucesso!\n\n"${matchedPlace.formatted_address}"\n\nCódigo Postal: ${postalCode}`);
+
+                                    // Triagem automática instantânea
+                                    const btnAnalisar = document.getElementById('btn-analisar');
+                                    if (btnAnalisar) btnAnalisar.click();
+                                } else {
+                                    alert(`Morada aproximada encontrada:\n"${matchedPlace.formatted_address}"\n\nCódigo Postal incompleto: ${postalCode}. Por favor, introduza manualmente.`);
+                                }
                             } else {
-                                alert(`Encontrámos a morada:\n"${matchedPlace.formatted_address}"\n\nMas o Código Postal está incompleto: ${postalCode}. Digite os dígitos em falta.`);
+                                alert(`Morada aproximada encontrada:\n"${matchedPlace.formatted_address}"\n\nMas não conseguimos extrair o Código Postal de 7 dígitos.`);
                             }
                         } else {
-                            alert(`Encontrámos a morada:\n"${matchedPlace.formatted_address}"\n\nMas não conseguimos extrair o Código Postal de 7 dígitos. Digite manualmente.`);
+                            alert("Não conseguimos localizar esta morada de forma automática. O texto extraído foi colocado na caixa para poder pesquisar manualmente.");
+                            document.getElementById('busca-morada-triagem').value = moradaFiltrada;
                         }
-                    } else {
-                        // Fallback: Coloca o texto extraído no campo de busca para o utilizador ajustar
-                        document.getElementById('busca-morada-triagem').value = cleanAddress;
-                        alert("Não foi possível geolocalizar automaticamente. Colocámos o texto detetado no campo de pesquisa para poder ajustar.");
-                    }
-                });
-            } else {
-                // Fallback sem Google Maps Geocoder ativo
-                document.getElementById('busca-morada-triagem').value = cleanAddress;
-                alert("Texto extraído com sucesso! Ajuste-o na caixa de pesquisa.");
-            }
-        }).catch(err => {
-            console.error("Erro no processamento OCR:", err);
-            alert("Falha ao ler a imagem. Tente tirar a foto novamente com foco no texto.");
-        }).finally(() => {
-            // Repõe o estado original do botão
-            btnCamera.innerHTML = '<i class="fa-solid fa-camera text-lg"></i>';
-            btnCamera.disabled = false;
-            inputCamera.value = ""; // Limpa o ficheiro para permitir novos cliques
+                    });
+                } else {
+                    document.getElementById('busca-morada-triagem').value = moradaFiltrada;
+                    alert("Texto extraído com sucesso! Ajuste e selecione a sugestão na barra de pesquisa.");
+                }
+            }).catch(err => {
+                console.error("Erro no processamento OCR:", err);
+                alert("Ocorreu um erro ao processar a fotografia. Tente novamente garantindo boa focagem das letras.");
+            }).finally(() => {
+                // Devolve o botão ao estado normal
+                btnCamera.innerHTML = '<i class="fa-solid fa-camera text-lg"></i>';
+                btnCamera.disabled = false;
+                inputCamera.value = "";
+            });
         });
     });
 }
 
 // ==========================================
-// FUNÇÕES GLOBAIS DE EDIÇÃO E CANCELAMENTO
+// FUNÇÕES GLOBAIS DE EDIÇÃO E CANCELAMENTO (DECLARAÇÃO ANTECIPADA)
 // ==========================================
 window.editDriver = (driver) => {
     window.driverSendoEditado = driver;
@@ -1147,7 +1245,7 @@ function setupForms() {
             handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
                 renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
                 atualizarSummaryUI();
-                renderizarSetoresUI(); // Atualiza os setores livres nas checkboxes do motorista
+                renderizarSetoresUI(); // Para atualizar os setores livres nas checkboxes do motorista
             });
         });
     }
