@@ -13,7 +13,7 @@ import {
 } from './gestao.js';
 import { 
     inicializarGoogleAutocomplete, 
-    inicializarGoogleAutocompleteTriagem, // Carrega o localizador de códigos postais por morada
+    inicializarGoogleAutocompleteTriagem, // Importa o inicializador específico de Triagem
     obterEnderecoPorGPSGoogle, 
     calcularDistanciaHaversine, 
     desenharMapaGoogle, 
@@ -51,7 +51,7 @@ window.lockedPrefixValue = "";
 window.selectedColor = "#2563EB";
 window.lastAnalysisResult = null;
 
-// Estados para controle de edição ativa
+// Estados para controle de edição activa
 window.driverSendoEditado = null;
 window.sectorSendoEditado = null;
 
@@ -142,6 +142,88 @@ window.cancelarEdicaoSector = () => {
 };
 
 // ==========================================
+// INICIALIZAÇÃO DOS AUTOCOMPLETES DO GOOGLE
+// ==========================================
+function inicializarTodosAutocompletes() {
+    // Autocomplete para o planeador de rotas (Aba Rotas)
+    const buscaMoradaInput = document.getElementById('busca-morada');
+    if (buscaMoradaInput) {
+        inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
+    }
+
+    // Autocomplete específico para encontrar o código postal (Aba Triagem)
+    const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
+    if (buscaMoradaTriagemInput) {
+        inicializarGoogleAutocompleteTriagem(buscaMoradaTriagemInput, (postalCode, formattedAddress) => {
+            if (postalCode) {
+                // Limpa traços do código postal e guarda-o sem caracteres especiais
+                const cleanCode = postalCode.replace(/\D/g, '');
+                
+                // Se tivermos os 7 dígitos completos do Código Postal
+                if (cleanCode.length === 7) {
+                    window.currentInput = cleanCode;
+                    
+                    const visorCodigo = document.getElementById('visor-codigo');
+                    if (visorCodigo) {
+                        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                    }
+                    
+                    console.log(`Código Postal extraído com sucesso: ${postalCode}. A iniciar triagem automática...`);
+                    
+                    // DISPARO AUTOMÁTICO: clica no botão Analisar para poupar um toque ao operador!
+                    const btnAnalisar = document.getElementById('btn-analisar');
+                    if (btnAnalisar) {
+                        btnAnalisar.click();
+                    }
+                } else if (cleanCode.length >= 4) {
+                    // Se for um código parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
+                    window.currentInput = cleanCode;
+                    const visorCodigo = document.getElementById('visor-codigo');
+                    if (visorCodigo) {
+                        updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                    }
+                    alert(`A morada selecionada contém apenas um código postal parcial (${postalCode}). Por favor, complete os 3 dígitos restantes usando o teclado.`);
+                }
+            } else {
+                alert("O Google encontrou o endereço mas não extraiu um Código Postal de 7 dígitos específico. Por favor, introduza manualmente.");
+            }
+            
+            // Limpa o input de pesquisa de triagem para a próxima leitura
+            buscaMoradaTriagemInput.value = "";
+        });
+    }
+}
+
+// ==========================================
+// CARREGAMENTO SEGURO DO SDK GOOGLE MAPS
+// ==========================================
+function carregarGoogleMapsScript() {
+    // CORRIGIDO: Se a variável 'google' já existir em cache no telemóvel, 
+    // não paramos a execução; inicializamos os autocompletes diretamente!
+    if (typeof google !== 'undefined' && google.maps && google.maps.places) {
+        console.log("Google Maps já carregado em cache. Inicializando inputs...");
+        inicializarTodosAutocompletes();
+        return;
+    }
+
+    if (typeof GOOGLE_MAPS_API_KEY === 'undefined' || !GOOGLE_MAPS_API_KEY) {
+        console.error("Chave de API do Google Maps não foi definida no config.js.");
+        return;
+    }
+
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => {
+        console.log("Google Maps SDK carregado pela primeira vez.");
+        inicializarTodosAutocompletes();
+    };
+    script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
+    document.head.appendChild(script);
+}
+
+// ==========================================
 // INICIALIZAÇÃO DA APLICAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -176,76 +258,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // RESTAURAÇÃO DE SEPARADOR ATIVO (Evita que o PWA volte para a triagem ao reabrir)
     const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
     showTab(activeTab);
+
+    // AJUSTE DE TOQUE PARA TELEMÓVEIS (Evita bloqueio de seleção no Autocomplete do Google)
+    document.addEventListener('touchend', (e) => {
+        const itemSugerido = e.target.closest('.pac-item');
+        if (itemSugerido) {
+            itemSugerido.click();
+        }
+    }, { passive: true });
 });
-
-// ==========================================
-// CARREGAMENTO SEGURO DO SDK GOOGLE MAPS
-// ==========================================
-function carregarGoogleMapsScript() {
-    if (typeof google !== 'undefined') return;
-    if (typeof GOOGLE_MAPS_API_KEY === 'undefined' || !GOOGLE_MAPS_API_KEY) {
-        console.error("Chave de API do Google Maps não foi definida no config.js.");
-        return;
-    }
-
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => {
-        console.log("Google Maps SDK carregado.");
-        
-        // Autocomplete para o planeador de rotas (Aba Rotas)
-        const buscaMoradaInput = document.getElementById('busca-morada');
-        if (buscaMoradaInput) {
-            inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
-        }
-
-        // Autocomplete específico para encontrar o código postal (Aba Triagem)
-        const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
-        if (buscaMoradaTriagemInput) {
-            inicializarGoogleAutocompleteTriagem(buscaMoradaTriagemInput, (postalCode, formattedAddress) => {
-                if (postalCode) {
-                    // Limpa traços do código postal e guarda-o sem caracteres especiais
-                    const cleanCode = postalCode.replace(/\D/g, '');
-                    
-                    // Se tivermos os 7 dígitos completos do Código Postal
-                    if (cleanCode.length === 7) {
-                        window.currentInput = cleanCode;
-                        
-                        const visorCodigo = document.getElementById('visor-codigo');
-                        if (visorCodigo) {
-                            updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-                        }
-                        
-                        console.log(`Código Postal extraído com sucesso: ${postalCode}. A iniciar triagem automática...`);
-                        
-                        // DISPARO AUTOMÁTICO: clica no botão Analisar para poupar um toque ao operador!
-                        const btnAnalisar = document.getElementById('btn-analisar');
-                        if (btnAnalisar) {
-                            btnAnalisar.click();
-                        }
-                    } else if (cleanCode.length >= 4) {
-                        // Se for um código parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
-                        window.currentInput = cleanCode;
-                        const visorCodigo = document.getElementById('visor-codigo');
-                        if (visorCodigo) {
-                            updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-                        }
-                        alert(`A morada selecionada contém apenas um código postal parcial (${postalCode}). Por favor, complete os 3 dígitos restantes usando o teclado.`);
-                    }
-                } else {
-                    alert("O Google encontrou o endereço mas não extraiu um Código Postal de 7 dígitos específico. Por favor, introduza manualmente.");
-                }
-                
-                // Limpa o input de pesquisa de triagem para a próxima leitura
-                buscaMoradaTriagemInput.value = "";
-            });
-        }
-    };
-    script.onerror = () => console.error("Falha ao carregar o SDK do Google Maps.");
-    document.head.appendChild(script);
-}
 
 // ==========================================
 // CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES
@@ -445,35 +466,6 @@ function setupTriagemLogic() {
                 cancelarAtribuicao();
             }
         });
-    }
-}
-
-// ==========================================
-// CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO
-// ==========================================
-function alternarModoRota(modo) {
-    const btnPlaneamento = document.getElementById('btn-modo-planeamento');
-    const btnConducao = document.getElementById('btn-modo-conducao');
-    const planningControls = document.getElementById('planning-controls');
-
-    if (!btnPlaneamento || !btnConducao || !planningControls) return;
-
-    if (modo === 'conducao') {
-        planningControls.classList.add('hidden');
-        
-        // Atualização estética dos botões seletores
-        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
-        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
-        
-        localStorage.setItem('cp_modo_rota', 'conducao');
-    } else {
-        planningControls.classList.remove('hidden');
-        
-        // Atualização estética dos botões seletores
-        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
-        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
-        
-        localStorage.setItem('cp_modo_rota', 'planeamento');
     }
 }
 
