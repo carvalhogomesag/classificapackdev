@@ -196,9 +196,10 @@ function extrairMoradaFocada(text) {
 
 // ==========================================
 // LÓGICA DE OCR (CÂMARA / LEITURA DE ETIQUETA COM IA)
+// Pré-instalada e pronta para ativação
 // ==========================================
 function setupCameraOcrLogic() {
-    const btnCamera = document.getElementById('btn-camera-triagem');
+    const btnCamera = document.getElementById('btn-camera-triagem'); // Inativo na v16
     const inputCamera = document.getElementById('input-camera-captura');
 
     if (!btnCamera || !inputCamera) return;
@@ -215,33 +216,17 @@ function setupCameraOcrLogic() {
         const file = event.target.files[0];
         if (!file) return;
 
-        // Feedback visual de processamento ativo
         btnCamera.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-lg"></i>';
         btnCamera.disabled = true;
 
-        console.log("Iniciando leitura OCR na imagem selecionada...");
-
-        // 1. Processa a foto tirada para obter escala de cinzentos e binarização de alto contraste
         preprocessarImagemParaOCR(file, (processedBlob) => {
-            
-            // 2. Envia a imagem limpa para o motor de IA Tesseract
             Tesseract.recognize(
                 processedBlob,
                 'por',
                 { logger: m => console.log(m.status, Math.round(m.progress * 100) + "%") }
             ).then(({ data: { text } }) => {
-                console.log("Texto Bruto Extraído:", text);
-
-                if (!text || !text.trim()) {
-                    alert("Não foi possível ler texto na etiqueta. Aproxime mais a câmara do endereço do destinatário e garanta boa iluminação.");
-                    return;
-                }
-
-                // 3. Limpa o texto, eliminando tracking numbers e isolando a morada física do destinatário
                 const moradaFiltrada = extrairMoradaFocada(text);
-                console.log("Morada Filtrada Segura para Google:", moradaFiltrada);
 
-                // 4. Executa a geolocalização exata usando o Google Geocoder para obter o código de 7 dígitos estruturado
                 if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
                     const geocoder = new google.maps.Geocoder();
                     geocoder.geocode({ address: moradaFiltrada, componentRestrictions: { country: 'PT' } }, (results, status) => {
@@ -264,32 +249,14 @@ function setupCameraOcrLogic() {
                                     if (visorCodigo) {
                                         updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
                                     }
-
-                                    alert(`✅ Morada Identificada com Sucesso!\n\n"${matchedPlace.formatted_address}"\n\nCódigo Postal: ${postalCode}`);
-
-                                    // Triagem automática instantânea
                                     const btnAnalisar = document.getElementById('btn-analisar');
                                     if (btnAnalisar) btnAnalisar.click();
-                                } else {
-                                    alert(`Morada aproximada encontrada:\n"${matchedPlace.formatted_address}"\n\nCódigo Postal incompleto: ${postalCode}. Por favor, introduza manualmente.`);
                                 }
-                            } else {
-                                alert(`Morada aproximada encontrada:\n"${matchedPlace.formatted_address}"\n\nMas não conseguimos extrair o Código Postal de 7 dígitos.`);
                             }
-                        } else {
-                            alert("Não conseguimos localizar esta morada de forma automática. O texto extraído foi colocado na caixa para poder pesquisar manualmente.");
-                            document.getElementById('busca-morada-triagem').value = moradaFiltrada;
                         }
                     });
-                } else {
-                    document.getElementById('busca-morada-triagem').value = moradaFiltrada;
-                    alert("Texto extraído com sucesso! Ajuste e selecione a sugestão na barra de pesquisa.");
                 }
-            }).catch(err => {
-                console.error("Erro no processamento OCR:", err);
-                alert("Ocorreu um erro ao processar a fotografia. Tente novamente garantindo boa focagem das letras.");
             }).finally(() => {
-                // Devolve o botão ao estado normal
                 btnCamera.innerHTML = '<i class="fa-solid fa-camera text-lg"></i>';
                 btnCamera.disabled = false;
                 inputCamera.value = "";
@@ -408,7 +375,7 @@ function inicializarTodosAutocompletes() {
                         btnAnalisar.click();
                     }
                 } else if (cleanCode.length >= 4) {
-                    // Se o código for parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
+                    // Se o código foi parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
                     window.currentInput = cleanCode;
                     const visorCodigo = document.getElementById('visor-codigo');
                     if (visorCodigo) {
@@ -430,8 +397,6 @@ function inicializarTodosAutocompletes() {
 // CARREGAMENTO SEGURO DO SDK GOOGLE MAPS
 // ==========================================
 function carregarGoogleMapsScript() {
-    // CORRIGIDO: Se a variável 'google' já existir em cache no telemóvel, 
-    // não paramos a execução; inicializamos os autocompletes diretamente!
     if (typeof google !== 'undefined' && google.maps && google.maps.places) {
         console.log("Google Maps já carregado em cache. Inicializando inputs...");
         inicializarTodosAutocompletes();
@@ -456,6 +421,110 @@ function carregarGoogleMapsScript() {
 }
 
 // ==========================================
+// CENTRAL DE RECONHECIMENTO DE VOZ PARA TRIAGEM
+// Transcreve a voz, geocodifica na Google e tria automaticamente
+// ==========================================
+function setupVozTriagemLogic() {
+    const btnVoz = document.getElementById('btn-voz-triagem');
+    const buscaMoradaInput = document.getElementById('busca-morada-triagem');
+    const micAtivo = document.getElementById('mic-ativo-triagem');
+    const micInativo = document.getElementById('mic-inativo-triagem');
+
+    if (!btnVoz || !buscaMoradaInput) return;
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        btnVoz.classList.add('hidden'); // Oculta o microfone se o browser não for compatível
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'pt-PT'; // Português de Portugal
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    btnVoz.addEventListener('click', () => {
+        try {
+            recognition.start();
+        } catch (err) {
+            console.warn("Reconhecimento de voz já ativo:", err);
+        }
+    });
+
+    recognition.onstart = () => {
+        if (micAtivo) micAtivo.classList.remove('hidden');
+        if (micInativo) micInativo.classList.add('hidden');
+        btnVoz.classList.remove('bg-blue-50', 'text-blue-700', 'border-blue-200');
+        btnVoz.classList.add('bg-red-500', 'text-white', 'border-red-600');
+    };
+
+    recognition.onend = () => {
+        if (micAtivo) micAtivo.classList.add('hidden');
+        if (micInativo) micInativo.classList.remove('hidden');
+        btnVoz.classList.add('bg-blue-50', 'text-blue-700', 'border-blue-200');
+        btnVoz.classList.remove('bg-red-500', 'text-white', 'border-red-600');
+    };
+
+    recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        buscaMoradaInput.value = transcript;
+        
+        console.log("Voz captada na Triagem:", transcript);
+
+        // Geocodificação silenciosa automática para extrair o código de 7 dígitos correspondente
+        if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+            const geocoder = new google.maps.Geocoder();
+            // Adiciona Mafra e Portugal para dar contexto à inteligência de pesquisa da Google
+            geocoder.geocode({ address: transcript + ", Mafra, Portugal", componentRestrictions: { country: 'PT' } }, (results, status) => {
+                if (status === "OK" && results[0]) {
+                    const matchedPlace = results[0];
+                    let postalCode = "";
+
+                    for (const component of matchedPlace.address_components) {
+                        if (component.types.includes('postal_code')) {
+                            postalCode = component.long_name;
+                            break;
+                        }
+                    }
+
+                    if (postalCode) {
+                        const cleanCode = postalCode.replace(/\D/g, '');
+                        if (cleanCode.length === 7) {
+                            window.currentInput = cleanCode;
+                            const visorCodigo = document.getElementById('visor-codigo');
+                            if (visorCodigo) {
+                                updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                            }
+                            
+                            console.log(`Morada ditada detetada com sucesso! Código: ${postalCode}`);
+                            
+                            // Dispara a triagem do motorista de imediato
+                            const btnAnalisar = document.getElementById('btn-analisar');
+                            if (btnAnalisar) btnAnalisar.click();
+                        } else {
+                            alert(`Morada detetada por voz: "${matchedPlace.formatted_address}".\nContudo, o Código Postal está incompleto (${postalCode}). Insira manualmente.`);
+                        }
+                    } else {
+                        alert(`Encontrámos a morada ditada: "${matchedPlace.formatted_address}".\nMas não conseguimos extrair o Código Postal de 7 dígitos.`);
+                    }
+                } else {
+                    // Fallback se não conseguir geolocalizar de imediato
+                    buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    buscaMoradaInput.focus();
+                }
+            });
+        } else {
+            buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
+            buscaMoradaInput.focus();
+        }
+    };
+
+    recognition.onerror = (event) => {
+        console.error("Erro no reconhecimento de voz:", event.error);
+    };
+}
+
+// ==========================================
 // INICIALIZAÇÃO DA APLICAÇÃO
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
@@ -470,8 +539,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setupModaisEdicao();
     setupTriagemLogic();
     setupCancelButtons(); // Ativa os ouvintes dos botões "Cancelar" das edições
-    setupVozLogic(); // Ativa o reconhecimento por voz
-    setupCameraOcrLogic(); // NOVO: Ativa o leitor inteligente de câmara
+    setupVozLogic(); // Ativa o reconhecimento por voz da aba Rotas
+    setupVozTriagemLogic(); // NOVO: Ativa o comando de voz no ecrã de Triagem
+    setupCameraOcrLogic(); // IA de câmara pré-instalada offline
     
     const visorCodigo = document.getElementById('visor-codigo');
     if (visorCodigo) {
@@ -528,7 +598,7 @@ function atualizarSummaryUI() {
 }
 
 // ==========================================
-// LÓGICA DE RECONHECIMENTO DE VOZ (MICROFONE)
+// LÓGICA DE RECONHECIMENTO DE VOZ (MICROFONE - ABA ROTAS)
 // ==========================================
 function setupVozLogic() {
     const btnVoz = document.getElementById('btn-voz');
@@ -567,8 +637,8 @@ function setupVozLogic() {
     recognition.onend = () => {
         if (micAtivo) micAtivo.classList.add('hidden');
         if (micInativo) micInativo.classList.remove('hidden');
-        btnVoz.classList.remove('bg-blue-50', 'text-blue-700');
-        btnVoz.classList.add('bg-red-500', 'text-white');
+        btnVoz.classList.add('bg-blue-50', 'text-blue-700');
+        btnVoz.classList.remove('bg-red-500', 'text-white');
     };
 
     recognition.onresult = (event) => {
@@ -1245,7 +1315,7 @@ function setupForms() {
             handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
                 renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
                 atualizarSummaryUI();
-                renderizarSetoresUI(); // Para atualizar os setores livres nas checkboxes do motorista
+                renderizarSetoresUI(); // Atualiza os setores livres nas checkboxes do motorista
             });
         });
     }
