@@ -67,7 +67,36 @@ window.definindoPartidaPorMorada = false;
 let itemSendoEditado = null; 
 
 // ==========================================
-// FUNÇÕES GLOBAIS DE EDIÇÃO E CANCELAMENTO (DECLARAÇÃO ANTECIPADA)
+// CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO (DEFINIDA NO INÍCIO)
+// ==========================================
+function alternarModoRota(modo) {
+    const btnPlaneamento = document.getElementById('btn-modo-planeamento');
+    const btnConducao = document.getElementById('btn-modo-conducao');
+    const planningControls = document.getElementById('planning-controls');
+
+    if (!btnPlaneamento || !btnConducao || !planningControls) return;
+
+    if (modo === 'conducao') {
+        planningControls.classList.add('hidden');
+        
+        // Atualização estética dos botões seletores
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        
+        localStorage.setItem('cp_modo_rota', 'conducao');
+    } else {
+        planningControls.classList.remove('hidden');
+        
+        // Atualização estética dos botões seletores
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        
+        localStorage.setItem('cp_modo_rota', 'planeamento');
+    }
+}
+
+// ==========================================
+// FUNÇÕES GLOBAIS DE EDIÇÃO E CANCELAMENTO
 // ==========================================
 window.editDriver = (driver) => {
     window.driverSendoEditado = driver;
@@ -176,7 +205,7 @@ function inicializarTodosAutocompletes() {
                         btnAnalisar.click();
                     }
                 } else if (cleanCode.length >= 4) {
-                    // Se for um código parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
+                    // Se o código for parcial (apenas 4 dígitos), preenchemos no visor mas avisamos para completar
                     window.currentInput = cleanCode;
                     const visorCodigo = document.getElementById('visor-codigo');
                     if (visorCodigo) {
