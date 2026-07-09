@@ -69,7 +69,7 @@ export const GEOGRAPHY = {
         "ENXARA DO BISPO": {
             "Tourinha": ["2665-061"],
             "Almeirinho Clemente": ["2665-051"],
-            "Azenha": ["2665-052"],
+            "Azenha": ["2665-062"],
             "Enxara do Bispo": ["2665-053"],
             "Enxara dos Cavaleiros": ["2665-054"],
             "Ervideira": ["2665-055"],
@@ -94,7 +94,7 @@ export const GEOGRAPHY = {
         },
         "GRADIL": {
             "Carapiteira": ["2665-100", "2665-137", "2665-135"],
-            "Gradil": ["2665-101", "2665-142", "2665-155", "2665-131", "2665-134", "2665-125", "2665-107", "2665-156", "2665-114", "2665-157", "2665-153", "2665-128", "2665-152", "2665-102", "2665-103", "2665-104", "2665-105", "2665-106", "2665-108", "2665-136", "2665-115", "2665-113", "2665-139", "2665-109", "2665-140", "2665-141", "2665-110", "2665-111", "2665-130", "2665-132", "2665-116", "2665-117", "2667-306", "2665-118", "2665-119", "2665-120", "2665-122", "2665-123", "2665-124", "2665-126", "2665-127", "2665-129", "2665-133", "2669-001", "2665-150", "2665-151"],
+            "Gradil": ["2665-101", "2665-142", "2665-155", "2665-131", "2665-134", "2665-125", "2665-107", "2665-156", "2665-114", "2665-157", "2665-153", "2665-128", "2665-135", "2665-153", "2665-153", "2665-153", "2665-135", "2665-152", "2665-102", "2665-103", "2665-104", "2665-105", "2665-106", "2665-107", "2665-108", "2665-135", "2665-135", "2665-135", "2665-136", "2665-115", "2665-113", "2665-152", "2665-135", "2665-139", "2665-102", "2665-109", "2665-140", "2665-141", "2665-110", "2665-111", "2665-155", "2665-141", "2665-112", "2665-113", "2665-114", "2665-115", "2665-139", "2665-130", "2665-132", "2665-116", "2665-117", "2667-306", "2665-118", "2665-119", "2665-120", "2665-122", "2665-123", "2665-124", "2665-125", "2665-126", "2665-127", "2665-129", "2665-130", "2665-131", "2665-113", "2665-133", "2665-134", "2665-139", "2669-001", "2665-140", "2665-155"],
             "Picão": ["2665-150"],
             "Portela": ["2665-151"],
             "Portela da Ginga": ["2665-138"],
@@ -274,7 +274,7 @@ export const GEOGRAPHY = {
 };
 
 /**
- * Renderiza a lista de motoristas cadastrados com indicação das freguesias ou localidades específicas
+ * Renderiza a lista de motoristas registados com indicação das freguesias ou localidades específicas
  * que compõem os seus Setores.
  */
 export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, editDriver) {
@@ -408,7 +408,7 @@ export function renderSectorCheckboxes(sectors, container, drivers = [], editing
             label.innerHTML = `
                 <div class="flex items-center space-x-2">
                     <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-4 h-4 cursor-not-allowed">
-                    <span class="font-bold text-gray-400 line-through">${sector.name}</span>
+                    <span class="font-bold text-gray-400 line-through text-xs">${sector.name}</span>
                 </div>
                 <span class="text-[9px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded border">
                     Com: ${driverOwner.name}
@@ -497,7 +497,7 @@ export function handleSectorSubmit(e, sectors, renderCallback) {
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
     renderCallback();
-    alert(emEdicao ? 'Setor atualizado com sucesso!' : 'Setor criado com sucesso!');
+    alert(emEdicao ? 'Setor updated com sucesso!' : 'Setor criado com sucesso!');
 }
 
 /**
@@ -540,10 +540,8 @@ export function renderSectors(sectors, listaSetores, deleteSector, editSector) {
 }
 
 /**
- * NOVO: Desenha a Árvore de Seleção Geográfica Hierárquica em 3 Níveis.
+ * Desenha a Árvore de Seleção Geográfica Hierárquica em 3 Níveis.
  * Concelho (Mafra) -> Freguesias (Abre e fecha com [+] e [-]) -> Sub-localidades.
- * Verifica a exclusividade de cada localidade individualmente, desactivando a freguesia por inteiro
- * se pelo menos uma das suas sub-localidades já estiver atribuída a outro motorista.
  */
 export function renderAreaCheckboxes(sectors, container, editingId = null) {
     if (!container) return;
@@ -552,12 +550,11 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
     const concelho = "MAFRA";
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    // 1. Levantamento estruturado das áreas já atribuídas a OUTROS setores activos
     const freguesiasOcupadasTotalidade = new Set();
-    const localidadesOcupadas = new Map(); // Guarda Freguesia|Localidade -> Nome do Setor que a detém
+    const localidadesOcupadas = new Map();
 
     sectors.forEach(s => {
-        if (editingId && s.id === editingId) return; // Ignora o próprio setor em modo de edição
+        if (editingId && s.id === editingId) return;
         
         const areaNames = Array.isArray(s.areaNames) ? s.areaNames : [];
         areaNames.forEach(item => {
@@ -574,7 +571,6 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
         });
     });
 
-    // 2. Construir o nó visual do Concelho (Mafra)
     const concelhoTitle = document.createElement('div');
     concelhoTitle.className = "text-xs font-black uppercase tracking-wider text-blue-800 bg-blue-50 p-2 rounded mb-2 flex items-center space-x-1.5";
     concelhoTitle.innerHTML = `<i class="fa-solid fa-city"></i> <span>CONCELHO: ${concelho}</span>`;
@@ -587,22 +583,15 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
         const localidades = GEOGRAPHY[concelho][freguesiaName];
         const subLocalidadesKeys = Object.keys(localidades).sort();
 
-        // Verifica se a freguesia por inteiro já foi tomada por outro setor
         const freguesiaBloqueadaTotalmente = freguesiasOcupadasTotalidade.has(freguesiaName);
-        
-        // Verifica se pelo menos UMA localidade interna já está ocupada por outro setor
         const temSubLocalidadeOcupada = subLocalidadesKeys.some(loc => localidadesOcupadas.has(`${freguesiaName}|${loc}`));
-        
-        // Se alguma sub-localidade está ocupada, a FREGUESIA INTEIRA já não pode ser marcada por totalidade!
         const impedeMarcarTotalidade = freguesiaBloqueadaTotalmente || temSubLocalidadeOcupada;
 
-        // Se estamos a editar o setor actual e ele já possui a totalidade marcada
         const belongsToEditingSectorTotal = !!(editingId && sectors.some(s => s.id === editingId && s.areaNames && s.areaNames.includes(freguesiaName)));
 
         const fregDiv = document.createElement('div');
         fregDiv.className = "border rounded-lg bg-white overflow-hidden shadow-xs border-gray-200";
 
-        // Cabeçalho da Freguesia
         const header = document.createElement('div');
         header.className = "flex items-center justify-between p-2.5 bg-gray-50 border-b select-none";
         
@@ -633,7 +622,6 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
             <span class="text-[9px] text-gray-400 italic font-semibold">${subLocalidadesKeys.length} áreas</span>
         `;
 
-        // Contentor das sub-localidades (invisível no arranque)
         const subContainer = document.createElement('div');
         subContainer.className = "hidden p-2 bg-gray-50/50 border-t border-dashed space-y-2.5 pl-7 animate-fade-in";
 
@@ -641,7 +629,6 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
             const locKey = `${freguesiaName}|${locName}`;
             const donoSetor = localidadesOcupadas.get(locKey);
             
-            // Verifica se pertence ao setor em edição para pré-marcar
             const belongsToEditingSectorLoc = !!(editingId && sectors.some(s => s.id === editingId && s.areaNames && s.areaNames.includes(locKey)));
 
             const locLabel = document.createElement('label');
@@ -676,7 +663,6 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
         fregDiv.appendChild(subContainer);
         treeContainer.appendChild(fregDiv);
 
-        // Controlos visuais interativos dos botões de abrir/fechar (+)
         const btnExpand = header.querySelector('.btn-expand-tree');
         btnExpand.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -689,19 +675,16 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
             }
         });
 
-        // Sincronização em cascata: se marcar a freguesia principal,
-        // todas as sub-localidades livres dela são marcadas automaticamente
         const parentCheckbox = header.querySelector('.freg-checkbox');
         if (parentCheckbox) {
             parentCheckbox.addEventListener('change', (e) => {
                 const isChecked = e.target.checked;
                 subContainer.querySelectorAll('.loc-checkbox:not(:disabled)').forEach(childCb => {
-                    childChildChecked(childCb, isChecked);
+                    childCb.checked = isChecked;
                 });
             });
         }
 
-        // Se desmarcar uma única sub-localidade, desmarca também o checkbox de totalidade acima
         subContainer.querySelectorAll('.loc-checkbox').forEach(cb => {
             cb.addEventListener('change', (e) => {
                 if (!e.target.checked && parentCheckbox) {
@@ -714,17 +697,12 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
     container.appendChild(treeContainer);
 }
 
-function childChildChecked(el, val) {
-    el.checked = val;
-}
-
 // Manter aliases de compatibilidade para evitar quebra de fluxos legados
 export const renderIntervalCheckboxes = renderAreaCheckboxes;
 
 /**
  * ALGORITMO DE TRIAGEM HIERÁRQUICA DE MÁXIMA VELOCIDADE.
  * Cruza o código postal de 7 dígitos introduzido com a Freguesia e Localidade correspondente.
- * Retorna o motorista cujo Setor cobre a totalidade da Freguesia OU a Localidade específica.
  */
 export function findDriverForZip(zip, sectors, drivers) {
     if (!zip) return null;
@@ -750,9 +728,6 @@ export function findDriverForZip(zip, sectors, drivers) {
     if (!matchedFreguesia) return null;
 
     // 2. Procura pelo Setor ativo encarregue deste território.
-    // O Setor cobre se:
-    //   A. Reivindicou a freguesia por inteiro (ex: "AZUEIRA")
-    //   B. Reivindicou especificamente essa sub-área (ex: "AZUEIRA|Tourinha")
     const matchedSector = sectors.find(s => {
         const areaNames = Array.isArray(s.areaNames) ? s.areaNames : [];
         return areaNames.includes(matchedFreguesia) || areaNames.includes(`${matchedFreguesia}|${matchedLocalidade}`);

@@ -1,5 +1,5 @@
-// sw.js (Versão v18)
-const CACHE_NAME = 'classificapack-v18';
+// sw.js (Versão v19)
+const CACHE_NAME = 'classificapack-v19';
 const ASSETS = [
   '/',
   '/index.html',
