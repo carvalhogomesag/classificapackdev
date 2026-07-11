@@ -1,10 +1,11 @@
 /**
  * rotas.js
- * Faz: Gere a lógica de turnos, otimização automática de rotas pelo algoritmo do Vizinho Mais Próximo, Modo Condução, preenchimento rápido de prefixo e a edição de prioridades das paragens.
+ * Faz: Gere a lógica de turnos, otimização automática de rotas por Agrupamento Territorial (Freguesia), Modo Condução, atalhos de prefixo e prioridades de paragens.
  * NÃO faz: Não interage diretamente com o hardware do mapa ou autocompletar da Google (delegado para o módulo maps.js).
- * Depende de: ./storage.js, ./voz.js, ./maps.js
+ * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js
  */
 
+import { GEOGRAPHY } from './geografia-data.js';
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
 import { 
@@ -31,6 +32,33 @@ function sincronizarPersistencia() {
         window.rotaIniciada,
         window.sectors
     );
+}
+
+// =========================================================================
+// IDENTIFICADOR AUXILIAR DE FREGUESIA POR CÓDIGO POSTAL DA MORADA
+// =========================================================================
+function obterFreguesiaDaMorada(morada) {
+    if (morada.freguesia) return morada.freguesia; // Se já tiver em memória
+
+    // Expressão regular para encontrar o padrão de código postal "XXXX-XXX" na morada da Google
+    const zipRegex = /\b\d{4}-\d{3}\b/;
+    const match = morada.address.match(zipRegex);
+    
+    if (match) {
+        const zip = match[0];
+        const concelho = "MAFRA";
+        // Procura no nosso dicionário geográfico a qual freguesia pertence este Código Postal
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+            for (const [localidade, cpList] of Object.entries(localidades)) {
+                if (cpList.includes(zip)) {
+                    return freguesia;
+                }
+            }
+        }
+    }
+    
+    // Categoria de segurança (fallback) para moradas fora do concelho ou sem CP mapeado
+    return "OUTROS"; 
 }
 
 // ==========================================
@@ -101,7 +129,7 @@ export function adicionarMorada(morada) {
     } else {
         morada.status = "Pendente"; 
         morada.observation = ""; 
-        morada.priority = false; // Valor de prioridade por defeito
+        morada.priority = false; 
         window.moradasEntregas.push(morada);
         renderMoradasAdicionadas();
         sincronizarPersistencia();
@@ -125,7 +153,6 @@ export function renderMoradasAdicionadas() {
     window.moradasEntregas.forEach((morada, index) => {
         const item = document.createElement('div');
         
-        // Destaca a morada na listagem de planeamento se for urgente/prioritária
         if (morada.priority) {
             item.className = "flex items-center justify-between p-2 bg-orange-50 border border-orange-200 rounded-lg text-xs animate-fade-in space-x-2";
         } else {
@@ -174,31 +201,71 @@ export function renderMoradasAdicionadas() {
 }
 
 // =========================================================================
-// ALGORITMO INTELIGENTE DE OTIMIZAÇÃO: VIZINHO MAIS PRÓXIMO (GREEDY TSP)
+// NOVO ALGORITMO DE OTIMIZAÇÃO: VIZINHO MAIS PRÓXIMO AGRUPADO POR FREGUESIAS
 // =========================================================================
 export function otimizarItinerarioComVizinhoMaisProximo() {
+    if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
+    if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
+
     let atual = { lat: window.partidaLocalizacao.lat, lng: window.partidaLocalizacao.lng };
     let restantes = [...window.moradasEntregas];
     window.rotaOtimizada = [];
 
+    // Otimiza as paragens agrupando-as totalmente por Freguesias
     while (restantes.length > 0) {
-        let indiceMaisProximo = -1;
-        let menorDistancia = Infinity;
+        
+        // 1. Identificar qual a freguesia ativa.
+        // Procura a morada globalmente mais próxima de 'atual' para saber em que freguesia devemos focar agora
+        let freguesiaAtiva = "";
+        let indiceMaisProximoGlobal = -1;
+        let menorDistanciaGlobal = Infinity;
 
         for (let i = 0; i < restantes.length; i++) {
             const dist = calcularDistanciaHaversine(atual.lat, atual.lng, restantes[i].lat, restantes[i].lng);
-            if (dist < menorDistancia) {
-                menorDistancia = dist;
-                indiceMaisProximo = i;
+            if (dist < menorDistanciaGlobal) {
+                menorDistanciaGlobal = dist;
+                indiceMaisProximoGlobal = i;
             }
         }
 
-        if (indiceMaisProximo !== -1) {
-            const paragem = restantes[indiceMaisProximo];
-            paragem.distanciaDoAnterior = menorDistancia;
-            window.rotaOtimizada.push(paragem);
-            atual = { lat: paragem.lat, lng: paragem.lng };
-            restantes.splice(indiceMaisProximo, 1);
+        if (indiceMaisProximoGlobal !== -1) {
+            const proximaMorada = restantes[indiceMaisProximoGlobal];
+            freguesiaAtiva = obterFreguesiaDaMorada(proximaMorada);
+        }
+
+        // 2. Resolver sequencialmente todas as encomendas que pertencem a esta 'freguesiaAtiva'
+        while (true) {
+            // Filtra se ainda restam encomendas na freguesia ativa
+            const emFreguesiaAtiva = restantes.filter(m => obterFreguesiaDaMorada(m) === freguesiaAtiva);
+            if (emFreguesiaAtiva.length === 0) {
+                // Esgotaram as paragens desta freguesia, sai do loop interno para definir a freguesia seguinte
+                break;
+            }
+
+            // Encontra o vizinho mais próximo estritamente dentro desta mesma freguesia ativa
+            let proximaMoradaFreguesia = null;
+            let menorDistanciaFreguesia = Infinity;
+            let indexNoRestantes = -1;
+
+            for (let i = 0; i < restantes.length; i++) {
+                const m = restantes[i];
+                if (obterFreguesiaDaMorada(m) === freguesiaAtiva) {
+                    const dist = calcularDistanciaHaversine(atual.lat, atual.lng, m.lat, m.lng);
+                    if (dist < menorDistanciaFreguesia) {
+                        menorDistanciaFreguesia = dist;
+                        proximaMoradaFreguesia = m;
+                        indexNoRestantes = i;
+                    }
+                }
+            }
+
+            // Adiciona ao itinerário e define as novas coordenadas ativas
+            if (proximaMoradaFreguesia && indexNoRestantes !== -1) {
+                proximaMoradaFreguesia.distanciaDoAnterior = menorDistanciaFreguesia;
+                window.rotaOtimizada.push(proximaMoradaFreguesia);
+                atual = { lat: proximaMoradaFreguesia.lat, lng: proximaMoradaFreguesia.lng };
+                restantes.splice(indexNoRestantes, 1);
+            }
         }
     }
 
@@ -214,7 +281,7 @@ export function otimizarItinerarioComVizinhoMaisProximo() {
         desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
     }, 300);
 
-    // Entra logo em Modo Condução focado após otimizar a rota
+    // Muda automaticamente para o Modo Condução focado
     alternarModoRota('conducao');
 }
 
@@ -231,7 +298,7 @@ export function renderizarItinerarioOtimizado() {
 
     window.rotaOtimizada.forEach((paragem, index) => {
         const item = document.createElement('div');
-        item.id = `paragem-${paragem.id}`; // Para scroll automático
+        item.id = `paragem-${paragem.id}`; 
         
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
