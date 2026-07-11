@@ -1,4 +1,9 @@
-// ui.js
+/**
+ * ui.js
+ * Faz: Controla a navegação entre abas, atualização do visor principal e os eventos do teclado numérico virtual.
+ * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
+ * Depende de: Nenhuns módulos.
+ */
 
 /**
  * Configura os listeners dos botões de navegação inferior

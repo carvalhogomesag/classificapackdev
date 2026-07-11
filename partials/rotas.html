@@ -1,0 +1,129 @@
+<!--
+  rotas.html
+  Faz: Contém a estrutura visual integral do ecrã de Gestão, Execução e Otimização de Rotas de Entrega, incluindo o contentor do Google Maps e o ecrã do Modo Condução.
+  NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
+  Depende de: Injeção assíncrona pelo main.js no index.html.
+-->
+
+<main id="view-rotas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
+    
+    <!-- SUB-ECRÃ A: PREPARAÇÃO/INICIALIZAÇÃO DA ROTA -->
+    <div id="container-setup-rota" class="space-y-4">
+        <h2 class="text-xl font-bold text-gray-800">Iniciar Novo Itinerário</h2>
+        <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-500">Data de Trabalho</label>
+                <input type="date" id="data-rota" class="w-full mt-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <button id="btn-iniciar-rota" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md text-sm flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-play"></i> <span>Criar Rota do Turno</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- SUB-ECRÃ B: PLANEAMENTO E EXECUÇÃO (FICA OCULTO ATÉ INICIAR) -->
+    <div id="container-planeador-rota" class="hidden space-y-4">
+        
+        <!-- Cabeçalho de Rota Ativa -->
+        <div class="flex justify-between items-center bg-blue-50 border border-blue-100 p-3 rounded-xl">
+            <div>
+                <span class="text-[10px] uppercase font-bold text-blue-500 tracking-wider">Turno Ativo</span>
+                <h4 id="display-data-rota" class="text-sm font-bold text-blue-800">00/00/2026</h4>
+            </div>
+            <button id="btn-encerrar-rota" class="text-xs text-red-600 hover:bg-red-50 border border-red-200 px-2 py-1 rounded bg-white font-bold">
+                Encerrar Rota
+            </button>
+        </div>
+
+        <!-- SELETOR DE MODO (Planeamento vs Modo Condução) -->
+        <div class="flex space-x-1 bg-gray-100 p-1 rounded-xl mb-3 shadow-inner">
+            <button type="button" id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
+                <i class="fa-solid fa-sliders mr-1"></i> Planeamento
+            </button>
+            <button type="button" id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
+                <i class="fa-solid fa-truck-steering mr-1"></i> Condução
+            </button>
+        </div>
+
+        <!-- GRUPO DE CONTROLOS DE PLANEAMENTO (Podem ser ocultados no Modo Condução) -->
+        <div id="planning-controls" class="space-y-4">
+            
+            <!-- Ponto de Partida -->
+            <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
+                <span class="block text-xs font-bold uppercase text-gray-500">1. Ponto de Partida</span>
+                <div class="flex space-x-2">
+                    <button id="btn-gps-partida" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-location-crosshairs"></i> <span>Usar Meu GPS</span>
+                    </button>
+                    <button id="btn-buscar-partida" class="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
+                        <i class="fa-solid fa-magnifying-glass"></i> <span>Buscar Morada</span>
+                    </button>
+                </div>
+                <div id="status-partida" class="text-xs font-mono text-gray-500 italic bg-gray-50 p-2 rounded border">
+                    Partida: Localização não definida
+                </div>
+            </div>
+
+            <!-- Adicionar Entregas -->
+            <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-3 relative">
+                <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
+                <div class="flex space-x-2">
+                    <input type="text" id="busca-morada" placeholder="Comece a digitar ou use a voz..." 
+                           class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                    <button type="button" id="btn-voz" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm">
+                        <i class="fa-solid fa-microphone text-lg animate-pulse hidden" id="microfone-ativo"></i>
+                        <i class="fa-solid fa-microphone text-lg" id="microfone-inativo"></i>
+                    </button>
+                </div>
+
+                <div class="border-t pt-2">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-bold text-gray-600">Pacotes Adicionados:</span>
+                        <button id="btn-limpar-enderecos" class="text-[10px] text-red-500 font-bold uppercase">Limpar Tudo</button>
+                    </div>
+                    <div id="lista-moradas-adicionadas" class="space-y-1.5 max-h-32 overflow-y-auto">
+                        <p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botão de Otimizar -->
+            <button id="btn-otimizar-rota" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md text-base flex items-center justify-center space-x-2">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>
+            </button>
+        </div>
+
+        <!-- Mapa do Google Maps -->
+        <div id="container-mapa" class="hidden space-y-2">
+            <span class="block text-xs font-bold uppercase text-gray-500">Mapa do Itinerário</span>
+            <div id="map" class="h-60 w-full rounded-xl border mt-1 shadow-inner z-10"></div>
+        </div>
+
+        <!-- Estatísticas de Turno / Entrega -->
+        <div id="estatisticas-rota" class="hidden bg-blue-50 border border-blue-100 p-3 rounded-xl flex justify-around text-center text-xs font-bold shadow-sm">
+            <div>
+                <span class="block text-gray-400 text-[9px] uppercase">Total</span>
+                <span id="stat-total" class="text-base text-blue-800">0</span>
+            </div>
+            <div>
+                <span class="block text-green-500 text-[9px] uppercase">Entregues</span>
+                <span id="stat-entregues" class="text-base text-green-600">0</span>
+            </div>
+            <div>
+                <span class="block text-red-500 text-[9px] uppercase">Falhas</span>
+                <span id="stat-falhas" class="text-base text-red-600">0</span>
+            </div>
+            <div>
+                <span class="block text-gray-400 text-[9px] uppercase">Pendente</span>
+                <span id="stat-pendentes" class="text-base text-gray-700">0</span>
+            </div>
+        </div>
+
+        <!-- Rota Ordenada de Entregas -->
+        <div id="container-rota-ordenada" class="hidden space-y-2 pb-6">
+            <span class="block text-xs font-bold uppercase text-gray-500">Itinerário Otimizado de Entregas</span>
+            <div id="lista-rota-final" class="space-y-2"></div>
+        </div>
+
+    </div>
+</main>

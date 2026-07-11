@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="pt">
 <head>
+    <!--
+      index.html
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
+      Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
+    -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Classifica Pack</title>
@@ -15,7 +21,7 @@
     <!-- Ícones simples -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
-    <!-- Tesseract.js para processamento OCR local na câmara do telemóvel (Mantido pré-instalado) -->
+    <!-- Tesseract.js para processamento OCR local na câmara do telemóvel -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <!-- CORREÇÕES VISUAIS PARA O AUTOCOMPLETE DO GOOGLE MAPS -->
@@ -47,305 +53,21 @@
 </head>
 <body class="bg-gray-100 font-sans text-gray-900 select-none relative">
 
-    <!-- Container Principal -->
+    <!-- Container Principal (Shell) -->
     <div class="max-w-md mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho -->
+        <!-- Cabeçalho de Identidade -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10">
             Classifica Pack
         </header>
 
-        <!-- SEÇÃO 1: TRIAGEM -->
-        <main id="view-triagem" class="flex-1 flex flex-col p-4 space-y-4">
-            
-            <!-- NOVO: Banner Inteligente de Instalação Manual/Automática PWA -->
-            <div id="banner-pwa-instalacao" class="hidden bg-blue-50 p-3 rounded-xl border border-blue-200 flex items-center justify-between shadow-sm animate-fade-in">
-                <div class="flex items-center space-x-2.5">
-                    <i class="fa-solid fa-mobile-screen-button text-blue-600 text-lg"></i>
-                    <div>
-                        <h4 class="text-xs font-bold text-blue-900">Classifica Pack no Telemóvel</h4>
-                        <p class="text-[10px] text-blue-600 leading-tight">Instale para usar offline e com mais rapidez.</p>
-                    </div>
-                </div>
-                <button type="button" id="btn-instalar-pwa" class="bg-blue-600 active:bg-blue-700 text-white font-bold text-xs px-3 py-1.5 rounded-lg shadow-sm whitespace-nowrap">
-                    Instalar
-                </button>
-            </div>
+        <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) -->
+        <div id="container-view-triagem"></div>
+        <div id="container-view-motoristas"></div>
+        <div id="container-view-intervalos"></div>
+        <div id="container-view-rotas"></div>
 
-            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                <div class="flex items-center justify-between">
-                    <label class="flex items-center space-x-2 text-sm font-semibold text-blue-800 cursor-pointer">
-                        <input type="checkbox" id="chk-fixar-prefixo" class="w-4 h-4 text-blue-600 rounded">
-                        <span>Fixar 4 dígitos iniciais</span>
-                    </label>
-                    <input type="number" id="input-prefixo" placeholder="Ex: 2700" disabled
-                           class="w-20 px-2 py-1 text-center border rounded bg-gray-200 text-gray-500 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500">
-                </div>
-            </div>
-
-            <div class="bg-gray-900 text-white rounded-xl p-4 text-center shadow-inner relative">
-                <div class="text-xs text-gray-400 uppercase tracking-wider">Código Postal</div>
-                <div id="visor-codigo" class="text-4xl font-mono font-bold tracking-widest mt-1 text-yellow-400">
-                    - - - - - - -
-                </div>
-            </div>
-
-            <!-- Procurar Código por Morada (COM MICROFONE INTEGRADO) -->
-            <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 space-y-2">
-                <label class="block text-xs font-bold uppercase text-blue-800">
-                    <i class="fa-solid fa-microphone mr-1"></i> Procurar Código por Voz:
-                </label>
-                <div class="flex space-x-2">
-                    <input type="text" id="busca-morada-triagem" placeholder="Fale ou digite a morada..." 
-                           class="flex-1 p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                    <button type="button" id="btn-voz-triagem" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm transition animate-none" title="Ditar morada">
-                        <i class="fa-solid fa-microphone text-lg" id="mic-inativo-triagem"></i>
-                        <i class="fa-solid fa-microphone text-lg animate-pulse text-red-500 hidden" id="mic-ativo-triagem"></i>
-                    </button>
-                </div>
-                <!-- Input de câmara mantido oculto para reativação futura simples (Pré-instalado) -->
-                <input type="file" id="input-camera-captura" accept="image/*" capture="environment" class="hidden">
-            </div>
-
-            <div class="grid grid-cols-3 gap-3 flex-1">
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="1">1</button>
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="2">2</button>
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="3">3</button>
-                
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="4">4</button>
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="5">5</button>
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="6">6</button>
-                
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="7">7</button>
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="8">8</button>
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="9">9</button>
-                
-                <button type="button" id="btn-key-clear" class="bg-red-100 active:bg-red-200 text-red-700 text-lg font-bold py-4 rounded-xl shadow-sm focus:outline-none">Limpar</button>
-                <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="0">0</button>
-                <button type="button" id="btn-key-backspace" class="bg-yellow-100 active:bg-yellow-200 text-yellow-700 text-xl font-bold py-4 rounded-xl shadow-sm focus:outline-none">
-                    <i class="fa-solid fa-backspace"></i>
-                </button>
-            </div>
-
-            <button id="btn-analisar" class="w-full bg-green-600 active:bg-green-700 text-white font-bold text-xl py-4 rounded-xl shadow-md transition duration-150">
-                Analisar Código
-            </button>
-        </main>
-
-        <!-- SEÇÃO 2: MOTORISTAS -->
-        <main id="view-motoristas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
-            <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-sm font-bold uppercase text-gray-500 tracking-wider">Resumo de Leituras</h3>
-                    <button id="btn-limpar-leituras" class="text-xs text-red-600 active:text-red-800 font-bold flex items-center space-x-1 border border-red-200 px-2 py-1 rounded bg-red-50">
-                        <i class="fa-solid fa-rotate-left"></i> <span>Reset Leituras</span>
-                    </button>
-                </div>
-                <div id="painel-resumo" class="space-y-2"></div>
-            </div>
-
-            <h2 class="text-xl font-bold text-gray-800 mt-2">Registo de Motoristas</h2>
-            <form id="form-motorista" class="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
-                <div>
-                    <label class="block text-xs font-bold uppercase text-gray-600">Nome do Motorista</label>
-                    <input type="text" id="nome-motorista" required placeholder="Ex: João Silva" 
-                           class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
-                </div>
-                <div>
-                    <div class="flex justify-between items-center mb-1">
-                        <label class="block text-xs font-bold uppercase text-gray-600">Associar Setor(es)</label>
-                        <span class="text-[9px] text-gray-400 font-semibold italic">*Um setor só pode ter 1 motorista</span>
-                    </div>
-                    <div id="checkboxes-setores-motorista" class="border rounded p-2 max-h-56 overflow-y-auto space-y-2 bg-gray-50">
-                        <p class="text-xs text-gray-400 italic text-center py-2">A carregar setores do sistema...</p>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
-                    <div class="grid grid-cols-6 gap-2" id="color-picker-container"></div>
-                </div>
-                <div class="flex space-x-2">
-                    <button type="button" id="btn-cancelar-motorista" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded shadow">
-                        Cancelar
-                    </button>
-                    <button type="submit" id="btn-submit-motorista" class="flex-1 bg-blue-600 text-white font-bold py-2 rounded shadow">
-                        Adicionar Motorista
-                    </button>
-                </div>
-            </form>
-
-            <div>
-                <h3 class="text-sm font-bold uppercase text-gray-500 mb-2">Motoristas Ativos</h3>
-                <div id="lista-motoristas" class="space-y-2">
-                    <p class="text-sm text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
-                </div>
-            </div>
-        </main>
-
-        <!-- SEÇÃO 3: SETORES E ÁREAS -->
-        <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
-            
-            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-                <h2 class="text-xl font-bold text-gray-800">Criar Setor de Entrega</h2>
-                <form id="form-setor" class="space-y-3">
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-gray-600">Nome do Setor</label>
-                        <input type="text" id="setor-nome" required placeholder="Ex: Setor Norte, Setor Oeste"
-                               class="w-full mt-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <div class="flex justify-between items-center mb-1">
-                            <label class="block text-xs font-bold uppercase text-gray-600">Selecionar Áreas (Localidades)</label>
-                            <span class="text-[9px] text-gray-400 font-semibold italic">*Área única por setor</span>
-                        </div>
-                        <div id="checkboxes-areas" class="border rounded p-2 max-h-56 overflow-y-auto space-y-2 bg-gray-50">
-                            <p class="text-xs text-gray-400 italic text-center py-2">A carregar áreas do sistema...</p>
-                        </div>
-                    </div>
-                    <div class="flex space-x-2">
-                        <button type="button" id="btn-cancelar-setor" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg shadow">
-                            Cancelar
-                        </button>
-                        <button type="submit" id="btn-submit-setor" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700 transition">
-                            Criar Setor
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-                <h3 class="text-sm font-bold uppercase text-gray-500 mb-1">Setores Ativos</h3>
-                <div id="lista-setores" class="space-y-2 max-h-64 overflow-y-auto pr-1">
-                    <p class="text-sm text-gray-400 italic text-center py-4">Nenhum sector registado.</p>
-                </div>
-            </div>
-
-        </main>
-
-        <!-- SEÇÃO 4: ROTAS -->
-        <main id="view-rotas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
-            
-            <!-- SUB-ECRÃ A: PREPARAÇÃO/INICIALIZAÇÃO DA ROTA -->
-            <div id="container-setup-rota" class="space-y-4">
-                <h2 class="text-xl font-bold text-gray-800">Iniciar Novo Itinerário</h2>
-                <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-                    <div>
-                        <label class="block text-xs font-bold uppercase text-gray-500">Data de Trabalho</label>
-                        <input type="date" id="data-rota" class="w-full mt-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <button id="btn-iniciar-rota" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md text-sm flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-play"></i> <span>Criar Rota do Turno</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- SUB-ECRÃ B: PLANEAMENTO E EXECUÇÃO (FICA OCULTO ATÉ INICIAR) -->
-            <div id="container-planeador-rota" class="hidden space-y-4">
-                
-                <!-- Cabeçalho de Rota Ativa -->
-                <div class="flex justify-between items-center bg-blue-50 border border-blue-100 p-3 rounded-xl">
-                    <div>
-                        <span class="text-[10px] uppercase font-bold text-blue-500 tracking-wider">Turno Ativo</span>
-                        <h4 id="display-data-rota" class="text-sm font-bold text-blue-800">00/00/2026</h4>
-                    </div>
-                    <button id="btn-encerrar-rota" class="text-xs text-red-600 hover:bg-red-50 border border-red-200 px-2 py-1 rounded bg-white font-bold">
-                        Encerrar Rota
-                    </button>
-                </div>
-
-                <!-- SELETOR DE MODO (Planeamento vs Modo Condução) -->
-                <div class="flex space-x-1 bg-gray-100 p-1 rounded-xl mb-3 shadow-inner">
-                    <button type="button" id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
-                        <i class="fa-solid fa-sliders mr-1"></i> Planeamento
-                    </button>
-                    <button type="button" id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
-                        <i class="fa-solid fa-truck-steering mr-1"></i> Condução
-                    </button>
-                </div>
-
-                <!-- GRUPO DE CONTROLOS DE PLANEAMENTO (Podem ser ocultados no Modo Condução) -->
-                <div id="planning-controls" class="space-y-4">
-                    <!-- Ponto de Partida -->
-                    <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-2">
-                        <span class="block text-xs font-bold uppercase text-gray-500">1. Ponto de Partida</span>
-                        <div class="flex space-x-2">
-                            <button id="btn-gps-partida" class="flex-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
-                                <i class="fa-solid fa-location-crosshairs"></i> <span>Usar Meu GPS</span>
-                            </button>
-                            <button id="btn-buscar-partida" class="flex-1 bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 rounded-lg p-2 font-bold text-xs flex items-center justify-center space-x-1">
-                                <i class="fa-solid fa-magnifying-glass"></i> <span>Buscar Morada</span>
-                            </button>
-                        </div>
-                        <div id="status-partida" class="text-xs font-mono text-gray-500 italic bg-gray-50 p-2 rounded border">
-                            Partida: Localização não definida
-                        </div>
-                    </div>
-
-                    <!-- Adicionar Entregas -->
-                    <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-3 relative">
-                        <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
-                        <div class="flex space-x-2">
-                            <input type="text" id="busca-morada" placeholder="Comece a digitar ou use a voz..." 
-                                   class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                            <button type="button" id="btn-voz" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm">
-                                <i class="fa-solid fa-microphone text-lg animate-pulse hidden" id="microfone-ativo"></i>
-                                <i class="fa-solid fa-microphone text-lg" id="microfone-inativo"></i>
-                            </button>
-                        </div>
-
-                        <div class="border-t pt-2">
-                            <div class="flex justify-between items-center mb-2">
-                                <span class="text-xs font-bold text-gray-600">Pacotes Adicionados:</span>
-                                <button id="btn-limpar-enderecos" class="text-[10px] text-red-500 font-bold uppercase">Limpar Tudo</button>
-                            </div>
-                            <div id="lista-moradas-adicionadas" class="space-y-1.5 max-h-32 overflow-y-auto">
-                                <p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Botão de Otimizar -->
-                    <button id="btn-otimizar-rota" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-md text-base flex items-center justify-center space-x-2">
-                        <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>
-                    </button>
-                </div>
-
-                <!-- Mapa do Google Maps -->
-                <div id="container-mapa" class="hidden space-y-2">
-                    <span class="block text-xs font-bold uppercase text-gray-500">Mapa do Itinerário</span>
-                    <div id="map" class="h-60 w-full rounded-xl border mt-1 shadow-inner z-10"></div>
-                </div>
-
-                <!-- Estatísticas de Turno / Entrega -->
-                <div id="estatisticas-rota" class="hidden bg-blue-50 border border-blue-100 p-3 rounded-xl flex justify-around text-center text-xs font-bold shadow-sm">
-                    <div>
-                        <span class="block text-gray-400 text-[9px] uppercase">Total</span>
-                        <span id="stat-total" class="text-base text-blue-800">0</span>
-                    </div>
-                    <div>
-                        <span class="block text-green-500 text-[9px] uppercase">Entregues</span>
-                        <span id="stat-entregues" class="text-base text-green-600">0</span>
-                    </div>
-                    <div>
-                        <span class="block text-red-500 text-[9px] uppercase">Falhas</span>
-                        <span id="stat-falhas" class="text-base text-red-600">0</span>
-                    </div>
-                    <div>
-                        <span class="block text-gray-400 text-[9px] uppercase">Pendente</span>
-                        <span id="stat-pendentes" class="text-base text-gray-700">0</span>
-                    </div>
-                </div>
-
-                <!-- Rota Ordenada de Entregas -->
-                <div id="container-rota-ordenada" class="hidden space-y-2 pb-6">
-                    <span class="block text-xs font-bold uppercase text-gray-500">Itinerário Otimizado de Entregas</span>
-                    <div id="lista-rota-final" class="space-y-2"></div>
-                </div>
-
-            </div>
-        </main>
-
-        <!-- OVERLAY DO RESULTADO DA TRIAGEM -->
+        <!-- OVERLAY DO RESULTADO DA TRIAGEM (Global/Partilhado) -->
         <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
             <div class="bg-white w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
                 <div class="flex-shrink-0 bg-gray-100 p-3 border-b text-center font-bold text-gray-700">Resultado da Triagem</div>
@@ -375,7 +97,7 @@
             </div>
         </div>
 
-        <!-- MODAL DE EDIÇÃO DA PARAGEM -->
+        <!-- MODAL DE EDIÇÃO DA PARAGEM (Global/Partilhado) -->
         <div id="modal-editar-paragem" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-6 z-50">
             <div class="bg-white w-full rounded-2xl overflow-hidden shadow-2xl p-4 space-y-4">
                 <h3 class="font-bold text-gray-700 text-lg flex items-center space-x-2">
@@ -403,7 +125,7 @@
             </div>
         </div>
 
-        <!-- MODALMENTE FIXO: Barra de Navegação Inferior (Fixed) -->
+        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA (Global) -->
         <nav class="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
             <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-lg"></i>
@@ -425,8 +147,19 @@
 
     </div>
 
-    <!-- Scripts da Aplicação -->
+    <!-- Scripts de Configuração e Arranque -->
     <script src="config.js"></script>
-    <script type="module" src="app.js"></script>
+    <script type="module" src="js/main.js"></script>
+
+    <!-- Registo do Service Worker para suporte PWA offline -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker registado com sucesso para uso offline. Escopo:', reg.scope))
+                    .catch(err => console.error('Falha ao registar o Service Worker:', err));
+            });
+        }
+    </script>
 </body>
 </html>

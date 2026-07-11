@@ -1,10 +1,15 @@
-// rotas.js
+/**
+ * maps.js
+ * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas, autocompletar de endereços, geocodificação inversa e cálculo de distâncias).
+ * NÃO faz: Não executa a otimização algorítmica de sequência ou turnos (tarefa do rotas.js).
+ * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps carregado globalmente).
+ */
 
 let googleMap = null;
 let googleMarkers = [];
 let googleRoutePolyline = null;
 let autocompleteWidget = null;
-let autocompleteWidgetTriagem = null; // Autocomplete específico para triagem
+let autocompleteWidgetTriagem = null;
 
 /**
  * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha (Rotas)
@@ -38,7 +43,7 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
 export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
 
-    // Focado em obter os componentes de morada onde o Código Postal reside
+    // Focado em obter os componentes da morada para isolar o Código Postal correspondente
     autocompleteWidgetTriagem = new google.maps.places.Autocomplete(buscaMoradaInput, {
         componentRestrictions: { country: ['pt', 'es'] },
         fields: ['address_components', 'formatted_address']
@@ -52,10 +57,9 @@ export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback)
         }
 
         let postalCode = "";
-        // Procura pelo componente "postal_code" na morada selecionada
         for (const component of place.address_components) {
             if (component.types.includes('postal_code')) {
-                postalCode = component.long_name; // Formato padrão do Google: "2655-319"
+                postalCode = component.long_name; // Exemplo: "2655-319"
                 break;
             }
         }
@@ -88,7 +92,7 @@ export function obterEnderecoPorGPSGoogle(lat, lng, callback) {
 }
 
 /**
- * Calcula a distância em linha reta entre duas coordenadas geográficas (em km)
+ * Calcula a distância em linha reta entre duas coordenadas geográficas (em km) usando Haversine
  */
 export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371; 
@@ -121,11 +125,11 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     const bounds = new google.maps.LatLngBounds();
     const posicoesOcupadas = [];
 
-    // Função interna para afastar ligeiramente os marcadores sobrepostos
+    // Função interna para afastar ligeiramente os marcadores sobrepostos na mesma coordenada
     function evitarSobreposicao(lat, lng) {
         let finalLat = lat;
         let finalLng = lng;
-        const margemDiferenca = 0.00003; // Tolerância de igualdade
+        const margemDiferenca = 0.00003; // Tolerância de proximidade física
         const deslocamento = 0.00008; // Afastamento de segurança (~10 metros)
 
         while (posicoesOcupadas.some(pos => 
@@ -140,7 +144,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
         return new google.maps.LatLng(finalLat, finalLng);
     }
 
-    // Desenhar Ponto de Partida
+    // Desenhar Ponto de Partida (Vermelho com a letra "P")
     const startPos = evitarSobreposicao(partida.lat, partida.lng);
     path.push(startPos);
     bounds.extend(startPos);
@@ -161,7 +165,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     });
     googleMarkers.push(partidaMarker);
 
-    // Desenhar Entregas
+    // Desenhar Entregas (Marcadores Azuis numerados de 1 a N)
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
@@ -207,9 +211,9 @@ export function limparMapaVisual() {
     }
 }
 
-/**
- * Recalcula os limites do mapa para enquadrar os pontos (disponível globalmente para o ui.js)
- */
+// ==========================================
+// ASSINATURA GLOBAL DO AJUSTADOR DE LIMITES (WINDOW)
+// ==========================================
 window.ajustarLimitesMapaGoogle = () => {
     if (!googleMap || !window.partidaLocalizacao || !window.rotaOtimizada || window.rotaOtimizada.length === 0) return;
     const bounds = new google.maps.LatLngBounds();
