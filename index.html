@@ -113,6 +113,16 @@
                         <label class="block text-xs font-bold uppercase text-gray-500">Observações / Notas</label>
                         <textarea id="edit-morada-obs" placeholder="Ex: Deixar com o vizinho no nº 12, código do portão..." class="w-full mt-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 h-24 resize-none"></textarea>
                     </div>
+                    <!-- NOVO: Caixa para marcar prioridade diretamente na paragem de rota -->
+                    <div>
+                        <label class="flex items-center space-x-3 text-sm font-bold text-gray-700 cursor-pointer py-1">
+                            <input type="checkbox" id="edit-morada-prioridade" class="w-5 h-5 text-orange-600 rounded focus:ring-orange-500 border-gray-300">
+                            <span class="flex items-center space-x-1.5">
+                                <i class="fa-solid fa-circle-exclamation text-orange-500 text-lg"></i>
+                                <span>Encomenda Prioritária</span>
+                            </span>
+                        </label>
+                    </div>
                 </div>
                 <div class="flex space-x-2">
                     <button id="btn-cancelar-edicao" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm">

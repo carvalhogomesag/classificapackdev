@@ -1,6 +1,6 @@
 /**
  * rotas.js
- * Faz: Gere a lógica de turnos, otimização automática de rotas pelo algoritmo do Vizinho Mais Próximo, Modo Condução e a edição de moradas de entrega.
+ * Faz: Gere a lógica de turnos, otimização automática de rotas pelo algoritmo do Vizinho Mais Próximo, Modo Condução, preenchimento rápido de prefixo e a edição de prioridades das paragens.
  * NÃO faz: Não interage diretamente com o hardware do mapa ou autocompletar da Google (delegado para o módulo maps.js).
  * Depende de: ./storage.js, ./voz.js, ./maps.js
  */
@@ -101,6 +101,7 @@ export function adicionarMorada(morada) {
     } else {
         morada.status = "Pendente"; 
         morada.observation = ""; 
+        morada.priority = false; // Valor de prioridade por defeito
         window.moradasEntregas.push(morada);
         renderMoradasAdicionadas();
         sincronizarPersistencia();
@@ -123,10 +124,19 @@ export function renderMoradasAdicionadas() {
     }
     window.moradasEntregas.forEach((morada, index) => {
         const item = document.createElement('div');
-        item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs animate-fade-in space-x-2";
+        
+        // Destaca a morada na listagem de planeamento se for urgente/prioritária
+        if (morada.priority) {
+            item.className = "flex items-center justify-between p-2 bg-orange-50 border border-orange-200 rounded-lg text-xs animate-fade-in space-x-2";
+        } else {
+            item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs animate-fade-in space-x-2";
+        }
+
         item.innerHTML = `
             <div class="flex-1 truncate">
-                <strong class="text-gray-500">#${index + 1}</strong> <span>${morada.address}</span>
+                <strong class="text-gray-500">#${index + 1}</strong> 
+                <span>${morada.address}</span>
+                ${morada.priority ? `<span class="bg-orange-500 text-white text-[8px] font-bold uppercase px-1 py-0.5 rounded ml-1.5"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                 ${morada.observation ? `<p class="text-[10px] text-blue-500 font-semibold italic mt-0.5 truncate">Nota: ${morada.observation}</p>` : ''}
             </div>
             <div class="flex items-center space-x-1.5 flex-shrink-0">
@@ -228,12 +238,21 @@ export function renderizarItinerarioOtimizado() {
         if (paragem.status === "Falhou") statusColor = "bg-red-500";
 
         const isLastNavigated = paragem.id === lastNavigatedId;
+        const isPriority = !!paragem.priority;
 
-        // Visual estético destacado para o item ativo que está em navegação
+        // Determinação do visual e contorno com base na atividade e na prioridade urgente
         if (isLastNavigated) {
-            item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-blue-500 bg-blue-50/70 shadow-md ring-4 ring-blue-100";
+            if (isPriority) {
+                item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
+            } else {
+                item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-blue-500 bg-blue-50/70 shadow-md ring-4 ring-blue-100";
+            }
         } else {
-            item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
+            if (isPriority) {
+                item.className = "bg-orange-50/30 p-3 rounded-xl border-2 border-orange-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
+            } else {
+                item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
+            }
         }
 
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
@@ -242,7 +261,7 @@ export function renderizarItinerarioOtimizado() {
         item.innerHTML = `
             <div class="flex items-center justify-between space-x-2">
                 <div class="flex-1 truncate">
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 flex-wrap gap-1">
                         <span class="w-5 h-5 rounded-full ${statusColor} text-white font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
                             ${index + 1}
                         </span>
@@ -250,6 +269,7 @@ export function renderizarItinerarioOtimizado() {
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
                         ${isLastNavigated ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
+                        ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
@@ -359,12 +379,29 @@ export function setupRotasLogic() {
     const statusPartida = document.getElementById('status-partida');
     const buscaMoradaInput = document.getElementById('busca-morada');
 
+    // Elementos de atalho de prefixo na rota
+    const btnInserirPrefixo = document.getElementById('btn-inserir-prefixo-rota');
+    const inputPrefixoRota = document.getElementById('input-prefixo-rota');
+
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
         btnConducao.addEventListener('click', () => alternarModoRota('conducao'));
+    }
+
+    // Lógica para clique no botão de atalho rápido de prefixo de rota
+    if (btnInserirPrefixo && inputPrefixoRota && buscaMoradaInput) {
+        btnInserirPrefixo.addEventListener('click', () => {
+            const prefix = inputPrefixoRota.value.trim();
+            if (prefix) {
+                // Escreve o prefixo mais o hífen e foca o campo de texto abrindo o autocomplete
+                buscaMoradaInput.value = prefix + "-";
+                buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
+                buscaMoradaInput.focus();
+            }
+        });
     }
 
     if (btnIniciarRota && dataRotaInput) {
@@ -543,10 +580,12 @@ export function setupModaisEdicao() {
 
         const editMoradaTexto = document.getElementById('edit-morada-texto');
         const editMoradaObs = document.getElementById('edit-morada-obs');
+        const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
         if (!editMoradaTexto || !editMoradaObs) return;
 
         const novaMorada = editMoradaTexto.value.trim();
         const novaObs = editMoradaObs.value.trim();
+        const novaPrioridade = editMoradaPrioridade ? editMoradaPrioridade.checked : false;
 
         if (!novaMorada) {
             alert("A morada de entrega não pode ficar em branco.");
@@ -559,11 +598,13 @@ export function setupModaisEdicao() {
         if (itemIndexPre !== -1) {
             window.moradasEntregas[itemIndexPre].address = novaMorada;
             window.moradasEntregas[itemIndexPre].observation = novaObs;
+            window.moradasEntregas[itemIndexPre].priority = novaPrioridade;
         }
 
         if (itemIndexPos !== -1) {
             window.rotaOtimizada[itemIndexPos].address = novaMorada;
             window.rotaOtimizada[itemIndexPos].observation = novaObs;
+            window.rotaOtimizada[itemIndexPos].priority = novaPrioridade;
         }
 
         sincronizarPersistencia();
@@ -584,12 +625,16 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     const modalEditarParagem = document.getElementById('modal-editar-paragem');
     const editMoradaTexto = document.getElementById('edit-morada-texto');
     const editMoradaObs = document.getElementById('edit-morada-obs');
+    const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
 
     if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
 
     itemSendoEditado = paragem;
     editMoradaTexto.value = paragem.address;
     editMoradaObs.value = paragem.observation || "";
+    if (editMoradaPrioridade) {
+        editMoradaPrioridade.checked = !!paragem.priority;
+    }
     modalEditarParagem.classList.remove('hidden');
 
     setTimeout(() => {

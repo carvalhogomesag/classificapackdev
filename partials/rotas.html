@@ -1,6 +1,6 @@
 <!--
   rotas.html
-  Faz: Contém a estrutura visual integral do ecrã de Gestão, Execução e Otimização de Rotas de Entrega, incluindo o contentor do Google Maps e o ecrã do Modo Condução.
+  Faz: Contém a estrutura visual integral do ecrã de Gestão, Execução e Otimização de Rotas de Entrega, incluindo o atalho rápido para prefixo de Código Postal, o contentor do Google Maps e o ecrã do Modo Condução.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -67,6 +67,19 @@
             <!-- Adicionar Entregas -->
             <div class="bg-white p-3 rounded-lg border border-gray-200 shadow-sm space-y-3 relative">
                 <span class="block text-xs font-bold uppercase text-gray-500">2. Adicionar Moradas de Entrega</span>
+                
+                <!-- NOVO: Atalho rápido para travar/inserir prefixo de Código Postal de 4 dígitos na pesquisa -->
+                <div class="flex items-center justify-between bg-blue-50/50 p-2 rounded-xl border border-blue-100 space-x-2 animate-fade-in">
+                    <span class="text-[11px] font-bold text-blue-800 uppercase tracking-wide">Prefixo Rápido de Rota:</span>
+                    <div class="flex items-center space-x-1.5">
+                        <input type="number" id="input-prefixo-rota" value="2655" placeholder="2655"
+                               class="w-16 p-1 text-center border rounded font-black text-xs focus:ring-2 focus:ring-blue-500 bg-white">
+                        <button type="button" id="btn-inserir-prefixo-rota" class="bg-blue-600 active:bg-blue-700 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg shadow-sm flex items-center space-x-1 uppercase tracking-wider">
+                            <i class="fa-solid fa-keyboard"></i> <span>Inserir CP-</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="flex space-x-2">
                     <input type="text" id="busca-morada" placeholder="Comece a digitar ou use a voz..." 
                            class="flex-1 p-3 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500">
