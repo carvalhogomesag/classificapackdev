@@ -1,6 +1,6 @@
 /**
  * maps.js
- * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas, autocompletar de endereços, geocodificação inversa e cálculo de distâncias).
+ * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos dinamicamente por status, autocompletar e geocodificação).
  * NÃO faz: Não executa a otimização algorítmica de sequência ou turnos (tarefa do rotas.js).
  * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps carregado globalmente).
  */
@@ -103,7 +103,7 @@ export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Desenha a rota otimizada no Mapa da Google com algoritmo de Jitter para evitar sobreposição
+ * Desenha a rota otimizada no Mapa da Google com algoritmo de Jitter e coloração dinâmica por status
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -144,7 +144,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
         return new google.maps.LatLng(finalLat, finalLng);
     }
 
-    // Desenhar Ponto de Partida (Vermelho com a letra "P")
+    // Desenhar Ponto de Partida (Vermelho escuro com a letra "P")
     const startPos = evitarSobreposicao(partida.lat, partida.lng);
     path.push(startPos);
     bounds.extend(startPos);
@@ -165,11 +165,19 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     });
     googleMarkers.push(partidaMarker);
 
-    // Desenhar Entregas (Marcadores Azuis numerados de 1 a N)
+    // Desenhar Entregas (Marcadores Coloridos Dinamicamente por Status)
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
         bounds.extend(pos);
+
+        // Define a cor do marcador com base no status em tempo real da paragem
+        let pinoColor = "#2563EB"; // Azul por defeito (Pendente)
+        if (p.status === "Entregue") {
+            pinoColor = "#10B981"; // Verde (Sucesso)
+        } else if (p.status === "Falhou" || p.status === "Failed") {
+            pinoColor = "#EF4444"; // Vermelho (Falha)
+        }
 
         const m = new google.maps.Marker({
             position: pos,
@@ -179,7 +187,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             icon: {
                 path: google.maps.SymbolPath.CIRCLE,
                 scale: 14,
-                fillColor: "#2563EB",
+                fillColor: pinoColor, // Aplicação da cor dinâmica
                 fillOpacity: 1,
                 strokeWeight: 2,
                 strokeColor: "#FFFFFF"
