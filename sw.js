@@ -1,7 +1,7 @@
-// sw.js (Versão v20)
-const CACHE_NAME = 'classificapack-v20';
+// sw.js (Versão v21)
+const CACHE_NAME = 'classificapack-v21';
 
-// Lista atualizada de todos os ficheiros ativos da nova arquitetura modular
+// Lista de todos os ficheiros ativos da arquitetura modular para guardar em cache
 const ASSETS = [
   './',
   'index.html',
@@ -30,7 +30,7 @@ const ASSETS = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Guarda em cache os novos ficheiros modulares
+      // Guarda em cache os novos ficheiros
       return cache.addAll(ASSETS);
     }).then(() => self.skipWaiting())
   );
@@ -41,7 +41,7 @@ self.addEventListener('activate', (e) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          // Elimina a cache v19 antiga para libertar espaço no telemóvel do motorista
+          // Elimina as caches antigas (v20, v19, etc.) para libertar espaço e atualizar a aplicação
           if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
