@@ -1,7 +1,6 @@
-// sw.js (Versão v21)
-const CACHE_NAME = 'classificapack-v21';
+// sw.js (Versão v22)
+const CACHE_NAME = 'classificapack-v22';
 
-// Lista de todos os ficheiros ativos da arquitetura modular para guardar em cache
 const ASSETS = [
   './',
   'index.html',
@@ -30,7 +29,6 @@ const ASSETS = [
 self.addEventListener('install', (e) => {
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Guarda em cache os novos ficheiros
       return cache.addAll(ASSETS);
     }).then(() => self.skipWaiting())
   );
@@ -41,7 +39,6 @@ self.addEventListener('activate', (e) => {
     caches.keys().then((keys) => {
       return Promise.all(
         keys.map((key) => {
-          // Elimina as caches antigas (v20, v19, etc.) para libertar espaço e atualizar a aplicação
           if (key !== CACHE_NAME) {
             return caches.delete(key);
           }
@@ -52,13 +49,11 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Ignora o cache para chamadas de mapas em tempo real da Google
   if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google')) {
     return;
   }
   e.respondWith(
     caches.match(e.request).then((cachedResponse) => {
-      // Devolve o ficheiro guardado se estiver offline, ou vai buscar à rede se estiver online
       return cachedResponse || fetch(e.request);
     })
   );

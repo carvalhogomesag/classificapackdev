@@ -1,7 +1,7 @@
 /**
- * rotas.js
- * Faz: Gere a lógica de turnos, otimização automática de rotas por distância física pura (linha reta), Modo Condução, atalhos de prefixo e prioridades de paragens.
- * NÃO faz: Não interage diretamente com o hardware do mapa ou autocompletar da Google (delegado para o módulo maps.js).
+ * js/rotas.js
+ * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
+ * NÃO faz: Não executa cálculos de linha reta locais (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js
  */
 
@@ -15,6 +15,16 @@ import {
 } from './maps.js';
 
 let itemSendoEditado = null; 
+let autocompleteInstancia = null; // Guarda a instância ativa do Google Places Autocomplete
+
+// =========================================================================
+// NOVO: DETETOR INTELIGENTE DE AMBIENTE (LOCAL VS PRODUÇÃO)
+// =========================================================================
+// Se estiver no computador (localhost), usa a porta 3000. 
+// Se estiver na internet, aponta para o seu novo servidor seguro no Render.
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:3000'
+    : 'https://classificapack-backend.onrender.com'; // <-- DEVE substituir este link pelo seu link final do Render após o Passo 2.
 
 // ==========================================
 // CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS
@@ -61,11 +71,11 @@ export function alternarModoRota(modo) {
 }
 
 // ==========================================
-// RECONHECIMENTO DE VOZ (ABA ROTAS - MÉTODO UNIFICADO VIA VOZ.JS)
+// RECONHECIMENTO DE VOZ (ABA ROTAS)
 // ==========================================
 export function setupVozLogic() {
     const btnVoz = document.getElementById('btn-voz');
-    const buscaMoradaInput = document.getElementById('busca-morada');
+    const buscaMoradaInput = document.getElementById('rota-morada-completa'); // Aponta agora para a morada opcional
     const micAtivo = document.getElementById('microfone-ativo');
     const micInativo = document.getElementById('microfone-inativo');
 
@@ -85,33 +95,93 @@ export function setupVozLogic() {
     });
 }
 
-// ==========================================
-// ADICIONAR MORADA NO TURNO
-// ==========================================
-export function adicionarMorada(morada) {
-    const buscaMoradaInput = document.getElementById('busca-morada');
+// =========================================================================
+// TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA (GEOCODIFICAÇÃO LOCAL/PROD)
+// =========================================================================
+export async function processarAdicaoPorPostal() {
+    const inputPostal = document.getElementById('rota-codigo-postal');
+    const inputMorada = document.getElementById('rota-morada-completa');
+    const btnAdicionar = document.getElementById('btn-adicionar-postal-rota');
     const statusPartida = document.getElementById('status-partida');
 
-    if (window.definindoPartidaPorMorada) {
-        window.partidaLocalizacao = morada;
-        if (statusPartida) statusPartida.innerHTML = `<strong>Partida:</strong> ${morada.address}`;
-        window.definindoPartidaPorMorada = false;
-        if (buscaMoradaInput) buscaMoradaInput.placeholder = "Comece a digitar a morada aqui...";
-        sincronizarPersistencia();
-    } else {
-        morada.status = "Pendente"; 
-        morada.observation = ""; 
-        morada.priority = false; 
-        window.moradasEntregas.push(morada);
-        renderMoradasAdicionadas();
-        sincronizarPersistencia();
-        abrirModalEdicaoParagem(morada, false);
+    if (!inputPostal || !btnAdicionar) return;
+
+    const postalCodeVal = inputPostal.value.trim();
+    const moradaVal = inputMorada ? inputMorada.value.trim() : "";
+
+    // 1. Limpa e valida se o Código Postal tem 7 dígitos numéricos
+    const cleanZip = postalCodeVal.replace(/\D/g, '');
+    if (cleanZip.length !== 7) {
+        alert("Por favor, introduza um Código Postal válido com 7 dígitos (ex: 2655-319).");
+        inputPostal.focus();
+        return;
     }
-    if (buscaMoradaInput) buscaMoradaInput.value = "";
+
+    const formattedZip = `${cleanZip.substring(0, 4)}-${cleanZip.substring(4, 7)}`;
+
+    // 2. Coloca o botão em estado de carregamento de segurança
+    btnAdicionar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A geolocalizar...</span>';
+    btnAdicionar.disabled = true;
+
+    try {
+        // 3. Consulta o endpoint dinâmico (Local ou Render)
+        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                postalCode: formattedZip,
+                address: moradaVal
+            })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
+        }
+
+        // 4. Constrói o objeto de morada mapeada vinda da Google
+        const novaMorada = {
+            id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
+            lat: data.lat,
+            lng: data.lng,
+            address: data.address, // Endereço oficial mapeado pela Google
+            status: "Pendente",
+            observation: "",
+            priority: false
+        };
+
+        // 5. Verifica se o clique anterior foi para definir o Ponto de Partida
+        if (window.definindoPartidaPorMorada) {
+            window.partidaLocalizacao = novaMorada;
+            if (statusPartida) statusPartida.innerHTML = `<strong>Partida:</strong> ${novaMorada.address}`;
+            window.definindoPartidaPorMorada = false;
+            sincronizarPersistencia();
+            alert("Ponto de Partida configurado com sucesso!");
+        } else {
+            // Caso contrário, adiciona como paragem de entrega
+            window.moradasEntregas.push(novaMorada);
+            renderMoradasAdicionadas();
+            sincronizarPersistencia();
+            abrirModalEdicaoParagem(novaMorada, false);
+        }
+
+        // Limpa os campos de destino após adicionar com sucesso
+        inputPostal.value = "";
+        if (inputMorada) inputMorada.value = "";
+
+    } catch (err) {
+        console.error("Erro na geocodificação local:", err);
+        alert(`Erro: ${err.message}`);
+    } finally {
+        // Devolve o botão ao estado padrão
+        btnAdicionar.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Adicionar Pacote</span>';
+        btnAdicionar.disabled = false;
+    }
 }
 
 // ==========================================
-// DESENHAR MORADAS ADICIONADAS (FASE DE PLANEAMENTO)
+// DESENHAR MORADAS ADICIONADAS (PLANEAMENTO)
 // ==========================================
 export function renderMoradasAdicionadas() {
     const listaMoradasAdicionadas = document.getElementById('lista-moradas-adicionadas');
@@ -173,52 +243,82 @@ export function renderMoradasAdicionadas() {
 }
 
 // =========================================================================
-// RETORNO AO ALGORITMO NATIVO: VIZINHO MAIS PRÓXIMO POR DISTÂNCIA PURA
+// OTIMIZAÇÃO: CONEXÃO À GOOGLE ROUTE OPTIMIZATION API (CÁLCULO REAL POR ESTRADA)
 // =========================================================================
-export function otimizarItinerarioComVizinhoMaisProximo() {
+export async function otimizarItinerarioComVizinhoMaisProximo() {
     if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
     if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
 
-    let atual = { lat: window.partidaLocalizacao.lat, lng: window.partidaLocalizacao.lng };
-    let restantes = [...window.moradasEntregas];
-    window.rotaOtimizada = [];
-
-    // Algoritmo nativo de proximidade espacial pura
-    while (restantes.length > 0) {
-        let indiceMaisProximo = -1;
-        let menorDistancia = Infinity;
-
-        for (let i = 0; i < restantes.length; i++) {
-            const dist = calcularDistanciaHaversine(atual.lat, atual.lng, restantes[i].lat, restantes[i].lng);
-            if (dist < menorDistancia) {
-                menorDistancia = dist;
-                indiceMaisProximo = i;
-            }
-        }
-
-        if (indiceMaisProximo !== -1) {
-            const paragem = restantes[indiceMaisProximo];
-            paragem.distanciaDoAnterior = menorDistancia;
-            window.rotaOtimizada.push(paragem);
-            atual = { lat: paragem.lat, lng: paragem.lng };
-            restantes.splice(indiceMaisProximo, 1);
-        }
+    const btnOtimizar = document.getElementById('btn-otimizar-rota');
+    if (btnOtimizar) {
+        btnOtimizar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A calcular rota ótima...</span>';
+        btnOtimizar.disabled = true;
     }
 
-    const containerMapa = document.getElementById('container-mapa');
-    const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-    if (containerMapa) containerMapa.classList.remove('hidden');
-    if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+    try {
+        // Envia as coordenadas para o endpoint dinâmico (Local ou Render)
+        const response = await fetch(`${API_BASE_URL}/api/optimize-route`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pontoPartida: window.partidaLocalizacao,
+                paragens: window.moradasEntregas
+            })
+        });
 
-    renderizarItinerarioOtimizado();
-    sincronizarPersistencia();
-    
-    setTimeout(() => {
-        desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-    }, 300);
+        if (!response.ok) {
+            throw new Error("O servidor local falhou ou a Google rejeitou as credenciais de teste.");
+        }
 
-    // Muda automaticamente para o Modo Condução focado
-    alternarModoRota('conducao');
+        const data = await response.json();
+        
+        if (data.optimizedIndices) {
+            const indices = data.optimizedIndices; // Array de índices ordenados da Google (ex: [2, 0, 1])
+            window.rotaOtimizada = [];
+
+            // Reorganiza a rota local na ordem correta devolvida pela Google
+            indices.forEach((indexOriginal) => {
+                const paragemOriginal = window.moradasEntregas[indexOriginal];
+                
+                // Atribui uma distância teórica de condução (estimativa local)
+                paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
+                    window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
+                    window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
+                    paragemOriginal.lat,
+                    paragemOriginal.lng
+                );
+                
+                window.rotaOtimizada.push(paragemOriginal);
+            });
+        } else {
+            // Se a API não devolveu uma rota nova por alguma restrição, mantém a original
+            window.rotaOtimizada = [...window.moradasEntregas];
+            window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
+        }
+
+        const containerMapa = document.getElementById('container-mapa');
+        const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+        if (containerMapa) containerMapa.classList.remove('hidden');
+        if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+
+        renderizarItinerarioOtimizado();
+        sincronizarPersistencia();
+        
+        setTimeout(() => {
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }, 300);
+
+        alternarModoRota('conducao');
+
+    } catch (err) {
+        console.error("Erro na comunicação local DEV:", err);
+        alert(`Ocorreu um erro no teste: ${err.message}\n\nGaranta que iniciou o servidor no terminal escrevendo: node --env-file=.env js/dev-rotas-backend.js`);
+    } finally {
+        if (btnOtimizar) {
+            btnOtimizar.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>';
+            btnOtimizar.disabled = false;
+        }
+    }
 }
 
 // =========================================================================
@@ -243,7 +343,6 @@ export function renderizarItinerarioOtimizado() {
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
 
-        // Determinação do visual e contorno com base na atividade e na prioridade urgente
         if (isLastNavigated) {
             if (isPriority) {
                 item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
@@ -304,7 +403,6 @@ export function renderizarItinerarioOtimizado() {
 
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
-        // Ao carregar em navegar, regista o ID para destacar o item de forma persistente
         item.querySelector('.btn-navegar').onclick = () => {
             localStorage.setItem('cp_last_navigated_id', paragem.id);
             renderizarItinerarioOtimizado(); 
@@ -332,7 +430,6 @@ export function renderizarItinerarioOtimizado() {
 
     renderEstatisticasRota();
 
-    // SCROLL AUTOMÁTICO SUAVE: Desloca o telemóvel para focar a entrega ativa
     if (lastNavigatedId) {
         setTimeout(() => {
             const elementoAlvo = document.getElementById(`paragem-${lastNavigatedId}`);
@@ -368,6 +465,108 @@ export function renderEstatisticasRota() {
     if (statPendentes) statPendentes.textContent = pendentes;
 }
 
+// =========================================================================
+// AUXILIARES DO PREFIXO RÁPIDO E DA FORMATAÇÃO DO CÓDIGO POSTAL
+// =========================================================================
+function aplicarPrefixoNoCampo(prefixo) {
+    const inputCP = document.getElementById('rota-codigo-postal');
+    if (!inputCP) return;
+
+    inputCP.value = `${prefixo}-`;
+    
+    // Foca o campo de Código Postal para abrir o teclado imediatamente
+    inputCP.focus();
+
+    // Garante que o cursor de escrita fica colocado logo após o hífen
+    const comprimentoTexto = inputCP.value.length;
+    inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
+}
+
+function configurarEventosPrefixoRapido() {
+    const btnManual = document.getElementById('btn-inserir-prefixo');
+    const inputPrefixoManual = document.getElementById('prefixo-manual');
+
+    if (btnManual && inputPrefixoManual) {
+        btnManual.addEventListener('click', (e) => {
+            e.preventDefault();
+            const prefixoVal = inputPrefixoManual.value.replace(/\D/g, '');
+            if (prefixoVal.length !== 4) {
+                alert("Por favor, introduza um prefixo de Código Postal com exatamente 4 números.");
+                inputPrefixoManual.focus();
+                return;
+            }
+            aplicarPrefixoNoCampo(prefixoVal);
+        });
+    }
+}
+
+function configurarFormatacaoCodigoPostal() {
+    const inputCP = document.getElementById('rota-codigo-postal');
+    if (!inputCP) return;
+
+    inputCP.addEventListener('input', () => {
+        let valor = inputCP.value;
+        // Permite apenas números e hífens
+        valor = valor.replace(/[^0-9-]/g, '');
+
+        const numerosApenas = valor.replace(/\D/g, '');
+
+        if (numerosApenas.length <= 4) {
+            value = numerosApenas;
+        } else {
+            // Insere o hífen automaticamente a seguir ao quarto dígito
+            valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
+        }
+
+        inputCP.value = valor.toUpperCase();
+    });
+}
+
+// =========================================================================
+// INICIALIZAÇÃO INTELIGENTE DO GOOGLE MAPS AUTOCOMPLETE NO CAMPO DE MORADA
+// =========================================================================
+function inicializarAutocompleteMorada() {
+    const inputMorada = document.getElementById('rota-morada-completa');
+    if (!inputMorada) return;
+
+    // Se o SDK do Google Maps ainda não terminou de carregar, tenta novamente brevemente
+    if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
+        setTimeout(inicializarAutocompleteMorada, 500);
+        return;
+    }
+
+    try {
+        // Cria a instância de autocomplete restrita a Portugal, permitindo moradas e pontos de interesse (estabelecimentos)
+        autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
+            componentRestrictions: { country: 'pt' },
+            fields: ['address_components', 'geometry', 'formatted_address']
+        });
+
+        // Evento disparado quando o utilizador toca numa morada ou estabelecimento sugerido pela Google
+        autocompleteInstancia.addListener('place_changed', () => {
+            const localSelecionado = autocompleteInstancia.getPlace();
+            if (!localSelecionado || !localSelecionado.address_components) return;
+
+            // Extração automática inteligente do Código Postal (se presente no registo do Google)
+            const componenteCP = localSelecionado.address_components.find(c => c.types.includes('postal_code'));
+            if (componenteCP) {
+                const inputCP = document.getElementById('rota-codigo-postal');
+                if (inputCP) {
+                    const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
+                    if (cpLimpo.length === 7) {
+                        inputCP.value = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
+                    } else if (cpLimpo.length === 4) {
+                        inputCP.value = `${cpLimpo}-`;
+                        inputCP.focus();
+                    }
+                }
+            }
+        });
+    } catch (err) {
+        console.warn("Não foi possível iniciar o Autocomplete do Google Places neste ecrã:", err);
+    }
+}
+
 // ==========================================
 // CONFIGURAÇÃO DO MENU E CONTROLOS DE TURNOS
 // ==========================================
@@ -380,30 +579,31 @@ export function setupRotasLogic() {
     const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
     const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
     const statusPartida = document.getElementById('status-partida');
-    const buscaMoradaInput = document.getElementById('busca-morada');
 
-    // Elementos de atalho de prefixo na rota
-    const btnInserirPrefixo = document.getElementById('btn-inserir-prefixo-rota');
-    const inputPrefixoRota = document.getElementById('input-prefixo-rota');
+    // Novos elementos do formulário de Código Postal
+    const btnAdicionarPostal = document.getElementById('btn-adicionar-postal-rota');
 
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
+    // Inicialização da nova lógica de assistência ao teclado para o Código Postal
+    configurarEventosPrefixoRapido();
+    configurarFormatacaoCodigoPostal();
+    inicializarAutocompleteMorada();
+
     if (btnPlaneamento && btnConducao) {
-        btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
-        btnConducao.addEventListener('click', () => alternarModoRota('conducao'));
+        btnPlaneamento.addEventListener('click', () => {
+            alternarModoRota('planeamento');
+        });
+        btnConducao.addEventListener('click', () => {
+            alternarModoRota('conducao');
+        });
     }
 
-    // Lógica para clique no botão de atalho rápido de prefixo de rota
-    if (btnInserirPrefixo && inputPrefixoRota && buscaMoradaInput) {
-        btnInserirPrefixo.addEventListener('click', () => {
-            const prefix = inputPrefixoRota.value.trim();
-            if (prefix) {
-                // Escreve o prefixo mais o hífen e foca o campo de texto abrindo o autocomplete
-                buscaMoradaInput.value = prefix + "-";
-                buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
-                buscaMoradaInput.focus();
-            }
+    // Escuta de clique do novo botão de Adicionar Pacote por Código Postal
+    if (btnAdicionarPostal) {
+        btnAdicionarPostal.addEventListener('click', () => {
+            processarAdicaoPorPostal();
         });
     }
 
@@ -472,11 +672,13 @@ export function setupRotasLogic() {
         });
     }
 
-    if (btnBuscarPartida && buscaMoradaInput) {
+    // O botão de buscar partida agora instrui o utilizador a usar os mesmos inputs de Código Postal
+    if (btnBuscarPartida) {
         btnBuscarPartida.addEventListener('click', () => {
             window.definindoPartidaPorMorada = true;
-            buscaMoradaInput.placeholder = "Procure a morada de PARTIDA...";
-            buscaMoradaInput.focus();
+            alert("Introduza o Código Postal e a rua de PARTIDA pretendida nos campos abaixo e clique em 'Adicionar Pacote' para marcar o início!");
+            const inputPostal = document.getElementById('rota-codigo-postal');
+            if (inputPostal) inputPostal.focus();
         });
     }
 
@@ -529,6 +731,9 @@ export function sincronizarInterfaceRota() {
         }
 
         renderMoradasAdicionadas();
+
+        // Reinicia o autocomplete caso a caixa de moradas mude de estado visual
+        setTimeout(inicializarAutocompleteMorada, 100);
 
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
         alternarModoRota(modoSalvo);

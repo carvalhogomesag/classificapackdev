@@ -13,8 +13,7 @@ import { handleSectorSubmit } from './setores.js';
 import { setupTriagemLogic, setupCancelButtons, setupVozTriagemLogic, setupCameraOcrLogic } from './triagem.js';
 import { setupRotasLogic, setupModaisEdicao, setupVozLogic, sincronizarInterfaceRota } from './rotas.js';
 import { setupPWAInstallationLogic } from './pwa.js';
-import { inicializarGoogleAutocomplete, inicializarGoogleAutocompleteTriagem } from './maps.js';
-import { adicionarMorada } from './rotas.js';
+import { inicializarGoogleAutocompleteTriagem } from './maps.js';
 
 // ==========================================
 // PALETE DE CORES DOS MOTORISTAS
@@ -57,12 +56,11 @@ async function carregarPartials() {
 // ==========================================
 // INICIALIZAÇÃO DO AUTOCOMPLETE DE MORADAS
 // ==========================================
+// NOTA: o autocomplete de morada das ROTAS foi removido daqui de propósito.
+// A criação de rotas passou a exigir o Código Postal como campo obrigatório
+// (verdade absoluta), com morada apenas como complemento opcional — fluxo
+// tratado por processarAdicaoPorPostal() dentro de rotas.js, não por aqui.
 function inicializarTodosAutocompletes() {
-    const buscaMoradaInput = document.getElementById('busca-morada');
-    if (buscaMoradaInput) {
-        inicializarGoogleAutocomplete(buscaMoradaInput, adicionarMorada);
-    }
-
     const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
     if (buscaMoradaTriagemInput) {
         inicializarGoogleAutocompleteTriagem(buscaMoradaTriagemInput, (postalCode, formattedAddress) => {

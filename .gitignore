@@ -1,1 +1,16 @@
-config.js
+# ==========================================
+# CLASSIFICA PACK - FILTRO DE SEGURANÇA (GITIGNORE)
+# ==========================================
+
+# Ignorar chaves e credenciais secretas (CRÍTICO)
+.env
+google-credentials.json
+
+# Ignorar pastas de dependências do Node.js
+node_modules/
+
+# Ignorar ficheiros temporários do sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
