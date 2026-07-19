@@ -1,6 +1,6 @@
 {
-  "short_name": "ClassificaPack",
-  "name": "Classifica Pack - Triagem",
+  "short_name": "Classifica DEV",
+  "name": "Classifica Pack - DEV",
   "icons": [
     {
       "src": "icon-192.png",
@@ -14,8 +14,8 @@
     }
   ],
   "start_url": "/index.html",
-  "background_color": "#2563EB",
-  "theme_color": "#2563EB",
+  "background_color": "#DC2626",
+  "theme_color": "#DC2626",
   "display": "standalone",
   "orientation": "portrait"
 }
