@@ -17,6 +17,10 @@ import {
 let itemSendoEditado = null; 
 let autocompleteInstancia = null; // Guarda a instância ativa do Google Places Autocomplete
 
+// Variáveis de estado temporárias do modal de edição (Passo 4)
+let embalagemSelecionada = "";
+let origemSelecionada = "";
+
 // =========================================================================
 // DETETOR INTELIGENTE DE AMBIENTE (LOCAL VS PRODUÇÃO)
 // =========================================================================
@@ -572,6 +576,133 @@ function inicializarAutocompleteMorada() {
     }
 }
 
+// =========================================================================
+// NOVO: SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL (PASSO 4)
+// =========================================================================
+
+/**
+ * Atualiza o texto da caixa de observações com base nas tags selecionadas.
+ */
+function atualizarTextoObservacoesAutomatico() {
+    const textareaObs = document.getElementById('edit-morada-obs');
+    if (!textareaObs) return;
+
+    const partes = [];
+    if (embalagemSelecionada) partes.push(embalagemSelecionada);
+    if (origemSelecionada) partes.push(origemSelecionada);
+
+    // Junta as partes com um espaço (ex: "Envelope Amazon")
+    textareaObs.value = partes.join(" ");
+}
+
+/**
+ * Altera visualmente a cor dos botões (de cinzento para azul) consoante a seleção ativa.
+ */
+function atualizarEstilosBotoesModal() {
+    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
+    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
+
+    // 1. Pintar botões de Embalagem
+    botoesEmbalagem.forEach(btn => {
+        const tipo = btn.getAttribute('data-tipo');
+        if (embalagemSelecionada === tipo) {
+            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
+        } else {
+            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
+        }
+    });
+
+    // 2. Pintar botões de Origem / Fornecedores
+    botoesOrigem.forEach(btn => {
+        const origem = btn.getAttribute('data-origem');
+        if (origemSelecionada === origem) {
+            btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
+        } else {
+            // Estilo padrão específico para o botão de Fraldas (com o coração vermelho)
+            if (origem === 'Fraldas') {
+                btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1";
+            } else {
+                btn.className = "btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
+            }
+        }
+    });
+}
+
+/**
+ * Analisa as observações já existentes de um pacote e pré-seleciona os botões do modal de forma inteligente.
+ */
+function preencherSelecoesPorTexto(observacao) {
+    embalagemSelecionada = "";
+    origemSelecionada = "";
+
+    if (!observacao) return;
+
+    const obsUpper = observacao.toUpperCase();
+
+    // Detetar Embalagem no texto
+    if (obsUpper.includes("ENVELOPE")) {
+        embalagemSelecionada = "Envelope";
+    } else if (obsUpper.includes("CAIXA PEQUENA")) {
+        embalagemSelecionada = "Caixa Pequena";
+    } else if (obsUpper.includes("CAIXA GRANDE")) {
+        embalagemSelecionada = "Caixa Grande";
+    } else if (obsUpper.includes("PACOTE")) {
+        embalagemSelecionada = "Pacote";
+    }
+
+    // Detetar Fornecedor no texto
+    if (obsUpper.includes("AMAZON")) {
+        origemSelecionada = "Amazon";
+    } else if (obsUpper.includes("ZARA")) {
+        origemSelecionada = "Zara";
+    } else if (obsUpper.includes("CHINA") || obsUpper.includes("TEMU") || obsUpper.includes("SHEIN")) {
+        origemSelecionada = "China (Temu/Shein)";
+    } else if (obsUpper.includes("FRALDAS")) {
+        origemSelecionada = "Fraldas";
+    }
+}
+
+/**
+ * Atribui os escutadores de cliques em todos os botões rápidos do modal de edição.
+ */
+function configurarBotoesRapidosModal() {
+    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
+    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
+
+    botoesEmbalagem.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tipo = btn.getAttribute('data-tipo');
+            
+            // Alterna a seleção: se clicar de novo no mesmo, desseleciona
+            if (embalagemSelecionada === tipo) {
+                embalagemSelecionada = "";
+            } else {
+                embalagemSelecionada = tipo;
+            }
+            
+            atualizarEstilosBotoesModal();
+            atualizarTextoObservacoesAutomatico();
+        });
+    });
+
+    botoesOrigem.forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const origem = btn.getAttribute('data-origem');
+            
+            if (origemSelecionada === origem) {
+                origemSelecionada = "";
+            } else {
+                origemSelecionada = origem;
+            }
+            
+            atualizarEstilosBotoesModal();
+            atualizarTextoObservacoesAutomatico();
+        });
+    });
+}
+
 // ==========================================
 // CONFIGURAÇÃO DO MENU E CONTROLOS DE TURNOS
 // ==========================================
@@ -687,9 +818,6 @@ export function setupRotasLogic() {
         });
     }
 
-    // MELHORIA REQUISITADA:
-    // Adicionámos uma janela de confirmação estrita para evitar que um toque
-    // acidental em campo limpe a rota que está a ser ativamente criada.
     if (btnLimparEnderecos) {
         btnLimparEnderecos.addEventListener('click', () => {
             if (confirm("Tem a certeza de que deseja eliminar todas as moradas e recomeçar a rota do zero?")) {
@@ -837,6 +965,9 @@ export function setupModaisEdicao() {
         if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
         itemSendoEditado = null;
     });
+
+    // NOVO: Liga os escutadores de cliques para os botões do modal de edição
+    configurarBotoesRapidosModal();
 }
 
 export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
@@ -853,6 +984,11 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     if (editMoradaPrioridade) {
         editMoradaPrioridade.checked = !!paragem.priority;
     }
+
+    // NOVO: Analisa as observações salvas no texto para acender os botões certos ao abrir o modal (Passo 4)
+    preencherSelecoesPorTexto(paragem.observation || "");
+    atualizarEstilosBotoesModal();
+
     modalEditarParagem.classList.remove('hidden');
 
     setTimeout(() => {
