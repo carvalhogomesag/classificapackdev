@@ -18,13 +18,11 @@ let itemSendoEditado = null;
 let autocompleteInstancia = null; // Guarda a instância ativa do Google Places Autocomplete
 
 // =========================================================================
-// NOVO: DETETOR INTELIGENTE DE AMBIENTE (LOCAL VS PRODUÇÃO)
+// DETETOR INTELIGENTE DE AMBIENTE (LOCAL VS PRODUÇÃO)
 // =========================================================================
-// Se estiver no computador (localhost), usa a porta 3000. 
-// Se estiver na internet, aponta para o seu novo servidor seguro no Render.
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:3000'
-    : 'https://classificapack-backend.onrender.com'; // <-- DEVE substituir este link pelo seu link final do Render após o Passo 2.
+    : 'https://classificapack-backend.onrender.com'; // Link do seu Render ativo
 
 // ==========================================
 // CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS
@@ -171,7 +169,7 @@ export async function processarAdicaoPorPostal() {
         if (inputMorada) inputMorada.value = "";
 
     } catch (err) {
-        console.error("Erro na geocodificação local:", err);
+        console.error("Erro na geocodificação:", err);
         alert(`Erro: ${err.message}`);
     } finally {
         // Devolve o botão ao estado padrão
@@ -512,7 +510,7 @@ function configurarFormatacaoCodigoPostal() {
         const numerosApenas = valor.replace(/\D/g, '');
 
         if (numerosApenas.length <= 4) {
-            value = numerosApenas;
+            valor = numerosApenas;
         } else {
             // Insere o hífen automaticamente a seguir ao quarto dígito
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
@@ -536,10 +534,17 @@ function inicializarAutocompleteMorada() {
     }
 
     try {
-        // Cria a instância de autocomplete restrita a Portugal, permitindo moradas e pontos de interesse (estabelecimentos)
+        // Coordenadas centrais de Mafra, Portugal para limitar a pesquisa automática localmente
+        const centroMafra = { lat: 38.9369, lng: -9.3282 };
+        const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 }); // Raio de 15km em redor do centro de Mafra
+        const limitesMafra = circuloMafra.getBounds();
+
+        // Cria a instância de autocomplete restrita a Portugal, priorizando o concelho de Mafra
         autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
             componentRestrictions: { country: 'pt' },
-            fields: ['address_components', 'geometry', 'formatted_address']
+            fields: ['address_components', 'geometry', 'formatted_address'],
+            bounds: limitesMafra,
+            strictBounds: false // false prioriza geograficamente Mafra mas permite resultados próximos em caso de fronteira
         });
 
         // Evento disparado quando o utilizador toca numa morada ou estabelecimento sugerido pela Google
@@ -682,17 +687,22 @@ export function setupRotasLogic() {
         });
     }
 
+    // MELHORIA REQUISITADA:
+    // Adicionámos uma janela de confirmação estrita para evitar que um toque
+    // acidental em campo limpe a rota que está a ser ativamente criada.
     if (btnLimparEnderecos) {
         btnLimparEnderecos.addEventListener('click', () => {
-            window.moradasEntregas = [];
-            window.rotaOtimizada = [];
-            localStorage.removeItem('cp_last_navigated_id');
-            document.getElementById('container-mapa').classList.add('hidden');
-            document.getElementById('container-rota-ordenada').classList.add('hidden');
-            document.getElementById('estatisticas-rota').classList.add('hidden');
-            limparMapaVisual();
-            renderMoradasAdicionadas();
-            sincronizarPersistencia();
+            if (confirm("Tem a certeza de que deseja eliminar todas as moradas e recomeçar a rota do zero?")) {
+                window.moradasEntregas = [];
+                window.rotaOtimizada = [];
+                localStorage.removeItem('cp_last_navigated_id');
+                document.getElementById('container-mapa').classList.add('hidden');
+                document.getElementById('container-rota-ordenada').classList.add('hidden');
+                document.getElementById('estatisticas-rota').classList.add('hidden');
+                limparMapaVisual();
+                renderMoradasAdicionadas();
+                sincronizarPersistencia();
+            }
         });
     }
 
