@@ -32,13 +32,6 @@ app.use((req, res, next) => {
 });
 
 // ==========================================
-// REGISTO DE QUOTAS E FATURAÇÃO (FinOps - Para referência futura)
-// ==========================================
-// SKU Ativo 1: "RouteOptimization - SingleVehicleRouting" (Fleet Routing) ➔ Cota Gratuita: 5.000 shipments/mês (0,00 €)
-// SKU Ativo 2: "Geocoding" (Essentials Tier) ➔ Cota Gratuita: 10.000 pedidos/mês (0,00 €)
-// O nosso volume estimado: ~100 entregas/dia × 26 dias úteis = ~2.600 shipments/mês (dentro da cota gratuita!)
-
-// ==========================================
 // CONFIGURAÇÃO SEGURA DA GOOGLE CLOUD VIA OAUTH2
 // ==========================================
 const GOOGLE_PROJECT_ID = process.env.GOOGLE_PROJECT_ID || 'classifica-pack-501319'; 
@@ -57,12 +50,7 @@ if (!process.env.GOOGLE_APPLICATION_CREDENTIALS) {
 const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 // =========================================================================
-// ENDPOINT DE GEOCODIFICAÇÃO DE CÓDIGO POSTAL (Essentials SKU - 10.000/mês grátis)
-// CORRIGIDO: o Código Postal agora entra como FILTRO (components), não como texto
-// livre dentro da busca. Isto garante que ele é a "verdade absoluta" da rota — a
-// Google só devolve resultados que batem exatamente com esse código postal; a
-// morada opcional serve apenas para refinar a busca DENTRO desse filtro, nunca
-// para o substituir ou "corrigir" silenciosamente.
+// ENDPOINT DE GEOCODIFICAÇÃO DE CÓDIGO POSTAL COM SISTEMA DE RETRY (FALLBACK)
 // =========================================================================
 app.post('/api/geocode', async (req, res) => {
     try {
@@ -76,8 +64,7 @@ app.post('/api/geocode', async (req, res) => {
         const cleanZip = postalCode.trim();
         const cleanAddress = address ? address.trim() : "";
 
-        // Monta os parâmetros: components é o FILTRO obrigatório (código postal + país);
-        // address é só o texto de busca opcional (rua/número), que fica restrito a esse filtro.
+        // 1. TENTATIVA ESTREITA (Filtro rígido de componentes)
         const params = new URLSearchParams();
         if (cleanAddress) {
             params.set('address', cleanAddress);
@@ -85,21 +72,44 @@ app.post('/api/geocode', async (req, res) => {
         params.set('components', `postal_code:${cleanZip}|country:PT`);
         params.set('key', GOOGLE_API_KEY);
 
-        const url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
+        let url = `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`;
 
         console.log(`[DEV SERVER] Geocodificando com filtro obrigatório de CP: "${cleanZip}" (morada opcional: "${cleanAddress || '(nenhuma)'}")`);
 
-        const response = await fetch(url);
+        let response = await fetch(url);
         if (!response.ok) {
             throw new Error("Falha na comunicação com o serviço Geocoding da Google.");
         }
 
-        const data = await response.json();
+        let data = await response.json();
 
-        // Se o código postal não existir ou não houver resultado dentro dele, avisa de forma amigável
+        // 2. RETRY / FALLBACK INTELIGENTE (Plano de Contingência para códigos postais rurais)
+        // Se a busca estrita falhar, faz uma busca por texto livre juntando tudo na mesma linha
+        if (data.status !== "OK" || !data.results || data.results.length === 0) {
+            console.log(`[DEV SERVER] ⚠️ Pesquisa estrita por componentes falhou para "${cleanZip}". A iniciar Fallback de Texto Livre...`);
+            
+            const fallbackParams = new URLSearchParams();
+            // Junta a morada e o código postal numa única linha de texto para a Google
+            fallbackParams.set('address', `${cleanAddress} ${cleanZip}, Portugal`);
+            fallbackParams.set('components', 'country:PT'); // Garante que a pesquisa não foge de Portugal
+            fallbackParams.set('key', GOOGLE_API_KEY);
+
+            const fallbackUrl = `https://maps.googleapis.com/maps/api/geocode/json?${fallbackParams.toString()}`;
+            const fallbackResponse = await fetch(fallbackUrl);
+            
+            if (fallbackResponse.ok) {
+                const fallbackData = await fallbackResponse.json();
+                if (fallbackData.status === "OK" && fallbackData.results && fallbackData.results.length > 0) {
+                    data = fallbackData; // Substitui o resultado falhado pelo do fallback com sucesso!
+                    console.log(`[DEV SERVER] ✅ Sucesso no Fallback! Coordenadas recuperadas com sucesso para: "${cleanAddress} ${cleanZip}"`);
+                }
+            }
+        }
+
+        // Se mesmo após o fallback não encontrar nada, avisa o utilizador de forma clara
         if (data.status !== "OK" || !data.results || data.results.length === 0) {
             return res.status(404).json({ 
-                error: `Não foi possível encontrar coordenadas para o Código Postal "${cleanZip}"${cleanAddress ? ` com a morada "${cleanAddress}"` : ''}. Verifique se o Código Postal está correto.` 
+                error: `Erro: Não foi possível encontrar coordenadas para o Código Postal "${cleanZip}"${cleanAddress ? ` com a morada "${cleanAddress}"` : ''}. Verifique se o Código Postal está correto.` 
             });
         }
 
@@ -107,16 +117,6 @@ app.post('/api/geocode', async (req, res) => {
         const coordinates = result.geometry.location;
         const formattedAddress = result.formatted_address;
 
-        // Verificação de segurança extra: confirma que o CP devolvido bate com o pedido.
-        // Isto nunca deveria falhar (o components já filtra), mas fica registado no
-        // terminal caso a Google alguma vez devolva algo inesperado, para depuração futura.
-        const postalComponent = result.address_components.find(c => c.types.includes('postal_code'));
-        const cpDevolvido = postalComponent ? postalComponent.long_name : null;
-        if (cpDevolvido && cpDevolvido.replace(/\s/g, '') !== cleanZip.replace(/\s/g, '')) {
-            console.warn(`[DEV SERVER] ⚠️ Aviso: CP pedido foi "${cleanZip}" mas a Google devolveu componente "${cpDevolvido}". A usar mesmo assim, mas vale a pena confirmar.`);
-        }
-
-        // Devolve o objeto com coordenadas e endereço oficial mapeados de forma limpa para o frontend
         res.json({
             lat: coordinates.lat,
             lng: coordinates.lng,
@@ -241,7 +241,7 @@ app.post('/api/optimize-route', async (req, res) => {
 });
 
 // ==========================================
-// 2. DISTANCE MATRIX API (FATIAMENTO / SLICING DE MATRIZES)
+// DISTANCE MATRIX API (FATIAMENTO / SLICING DE MATRIZES)
 // ==========================================
 async function obterMatrizFatiadaGoogle(coordenadas) {
     const LIMITE_ELEMENTOS = 25; 
@@ -264,7 +264,7 @@ async function obterMatrizFatiadaGoogle(coordenadas) {
             const originsParam = origensChunk.map(c => `${c.lat},${c.lng}`).join('|');
             const destinationsParam = destinosChunk.map(c => `${c.lat},${c.lng}`).join('|');
 
-            const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originsParam}&destinations=${destinationsParam}&mode=driving&key=${GOOGLE_API_KEY}`;
+            const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originsParam}&destinations=${destinationsParam}&key=${GOOGLE_API_KEY}`;
             
             const response = await fetch(url);
             if (!response.ok) {
@@ -304,7 +304,8 @@ app.post('/api/matrix-estatisticas', async (req, res) => {
     }
 });
 
-const PORT = 3000;
+// Suporte dinâmico para a porta atribuída pelo Render ou fallback local na porta 3000
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`[DEV SERVER] Servidor de testes de rotas a rodar na porta ${PORT}`);
 });
