@@ -1,6 +1,6 @@
 <!-- 
   partials/rotas.html
-  Faz: Interface completa do utilizador para gestão de turnos, inserção de paragens por Código Postal e Morada Autocomplete, e ecrã de navegação.
+  Faz: Interface otimizada para telemóvel com mapa fixado no topo (sticky) e banner de turno no final do ciclo.
   NÃO faz: Não processa chamadas de rede ou lógicas de rotas (delegado para js/rotas.js).
   Depende de: Tailwind CSS, FontAwesome e Google Maps API carregada globalmente.
 -->
@@ -32,20 +32,9 @@
     </div>
 
     <!-- 2. CONTAINER DO PLANEADOR ATIVO (Mostrado quando a rota JÁ está iniciada) -->
-    <div id="container-planeador-rota" class="hidden space-y-4">
+    <div id="container-planeador-rota" class="hidden space-y-4 relative">
         
-        <!-- Cabeçalho do Planeador -->
-        <div class="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-sm">
-            <div class="space-y-0.5">
-                <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Turno Ativo</span>
-                <h3 id="display-data-rota" class="font-bold text-sm text-blue-400">--/--/----</h3>
-            </div>
-            <button id="btn-encerrar-rota" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 font-bold text-xs px-3 py-2 rounded-xl border border-red-500/20 transition-all">
-                <i class="fa-solid fa-power-off mr-1"></i> Encerrar
-            </button>
-        </div>
-
-        <!-- Seletor de Modo: Planeamento vs Condução -->
+        <!-- Seletor de Modo: Planeamento vs Condução (Sempre acessível no topo) -->
         <div class="bg-gray-100 p-1 rounded-xl flex space-x-1">
             <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
                 Planeamento
@@ -53,6 +42,18 @@
             <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
                 Condução
             </button>
+        </div>
+
+        <!-- SEÇÃO DE CONDUÇÃO E MAPA (Ativada ao otimizar)
+             MELHORIA: Configurada como 'sticky' e 'full-bleed' para ficar fixa no topo do ecrã durante a condução. -->
+        <div id="container-mapa" class="hidden sticky top-0 z-30 bg-white -mx-4 px-4 py-2 border-b border-gray-100 shadow-sm space-y-2">
+            <div class="flex items-center justify-between">
+                <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Mapa Interativo da Rota</span>
+                <span class="text-[10px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded-full">Fixo</span>
+            </div>
+            <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+                <div id="map" class="w-full h-52 bg-gray-100"></div>
+            </div>
         </div>
 
         <!-- CONTROLOS DE PLANEAMENTO (Ocultados no modo condução) -->
@@ -153,22 +154,15 @@
             </div>
         </div>
 
-        <!-- SEÇÃO DE CONDUÇÃO E MAPA (Ativada ao otimizar) -->
-        <div id="container-mapa" class="hidden space-y-3">
-            <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider px-1">Mapa Interativo da Rota</span>
-            <div class="border border-gray-200 rounded-2xl overflow-hidden shadow-md">
-                <div id="map" class="w-full h-64 bg-gray-100"></div>
-            </div>
-        </div>
-
-        <div id="container-rota-ordenada" class="hidden space-y-2">
+        <!-- ITINERÁRIO DE CONDUÇÃO OTIMIZADO
+             MELHORIA: z-index configurado de forma a que este bloco deslize por trás do mapa fixo ao rolar o ecrã. -->
+        <div id="container-rota-ordenada" class="hidden space-y-2 relative z-10">
             <span class="block text-xs font-bold text-gray-500 uppercase tracking-wider px-1">Itinerário de Condução Otimizado</span>
-            <!-- Lista dinâmica gerada por renderizarItinerarioOtimizado() -->
             <div id="lista-rota-final" class="space-y-3"></div>
         </div>
 
         <!-- Painel de Estatísticas de Rota -->
-        <div id="estatisticas-rota" class="hidden bg-gray-50 border border-gray-100 rounded-2xl p-4 shadow-sm">
+        <div id="estatisticas-rota" class="hidden bg-gray-50 border border-gray-100 rounded-2xl p-4 shadow-sm relative z-10">
             <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 text-center">Resumo de Entregas</span>
             <div class="grid grid-cols-4 gap-2 text-center">
                 <div class="bg-white p-2 rounded-xl border border-gray-100">
@@ -188,6 +182,17 @@
                     <span class="text-[9px] font-bold text-gray-500 uppercase">Pendente</span>
                 </div>
             </div>
+        </div>
+
+        <!-- NOVO POSICIONAMENTO: BANNER DE TURNO ATIVO (Agora colocado no final do ciclo/página) -->
+        <div class="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-sm mt-6 relative z-10">
+            <div class="space-y-0.5">
+                <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Turno Ativo</span>
+                <h3 id="display-data-rota" class="font-bold text-sm text-blue-400">--/--/----</h3>
+            </div>
+            <button id="btn-encerrar-rota" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 font-bold text-xs px-3 py-2 rounded-xl border border-red-500/20 transition-all">
+                <i class="fa-solid fa-power-off mr-1"></i> Encerrar Rota
+            </button>
         </div>
 
     </div>
