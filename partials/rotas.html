@@ -1,13 +1,13 @@
 <!-- 
   partials/rotas.html
-  Faz: Interface com divisão física de ecrã (Split-screen) garantindo mapa 100% fixo no topo e rolagem independente de moradas.
+  Faz: Interface estável original de rolagem para gestão de turnos, inserção de paragens e ecrã de navegação.
   NÃO faz: Não processa chamadas de rede ou lógicas de rotas (delegado para js/rotas.js).
   Depende de: Tailwind CSS, FontAwesome e Google Maps API carregada globalmente.
 -->
-<div class="h-full flex flex-col overflow-hidden">
+<div class="flex-1 p-4 pb-24 overflow-y-auto space-y-4">
 
     <!-- 1. CONTAINER DE SETUP/CONFIGURAÇÃO INICIAL (Mostrado quando a rota NÃO está iniciada) -->
-    <div id="container-setup-rota" class="flex-1 p-4 overflow-y-auto space-y-4">
+    <div id="container-setup-rota" class="space-y-4">
         <div class="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4 text-center">
             <div class="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto text-2xl">
                 <i class="fa-solid fa-calendar-day"></i>
@@ -32,168 +32,162 @@
     </div>
 
     <!-- 2. CONTAINER DO PLANEADOR ATIVO (Mostrado quando a rota JÁ está iniciada) -->
-    <div id="container-planeador-rota" class="hidden flex-1 flex flex-col overflow-hidden">
+    <div id="container-planeador-rota" class="hidden space-y-4">
         
-        <!-- ANDAR DE CIMA (Fixo / Não rola): Seletor de Modo e o Mapa Google -->
-        <div class="bg-white border-b border-gray-100 p-4 flex-shrink-0 space-y-3">
+        <!-- Cabeçalho do Planeador -->
+        <div class="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-sm">
+            <div class="space-y-0.5">
+                <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Turno Ativo</span>
+                <h3 id="display-data-rota" class="font-bold text-sm text-blue-400">--/--/----</h3>
+            </div>
+            <button id="btn-encerrar-rota" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 font-bold text-xs px-3 py-2 rounded-xl border border-red-500/20 transition-all">
+                <i class="fa-solid fa-power-off mr-1"></i> Encerrar Rota
+            </button>
+        </div>
+
+        <!-- Seletor de Modo: Planeamento vs Condução -->
+        <div class="bg-gray-100 p-1 rounded-xl flex space-x-1">
+            <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
+                Planeamento
+            </button>
+            <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
+                Condução
+            </button>
+        </div>
+
+        <!-- CONTROLOS DE PLANEAMENTO (Ocultados no modo condução) -->
+        <div id="planning-controls" class="space-y-4">
             
-            <!-- Seletor de Modo: Planeamento vs Condução -->
-            <div class="bg-gray-100 p-1 rounded-xl flex space-x-1">
-                <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
-                    Planeamento
-                </button>
-                <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
-                    Condução
+            <!-- Configuração de Ponto de Partida -->
+            <div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
+                <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Início do Trajeto</span>
+                <div id="status-partida" class="text-xs text-gray-600 font-semibold bg-gray-50 p-3 rounded-xl border border-gray-100 truncate">
+                    Partida: Localização não definida
+                </div>
+                <div class="flex space-x-2">
+                    <button id="btn-gps-partida" class="flex-1 bg-blue-50 text-blue-700 font-bold text-xs py-2.5 rounded-xl border border-blue-100 flex items-center justify-center space-x-1.5 active:bg-blue-100">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                        <span>Usar GPS Atual</span>
+                    </button>
+                    <button id="btn-buscar-partida" class="flex-1 bg-gray-50 text-gray-700 font-bold text-xs py-2.5 rounded-xl border border-gray-200 flex items-center justify-center space-x-1.5 active:bg-gray-100">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <span>Definir Início</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- PAINEL DE PREFIXO RÁPIDO DE ROTA -->
+            <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-2 shadow-sm">
+                <span class="block text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center space-x-1.5">
+                    <i class="fa-solid fa-bolt"></i>
+                    <span>Prefixo Rápido de Rota</span>
+                </span>
+                <div class="flex space-x-2">
+                    <div class="relative flex-1">
+                        <input type="text" id="prefixo-manual" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ex: 2640" 
+                            class="w-full pl-3 pr-8 py-2.5 border border-blue-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <span class="absolute right-3 top-3 text-gray-400 text-xs font-bold">CP</span>
+                    </div>
+                    <button id="btn-inserir-prefixo" type="button" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center space-x-1">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Inserir CP-</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Formulário de Inserção de Nova Paragem -->
+            <div class="bg-white border border-gray-100 rounded-2xl p-4 space-y-3.5 shadow-sm">
+                <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Nova Paragem</span>
+                
+                <!-- Código Postal (Obrigatório) -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Código Postal (7 Dígitos) *</label>
+                    <input type="text" id="rota-codigo-postal" inputmode="numeric" placeholder="2640-000" maxlength="8"
+                        class="w-full mt-1 p-3 border border-gray-200 rounded-xl text-base font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-wider">
+                </div>
+
+                <!-- Morada ou Ponto de Interesse com Autocomplete do Google Maps -->
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Morada Detalhada ou Ponto de Interesse</label>
+                    <div class="flex space-x-2 mt-1">
+                        <input type="text" id="rota-morada-completa" placeholder="Ex: Rua, Loja, Café ou Ponto de Interesse..."
+                            class="flex-1 p-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        
+                        <!-- Botão do microfone para ditar por voz -->
+                        <button id="btn-voz" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-3 rounded-xl transition-all shadow-sm flex items-center justify-center flex-shrink-0">
+                            <i id="microfone-inativo" class="fa-solid fa-microphone"></i>
+                            <i id="microfone-ativo" class="fa-solid fa-microphone-lines hidden text-white animate-pulse"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Botão de submissão -->
+                <button id="btn-adicionar-postal-rota" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>Adicionar Pacote</span>
                 </button>
             </div>
 
-            <!-- O MAPA: Fixado de forma estrutural fora do scroll. Estende-se lateralmente para as bordas. -->
-            <div id="container-mapa" class="hidden border border-gray-200 rounded-xl overflow-hidden shadow-sm -mx-2">
-                <div id="map" class="w-full h-52 bg-gray-100"></div>
+            <!-- Lista de Moradas Adicionadas -->
+            <div class="space-y-2">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Moradas Mapeadas</span>
+                    <button id="btn-limpar-enderecos" class="text-xs font-bold text-red-500 hover:text-red-700 flex items-center space-x-1">
+                        <i class="fa-solid fa-trash-can"></i>
+                        <span>Limpar Tudo</span>
+                    </button>
+                </div>
+
+                <!-- Lista dinâmica gerada pelo renderMoradasAdicionadas() -->
+                <div id="lista-moradas-adicionadas" class="space-y-2">
+                    <p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>
+                </div>
+            </div>
+
+            <!-- Botão de Otimização Inteligente -->
+            <div class="pt-2">
+                <button id="btn-otimizar-rota" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
+                    <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+                    <span>Otimizar Sequência de Rota</span>
+                </button>
             </div>
         </div>
 
-        <!-- ANDAR DE BAIXO (Rola de forma independente): Moradas e controlos -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-4 pb-28">
-            
-            <!-- CONTROLOS DE PLANEAMENTO (Ocultados no modo condução) -->
-            <div id="planning-controls" class="space-y-4">
-                
-                <!-- Configuração de Ponto de Partida -->
-                <div class="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
-                    <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Início do Trajeto</span>
-                    <div id="status-partida" class="text-xs text-gray-600 font-semibold bg-gray-50 p-3 rounded-xl border border-gray-100 truncate">
-                        Partida: Localização não definida
-                    </div>
-                    <div class="flex space-x-2">
-                        <button id="btn-gps-partida" class="flex-1 bg-blue-50 text-blue-700 font-bold text-xs py-2.5 rounded-xl border border-blue-100 flex items-center justify-center space-x-1.5 active:bg-blue-100">
-                            <i class="fa-solid fa-location-crosshairs"></i>
-                            <span>Usar GPS Atual</span>
-                        </button>
-                        <button id="btn-buscar-partida" class="flex-1 bg-gray-50 text-gray-700 font-bold text-xs py-2.5 rounded-xl border border-gray-200 flex items-center justify-center space-x-1.5 active:bg-gray-100">
-                            <i class="fa-solid fa-magnifying-glass"></i>
-                            <span>Definir Início</span>
-                        </button>
-                    </div>
+        <!-- SEÇÃO DE CONDUÇÃO E MAPA -->
+        <div id="container-mapa" class="hidden space-y-3">
+            <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider px-1">Mapa Interativo da Rota</span>
+            <div class="border border-gray-200 rounded-2xl overflow-hidden shadow-md">
+                <div id="map" class="w-full h-64 bg-gray-100"></div>
+            </div>
+        </div>
+
+        <!-- ITINERÁRIO DE CONDUÇÃO OTIMIZADO -->
+        <div id="container-rota-ordenada" class="hidden space-y-2">
+            <span class="block text-xs font-bold text-gray-500 uppercase tracking-wider px-1">Itinerário de Condução Otimizado</span>
+            <div id="lista-rota-final" class="space-y-3"></div>
+        </div>
+
+        <!-- Painel de Estatísticas de Rota -->
+        <div id="estatisticas-rota" class="hidden bg-gray-50 border border-gray-100 rounded-2xl p-4 shadow-sm">
+            <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 text-center">Resumo de Entregas</span>
+            <div class="grid grid-cols-4 gap-2 text-center">
+                <div class="bg-white p-2 rounded-xl border border-gray-100">
+                    <span id="stat-total" class="block text-base font-black text-gray-800">0</span>
+                    <span class="text-[9px] font-bold text-gray-400 uppercase">Total</span>
                 </div>
-
-                <!-- PAINEL DE PREFIXO RÁPIDO DE ROTA -->
-                <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-2 shadow-sm">
-                    <span class="block text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center space-x-1.5">
-                        <i class="fa-solid fa-bolt"></i>
-                        <span>Prefixo Rápido de Rota</span>
-                    </span>
-                    <div class="flex space-x-2">
-                        <div class="relative flex-1">
-                            <input type="text" id="prefixo-manual" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ex: 2640" 
-                                class="w-full pl-3 pr-8 py-2.5 border border-blue-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            <span class="absolute right-3 top-3 text-gray-400 text-xs font-bold">CP</span>
-                        </div>
-                        <button id="btn-inserir-prefixo" type="button" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center space-x-1">
-                            <i class="fa-solid fa-plus"></i>
-                            <span>Inserir CP-</span>
-                        </button>
-                    </div>
+                <div class="bg-green-50 p-2 rounded-xl border border-green-100">
+                    <span id="stat-entregues" class="block text-base font-black text-green-600">0</span>
+                    <span class="text-[9px] font-bold text-green-500 uppercase">Feito</span>
                 </div>
-
-                <!-- Formulário de Inserção de Nova Paragem -->
-                <div class="bg-white border border-gray-100 rounded-2xl p-4 space-y-3.5 shadow-sm">
-                    <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider">Nova Paragem</span>
-                    
-                    <!-- Código Postal (Obrigatório) -->
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 uppercase">Código Postal (7 Dígitos) *</label>
-                        <input type="text" id="rota-codigo-postal" inputmode="numeric" placeholder="2640-000" maxlength="8"
-                            class="w-full mt-1 p-3 border border-gray-200 rounded-xl text-base font-mono font-bold uppercase focus:outline-none focus:ring-2 focus:ring-blue-500 tracking-wider">
-                    </div>
-
-                    <!-- Morada ou Ponto de Interesse com Autocomplete do Google Maps -->
-                    <div>
-                        <label class="block text-xs font-bold text-gray-600 uppercase">Morada Detalhada ou Ponto de Interesse</label>
-                        <div class="flex space-x-2 mt-1">
-                            <input type="text" id="rota-morada-completa" placeholder="Ex: Rua, Loja, Café ou Ponto de Interesse..."
-                                class="flex-1 p-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                            
-                            <!-- Botão do microfone para ditar por voz -->
-                            <button id="btn-voz" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-3 rounded-xl transition-all shadow-sm flex items-center justify-center flex-shrink-0">
-                                <i id="microfone-inativo" class="fa-solid fa-microphone"></i>
-                                <i id="microfone-ativo" class="fa-solid fa-microphone-lines hidden text-white animate-pulse"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Botão de submissão -->
-                    <button id="btn-adicionar-postal-rota" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all">
-                        <i class="fa-solid fa-plus"></i>
-                        <span>Adicionar Pacote</span>
-                    </button>
+                <div class="bg-red-50 p-2 rounded-xl border border-red-100">
+                    <span id="stat-falhas" class="block text-base font-black text-red-600">0</span>
+                    <span class="text-[9px] font-bold text-red-500 uppercase">Falhou</span>
                 </div>
-
-                <!-- Lista de Moradas Adicionadas -->
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between px-1">
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Moradas Mapeadas</span>
-                        <button id="btn-limpar-enderecos" class="text-xs font-bold text-red-500 hover:text-red-700 flex items-center space-x-1">
-                            <i class="fa-solid fa-trash-can"></i>
-                            <span>Limpar Tudo</span>
-                        </button>
-                    </div>
-
-                    <!-- Lista dinâmica gerada pelo renderMoradasAdicionadas() -->
-                    <div id="lista-moradas-adicionadas" class="space-y-2">
-                        <p class="text-xs text-gray-400 italic text-center py-2">Nenhuma morada adicionada.</p>
-                    </div>
-                </div>
-
-                <!-- Botão de Otimização Inteligente -->
-                <div class="pt-2">
-                    <button id="btn-otimizar-rota" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
-                        <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
-                        <span>Otimizar Sequência de Rota</span>
-                    </button>
+                <div class="bg-gray-100 p-2 rounded-xl border border-gray-200">
+                    <span id="stat-pendentes" class="block text-base font-black text-gray-700">0</span>
+                    <span class="text-[9px] font-bold text-gray-500 uppercase">Pendente</span>
                 </div>
             </div>
-
-            <!-- ITINERÁRIO DE CONDUÇÃO OTIMIZADO -->
-            <div id="container-rota-ordenada" class="hidden space-y-2">
-                <span class="block text-xs font-bold text-gray-500 uppercase tracking-wider px-1">Itinerário de Condução Otimizado</span>
-                <div id="lista-rota-final" class="space-y-3"></div>
-            </div>
-
-            <!-- Painel de Estatísticas de Rota -->
-            <div id="estatisticas-rota" class="hidden bg-gray-50 border border-gray-100 rounded-2xl p-4 shadow-sm">
-                <span class="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 text-center">Resumo de Entregas</span>
-                <div class="grid grid-cols-4 gap-2 text-center">
-                    <div class="bg-white p-2 rounded-xl border border-gray-100">
-                        <span id="stat-total" class="block text-base font-black text-gray-800">0</span>
-                        <span class="text-[9px] font-bold text-gray-400 uppercase">Total</span>
-                    </div>
-                    <div class="bg-green-50 p-2 rounded-xl border border-green-100">
-                        <span id="stat-entregues" class="block text-base font-black text-green-600">0</span>
-                        <span class="text-[9px] font-bold text-green-500 uppercase">Feito</span>
-                    </div>
-                    <div class="bg-red-50 p-2 rounded-xl border border-red-100">
-                        <span id="stat-falhas" class="block text-base font-black text-red-600">0</span>
-                        <span class="text-[9px] font-bold text-red-500 uppercase">Falhou</span>
-                    </div>
-                    <div class="bg-gray-100 p-2 rounded-xl border border-gray-200">
-                        <span id="stat-pendentes" class="block text-base font-black text-gray-700">0</span>
-                        <span class="text-[9px] font-bold text-gray-500 uppercase">Pendente</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- BANNER DE TURNO ATIVO (Colocado no fundo do scroll da página) -->
-            <div class="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-sm mt-6">
-                <div class="space-y-0.5">
-                    <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Turno Ativo</span>
-                    <h3 id="display-data-rota" class="font-bold text-sm text-blue-400">--/--/----</h3>
-                </div>
-                <button id="btn-encerrar-rota" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 font-bold text-xs px-3 py-2 rounded-xl border border-red-500/20 transition-all">
-                    <i class="fa-solid fa-power-off mr-1"></i> Encerrar Rota
-                </button>
-            </div>
-
         </div>
 
     </div>

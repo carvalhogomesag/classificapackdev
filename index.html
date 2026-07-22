@@ -3,7 +3,7 @@
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v25, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -51,25 +51,23 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 font-sans text-gray-900 select-none relative overflow-hidden">
+<body class="bg-gray-100 font-sans text-gray-900 select-none relative">
 
-    <!-- Container Principal (Shell) 
-         CORRIGIDO V25: h-screen e overflow-hidden para travar a tela principal, sem classes flex nos contentores filhos
-         para evitar conflito com o alternador de abas (hidden) do main.js. -->
-    <div class="max-w-md mx-auto h-screen flex flex-col bg-white shadow-lg relative overflow-hidden">
+    <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM -->
+    <div class="max-w-md mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
         <!-- Cabeçalho de Identidade (Selo visual de versão v25 no canto direito) -->
-        <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex-shrink-0">
+        <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v25</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
-             CORRIGIDO: Sem classes 'flex' para o 'hidden' do main.js funcionar perfeitamente. -->
-        <div id="container-view-triagem" class="h-full overflow-hidden"></div>
-        <div id="container-view-motoristas" class="h-full overflow-hidden"></div>
-        <div id="container-view-intervalos" class="h-full overflow-hidden"></div>
-        <div id="container-view-rotas" class="h-full overflow-hidden"></div>
+             REVERTIDO: Contentores originais puros que garantem compatibilidade total com o main.js. -->
+        <div id="container-view-triagem"></div>
+        <div id="container-view-motoristas"></div>
+        <div id="container-view-intervalos"></div>
+        <div id="container-view-rotas"></div>
 
         <!-- OVERLAY DO RESULTADO DA TRIAGEM (Global/Partilhado) -->
         <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
