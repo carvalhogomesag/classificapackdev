@@ -54,8 +54,8 @@
 <body class="bg-gray-100 font-sans text-gray-900 select-none relative overflow-hidden">
 
     <!-- Container Principal (Shell) 
-         MELHORADO V25: Altura travada no ecrã (h-screen) e scroll geral desativado (overflow-hidden)
-         para criar uma experiência de aplicação nativa onde só o conteúdo do meio é que rola. -->
+         CORRIGIDO V25: h-screen e overflow-hidden para travar a tela principal, sem classes flex nos contentores filhos
+         para evitar conflito com o alternador de abas (hidden) do main.js. -->
     <div class="max-w-md mx-auto h-screen flex flex-col bg-white shadow-lg relative overflow-hidden">
         
         <!-- Cabeçalho de Identidade (Selo visual de versão v25 no canto direito) -->
@@ -64,11 +64,12 @@
             <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v25</span>
         </header>
 
-        <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) -->
-        <div id="container-view-triagem" class="flex-1 flex flex-col overflow-hidden"></div>
-        <div id="container-view-motoristas" class="flex-1 flex flex-col overflow-hidden"></div>
-        <div id="container-view-intervalos" class="flex-1 flex flex-col overflow-hidden"></div>
-        <div id="container-view-rotas" class="flex-1 flex flex-col overflow-hidden"></div>
+        <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
+             CORRIGIDO: Sem classes 'flex' para o 'hidden' do main.js funcionar perfeitamente. -->
+        <div id="container-view-triagem" class="h-full overflow-hidden"></div>
+        <div id="container-view-motoristas" class="h-full overflow-hidden"></div>
+        <div id="container-view-intervalos" class="h-full overflow-hidden"></div>
+        <div id="container-view-rotas" class="h-full overflow-hidden"></div>
 
         <!-- OVERLAY DO RESULTADO DA TRIAGEM (Global/Partilhado) -->
         <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
