@@ -1,6 +1,7 @@
 /**
  * js/rotas.js
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
+ *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido.
  * NÃO faz: Não executa cálculos de linha reta locais (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js
  */
@@ -525,6 +526,64 @@ function configurarFormatacaoCodigoPostal() {
 }
 
 // =========================================================================
+// NOVO: ESCUTA INTELIGENTE DE CÓDIGO POSTAL PARA REDUZIR AUTOCOMPLETE A 1KM
+// =========================================================================
+function configurarEscutaCodigoPostalParaLimites() {
+    const inputCP = document.getElementById('rota-codigo-postal');
+    if (!inputCP) return;
+
+    inputCP.addEventListener('input', async () => {
+        const valor = inputCP.value.trim();
+        const padraoCP = /^\d{4}-\d{3}$/;
+
+        // Se o campo de Código Postal for limpo pelo utilizador
+        if (valor.length === 0 && autocompleteInstancia) {
+            // Repõe o limite geográfico padrão alargado de 15km de Mafra
+            const centroMafra = { lat: 38.9369, lng: -9.3282 };
+            const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
+            autocompleteInstancia.setBounds(circuloMafra.getBounds());
+            autocompleteInstancia.setOptions({ strictBounds: false });
+            console.log("[PWA] Autocomplete reposto para o limite geral de Mafra (15km).");
+            return;
+        }
+
+        // Se detetar que o utilizador digitou um Código Postal de 7 dígitos válido (ex: 2640-601)
+        if (padraoCP.test(valor)) {
+            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A pré-geolocalizar para mira laser...`);
+
+            try {
+                // Pergunta de forma silenciosa ao Render quais as coordenadas desse CP
+                const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ postalCode: valor })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.lat && data.lng && autocompleteInstancia) {
+                        const centroCP = { lat: data.lat, lng: data.lng };
+                        
+                        // Define um círculo ultra-fechado de apenas 1000 metros (1 km)
+                        const circuloCP = new google.maps.Circle({ center: centroCP, radius: 1000 });
+                        
+                        // Aplica as novas fronteiras ao autocomplete
+                        autocompleteInstancia.setBounds(circuloCP.getBounds());
+                        // Mantemos o strictBounds como false para tolerar pequenos desvios de divisões administrativas da Google,
+                        // mas com prioridade (bias) máxima focada a 1km, tornando as sugestões locais perfeitas.
+                        autocompleteInstancia.setOptions({ strictBounds: false });
+                        
+                        console.log(`[PWA] Autocomplete focado com raio laser de 1km em redor de: ${data.address}`);
+                    }
+                }
+            } catch (erro) {
+                console.warn("[PWA] Erro na pré-geolocalização para limites de 1km:", erro);
+            }
+        }
+    });
+}
+
+// =========================================================================
 // INICIALIZAÇÃO INTELIGENTE DO GOOGLE MAPS AUTOCOMPLETE NO CAMPO DE MORADA
 // =========================================================================
 function inicializarAutocompleteMorada() {
@@ -538,7 +597,7 @@ function inicializarAutocompleteMorada() {
     }
 
     try {
-        // Coordenadas centrais de Mafra, Portugal para limitar a pesquisa automática localmente
+        // Coordenadas centrais de Mafra, Portugal para limitar a pesquisa automática localmente (Padrão)
         const centroMafra = { lat: 38.9369, lng: -9.3282 };
         const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 }); // Raio de 15km em redor do centro de Mafra
         const limitesMafra = circuloMafra.getBounds();
@@ -577,7 +636,7 @@ function inicializarAutocompleteMorada() {
 }
 
 // =========================================================================
-// NOVO: SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL (PASSO 4)
+// SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL (PASSO 4)
 // =========================================================================
 
 /**
@@ -726,6 +785,9 @@ export function setupRotasLogic() {
     configurarEventosPrefixoRapido();
     configurarFormatacaoCodigoPostal();
     inicializarAutocompleteMorada();
+    
+    // NOVO: Liga a escuta dinâmica do Código Postal para mudar o raio de sugestões para 1km
+    configurarEscutaCodigoPostalParaLimites();
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => {
@@ -966,7 +1028,7 @@ export function setupModaisEdicao() {
         itemSendoEditado = null;
     });
 
-    // NOVO: Liga os escutadores de cliques para os botões do modal de edição
+    // Liga os escutadores de cliques para os botões do modal de edição
     configurarBotoesRapidosModal();
 }
 
@@ -985,7 +1047,7 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         editMoradaPrioridade.checked = !!paragem.priority;
     }
 
-    // NOVO: Analisa as observações salvas no texto para acender os botões certos ao abrir o modal (Passo 4)
+    // Analisa as observações salvas no texto para acender os botões certos ao abrir o modal (Passo 4)
     preencherSelecoesPorTexto(paragem.observation || "");
     atualizarEstilosBotoesModal();
 
