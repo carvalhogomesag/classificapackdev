@@ -1,7 +1,8 @@
 /**
  * js/rotas.js
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
- *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido.
+ *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido
+ *      e copia automaticamente o código postal para o campo de pesquisa para agilizar a digitação.
  * NÃO faz: Não executa cálculos de linha reta locais (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js
  */
@@ -18,7 +19,7 @@ import {
 let itemSendoEditado = null; 
 let autocompleteInstancia = null; // Guarda a instância ativa do Google Places Autocomplete
 
-// Variáveis de estado temporárias do modal de edição (Passo 4)
+// Variáveis de estado temporárias do modal de edição
 let embalagemSelecionada = "";
 let origemSelecionada = "";
 
@@ -526,10 +527,11 @@ function configurarFormatacaoCodigoPostal() {
 }
 
 // =========================================================================
-// NOVO: ESCUTA INTELIGENTE DE CÓDIGO POSTAL PARA REDUZIR AUTOCOMPLETE A 1KM
+// ESCUTA INTELIGENTE DE CÓDIGO POSTAL PARA REDUZIR AUTOCOMPLETE A 1KM (MIRA LASER)
 // =========================================================================
 function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
+    const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputCP) return;
 
     inputCP.addEventListener('input', async () => {
@@ -538,18 +540,29 @@ function configurarEscutaCodigoPostalParaLimites() {
 
         // Se o campo de Código Postal for limpo pelo utilizador
         if (valor.length === 0 && autocompleteInstancia) {
-            // Repõe o limite geográfico padrão alargado de 15km de Mafra
+            // Repõe o limite geográfico padrão alargado de 15km de Mafra (Foco Suave)
             const centroMafra = { lat: 38.9369, lng: -9.3282 };
             const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
             autocompleteInstancia.setBounds(circuloMafra.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false });
+            autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa a parede estrita
             console.log("[PWA] Autocomplete reposto para o limite geral de Mafra (15km).");
             return;
         }
 
-        // Se detetar que o utilizador digitou um Código Postal de 7 dígitos válido (ex: 2640-601)
+        // Se detetar que o utilizador digitou um Código Postal de 7 dígitos completo (ex: 2640-601)
         if (padraoCP.test(valor)) {
             console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A pré-geolocalizar para mira laser...`);
+
+            // NOVO: Copia automaticamente o Código Postal para o campo de morada/pesquisa
+            // seguido de um espaço e coloca o cursor no fim, agilizando imenso a digitação no telemóvel!
+            if (inputMorada) {
+                inputMorada.value = `${valor} `;
+                inputMorada.focus();
+                
+                // Coloca o cursor de escrita exatamente a seguir ao espaço, pronto a escrever a rua
+                const comprimento = inputMorada.value.length;
+                inputMorada.setSelectionRange(comprimento, comprimento);
+            }
 
             try {
                 // Pergunta de forma silenciosa ao Render quais as coordenadas desse CP
@@ -569,11 +582,12 @@ function configurarEscutaCodigoPostalParaLimites() {
                         
                         // Aplica as novas fronteiras ao autocomplete
                         autocompleteInstancia.setBounds(circuloCP.getBounds());
-                        // Mantemos o strictBounds como false para tolerar pequenos desvios de divisões administrativas da Google,
-                        // mas com prioridade (bias) máxima focada a 1km, tornando as sugestões locais perfeitas.
-                        autocompleteInstancia.setOptions({ strictBounds: false });
                         
-                        console.log(`[PWA] Autocomplete focado com raio laser de 1km em redor de: ${data.address}`);
+                        // MELHORADO V26: Ativamos strictBounds como 'true' para criar uma PAREDE ESTRITA!
+                        // A Google fica estritamente impedida de sugerir qualquer resultado fora deste raio de 1 km.
+                        autocompleteInstancia.setOptions({ strictBounds: true });
+                        
+                        console.log(`[PWA] Autocomplete focado com raio laser de 1km (Parede Estrita) em redor de: ${data.address}`);
                     }
                 }
             } catch (erro) {
@@ -636,11 +650,11 @@ function inicializarAutocompleteMorada() {
 }
 
 // =========================================================================
-// SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL (PASSO 4)
+// SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL
 // =========================================================================
 
 /**
- * Atualiza o texto da caixa de observações com base nas tags selecionadas.
+ * text para a caixa de observações com base nas tags selecionadas.
  */
 function atualizarTextoObservacoesAutomatico() {
     const textareaObs = document.getElementById('edit-morada-obs');
@@ -655,7 +669,7 @@ function atualizarTextoObservacoesAutomatico() {
 }
 
 /**
- * Altera visualmente a cor dos botões (de cinzento para azul) consoante a seleção ativa.
+ * Altera visualmente a cor dos botões (de cinzento para azul) consoante a seleção activa.
  */
 function atualizarEstilosBotoesModal() {
     const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
@@ -741,7 +755,7 @@ function configurarBotoesRapidosModal() {
             }
             
             atualizarEstilosBotoesModal();
-            atualizarTextoObservacoesAutomatico();
+            textObservacoesAutomatico();
         });
     });
 
@@ -757,7 +771,7 @@ function configurarBotoesRapidosModal() {
             }
             
             atualizarEstilosBotoesModal();
-            atualizarTextoObservacoesAutomatico();
+            textObservacoesAutomatico();
         });
     });
 }
@@ -786,7 +800,7 @@ export function setupRotasLogic() {
     configurarFormatacaoCodigoPostal();
     inicializarAutocompleteMorada();
     
-    // NOVO: Liga a escuta dinâmica do Código Postal para mudar o raio de sugestões para 1km
+    // Liga a escuta dinâmica do Código Postal para mudar o raio de sugestões para 1km (Mira Laser)
     configurarEscutaCodigoPostalParaLimites();
 
     if (btnPlaneamento && btnConducao) {
