@@ -1,15 +1,15 @@
 /**
  * storage.js
- * Faz: Gere a persistência de dados física (leitura e escrita defensiva no LocalStorage do telemóvel), garantindo que as informações de motoristas, turnos e rotas persistam.
+ * Faz: Gere a persistência de dados física (leitura e escrita defensiva no LocalStorage), garantindo que as informações de motoristas e rotas persistam de forma estável.
  * NÃO faz: Não gere o estado ativo em memória (tarefa do state.js) nem valida regras geográficas de Mafra.
  * Depende de: Nenhuns módulos externos (módulo independente utilitário).
  */
 
 /**
- * Lê os dados guardados no telemóvel de forma segura.
- * Se o telemóvel nunca tiver corrido a aplicação antes, devolve uma lista vazia ou valor padrão.
+ * Lê os dados guardados de forma segura.
+ * Se o navegador/telemóvel nunca tiver corrido a aplicação antes, devolve uma lista vazia ou valor padrão.
  * 
- * @param {string} key - A chave física guardada no telemóvel (ex: 'cp_drivers')
+ * @param {string} key - A chave física guardada (ex: 'cp_drivers')
  * @param {any} fallback - O valor padrão a devolver caso não exista nada guardado
  */
 export function safeJSONParse(key, fallback) {
@@ -26,12 +26,10 @@ export function safeJSONParse(key, fallback) {
 }
 
 /**
- * Grava fisicamente no telemóvel todos os dados importantes da aplicação num único ciclo.
- * Adaptado de forma retrocompatível para persistir o novo estado de Bricks de forma segura.
+ * Grava fisicamente no navegador/telemóvel todos os dados importantes da aplicação num único ciclo.
  */
-export function saveData(drivers, intervals, assignments, partida, entregas, rota, dataRota, iniciada, zones = []) {
+export function saveData(drivers, intervals, assignments, partida, entregas, rota, dataRota, iniciada) {
     localStorage.setItem('cp_drivers', JSON.stringify(drivers));
-    localStorage.setItem('cp_intervals', JSON.stringify(intervals));
     localStorage.setItem('cp_assignments', JSON.stringify(assignments));
     
     // Gravação física do itinerário e planeamento das rotas
@@ -40,12 +38,4 @@ export function saveData(drivers, intervals, assignments, partida, entregas, rot
     localStorage.setItem('cp_rota_otimizada', JSON.stringify(rota));
     localStorage.setItem('cp_data_rota', JSON.stringify(dataRota));
     localStorage.setItem('cp_rota_iniciada', JSON.stringify(iniciada));
-
-    // Gravação física das Zonas/Setores territoriais criados
-    localStorage.setItem('cp_zones', JSON.stringify(zones));
-
-    // Gravação física do novo estado de Bricks sem necessitar de alterar parâmetros noutros ficheiros
-    if (window.bricks !== undefined) {
-        localStorage.setItem('cp_bricks', JSON.stringify(window.bricks));
-    }
 }

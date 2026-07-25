@@ -1,7 +1,8 @@
 /**
  * state.js
- * Faz: Inicializa e gere o estado global da aplicação em memória (propriedades anexadas ao objeto global 'window') e executa a migração de dados de motoristas antigos.
- * NÃO faz: Não grava diretamente no LocalStorage do telemóvel (esta persistência física é delegada para o módulo storage.js).
+ * Faz: Inicializa e gere o estado global da aplicação em memória (propriedades anexadas ao objeto global 'window').
+ *      Removido o conceito de setores; agora os motoristas contêm diretamente a lista de Bricks (Localidades) atribuídos.
+ * NÃO faz: Não grava diretamente no LocalStorage do telemóvel/PC (esta persistência física é delegada para o módulo storage.js).
  * Depende de: ./storage.js (para ler os valores guardados de forma segura)
  */
 
@@ -12,21 +13,18 @@ import { safeJSONParse } from './storage.js';
 // ==========================================
 window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
-window.sectors = safeJSONParse('cp_zones', []); // Setores carregados em memória
-
-// NOVO: Recuperação segura dos Bricks (Estantes/Localizadores físicos) do armazenamento
-window.bricks = safeJSONParse('cp_bricks', []);
 
 // ==========================================
 // MIGRAÇÃO DE DADOS AUTOMÁTICA
-// Converte motoristas antigos (com 'sectorId' único) para o novo
-// modelo (com 'sectorIds' em lista/array), permitindo múltiplos setores.
+// Garante que cada motorista possui o array 'brickIds' para guardar as localidades atribuídas
 // ==========================================
 window.drivers.forEach(driver => {
-    if (!Array.isArray(driver.sectorIds)) {
-        driver.sectorIds = driver.sectorId ? [driver.sectorId] : [];
+    if (!Array.isArray(driver.brickIds)) {
+        driver.brickIds = [];
     }
+    // Removemos propriedades legadas de setores para limpar a estrutura
     delete driver.sectorId;
+    delete driver.sectorIds;
 });
 
 // ==========================================
@@ -42,7 +40,6 @@ window.lastAnalysisResult = null;
 // ESTADOS DE CONTROLO DE EDIÇÃO EM CURSO
 // ==========================================
 window.driverSendoEditado = null;
-window.sectorSendoEditado = null;
 
 // ==========================================
 // ESTADOS DAS ROTAS E ITINERÁRIOS DO TURNO
