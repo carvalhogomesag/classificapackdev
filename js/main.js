@@ -9,6 +9,7 @@ import './state.js'; // Garante o arranque do estado global e migração física
 import { saveData } from './storage.js';
 import { setupNavigation, showTab, setupKeypad, setupPrefixLock, updateVisor } from './ui.js';
 import { renderDrivers, handleDriverSubmit } from './motoristas.js';
+import './setores.js'; // IMPORTANTE: Ativa e regista o novo motor tátil de Bricks e atribuições
 import { setupTriagemLogic, setupCancelButtons, setupVozTriagemLogic, setupCameraOcrLogic } from './triagem.js';
 import { setupRotasLogic, setupModaisEdicao, setupVozLogic, sincronizarInterfaceRota } from './rotas.js';
 import { setupPWAInstallationLogic } from './pwa.js';
