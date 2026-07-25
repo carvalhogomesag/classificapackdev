@@ -1,14 +1,15 @@
 /**
  * js/rotas.js
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
- *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido
- *      e copia automaticamente o código postal para o campo de pesquisa para agilizar a digitação.
+ *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
+ *      atribui a estante (Brick) de arrumação e apresenta etiquetas visuais de organização nas listas.
  * NÃO faz: Não executa cálculos de linha reta locais (delegado à API remota da Google).
- * Depende de: ./storage.js, ./voz.js, ./maps.js
+ * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js
  */
 
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
+import { GEOGRAPHY } from './geografia-data.js';
 import { 
     obterEnderecoPorGPSGoogle, 
     calcularDistanciaHaversine, 
@@ -99,6 +100,53 @@ export function setupVozLogic() {
     });
 }
 
+// ==========================================
+// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS)
+// ==========================================
+function resolveBrickForZip(zip, sectors, drivers, bricks) {
+    if (!zip || !bricks) return null;
+    const regexZip = /\d{4}-\d{3}/;
+    const match = zip.match(regexZip);
+    const normalizedZip = match ? match[0] : zip.trim();
+
+    let matchedFreguesia = null;
+    let matchedLocalidade = null;
+    const concelho = "MAFRA";
+
+    for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+        for (const [localidade, cpList] of Object.entries(localidades)) {
+            if (cpList.includes(normalizedZip)) {
+                matchedFreguesia = freguesia;
+                matchedLocalidade = localidade;
+                break;
+            }
+        }
+        if (matchedFreguesia) break;
+    }
+
+    if (!matchedFreguesia) return null;
+
+    const matchedSector = sectors.find(s => {
+        const areaNames = Array.isArray(s.areaNames) ? s.areaNames : [];
+        return areaNames.includes(matchedFreguesia) || areaNames.includes(`${matchedFreguesia}|${matchedLocalidade}`);
+    });
+
+    if (!matchedSector) return null;
+
+    // 1. Procura Brick associado ao Setor
+    let matchedBrick = bricks.find(b => b.sectorId === matchedSector.id);
+    if (matchedBrick) return matchedBrick;
+
+    // 2. Procura Brick associado ao Motorista (Fallback)
+    const matchedDriver = drivers.find(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(matchedSector.id));
+    if (matchedDriver) {
+        matchedBrick = bricks.find(b => b.driverId === matchedDriver.id);
+        if (matchedBrick) return matchedBrick;
+    }
+
+    return null;
+}
+
 // =========================================================================
 // TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA (GEOCODIFICAÇÃO LOCAL/PROD)
 // =========================================================================
@@ -144,7 +192,11 @@ export async function processarAdicaoPorPostal() {
             throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
         }
 
-        // 4. Constrói o objeto de morada mapeada vinda da Google
+        // NOVO: Resolve e associa estante física (Brick) na criação da paragem
+        const resolvedBrick = resolveBrickForZip(formattedZip, window.sectors, window.drivers, window.bricks);
+        const brickName = resolvedBrick ? resolvedBrick.name : "";
+
+        // 4. Constrói o objeto de morada mapeada vinda da Google com seu respetivo Brick
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
             lat: data.lat,
@@ -152,7 +204,8 @@ export async function processarAdicaoPorPostal() {
             address: data.address, // Endereço oficial mapeado pela Google
             status: "Pendente",
             observation: "",
-            priority: false
+            priority: false,
+            brickName: brickName // Gravação física da estante no cartão de rota
         };
 
         // 5. Verifica se o clique anterior foi para definir o Ponto de Partida
@@ -347,6 +400,10 @@ export function renderizarItinerarioOtimizado() {
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
 
+        // NOVO FALLBACK: Tenta obter o Brick dinamicamente caso o pacote seja legado e não tenha brick associado
+        const fallbackBrick = resolveBrickForZip(paragem.address, window.sectors, window.drivers, window.bricks);
+        const brickName = paragem.brickName || (fallbackBrick ? fallbackBrick.name : "");
+
         if (isLastNavigated) {
             if (isPriority) {
                 item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
@@ -376,6 +433,9 @@ export function renderizarItinerarioOtimizado() {
                         </span>
                         ${isLastNavigated ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
+                        
+                        <!-- NOVO INDICADOR VISUAL: Etiqueta de Estante (Brick) de arrumação na lista de rotas -->
+                        ${brickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante ${brickName}</span></span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
@@ -654,9 +714,9 @@ function inicializarAutocompleteMorada() {
 // =========================================================================
 
 /**
- * text para a caixa de observações com base nas tags selecionadas.
+ * text para a caixa de observações com base das tags selecionadas.
  */
-function atualizarTextoObservacoesAutomatico() {
+function textObservacoesAutomatico() {
     const textareaObs = document.getElementById('edit-morada-obs');
     if (!textareaObs) return;
 
@@ -754,7 +814,7 @@ function configurarBotoesRapidosModal() {
                 embalagemSelecionada = tipo;
             }
             
-            atualizarEstilosBotoesModal();
+            atualizarStylesBotoesModal();
             textObservacoesAutomatico();
         });
     });
@@ -770,10 +830,15 @@ function configurarBotoesRapidosModal() {
                 origemSelecionada = origem;
             }
             
-            atualizarEstilosBotoesModal();
+            atualizarStylesBotoesModal();
             textObservacoesAutomatico();
         });
     });
+}
+
+// Para manter retrocompatibilidade com nomes chamados internamente no DOM
+function atualizarStylesBotoesModal() {
+    atualizarEstilosBotoesModal();
 }
 
 // ==========================================
@@ -1061,9 +1126,9 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         editMoradaPrioridade.checked = !!paragem.priority;
     }
 
-    // Analisa as observações salvas no texto para acender os botões certos ao abrir o modal (Passo 4)
+    // Analisa as observações salvas no texto para acender os botões certos ao abrir o modal
     preencherSelecoesPorTexto(paragem.observation || "");
-    atualizarEstilosBotoesModal();
+    atualizarStylesBotoesModal();
 
     modalEditarParagem.classList.remove('hidden');
 
