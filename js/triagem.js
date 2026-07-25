@@ -1,6 +1,7 @@
 /**
  * triagem.js
  * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick (Localidade) designados para o código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
+ *      Implementa avisos visuais explícitos de confirmação para códigos ausentes na base de dados de Mafra.
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js
  */
@@ -156,12 +157,18 @@ window.atualizarSummaryUI = () => {
 export function setupTriagemLogic() {
     const btnAnalisar = document.getElementById('btn-analisar');
     const btnConfirmarAtribuir = document.getElementById('btn-confirmar-atribuir');
-    const btnCancelarAtribuir = document.getElementById('btn-cancelar-atribuir');
     const modalResultado = document.getElementById('modal-resultado');
 
     function cancelarAtribuicao() {
         if (modalResultado) modalResultado.classList.add('hidden');
         window.lastAnalysisResult = null;
+        
+        // NOVO: Limpa visor ao fechar (cancelamento no clique fora do modal)
+        window.currentInput = "";
+        const visorCodigo = document.getElementById('visor-codigo');
+        if (visorCodigo) {
+            updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+        }
     }
 
     if (btnAnalisar) {
@@ -189,24 +196,19 @@ export function setupTriagemLogic() {
             const resultadoCorBg = document.getElementById('resultado-cor-bg');
             const chkPrioridade = document.getElementById('chk-prioridade');
             
-            // Novos elementos do Brick introduzidos na Fase 2
             const resultadoBrickLabel = document.getElementById('resultado-brick-label');
             const modalBrickOverride = document.getElementById('modal-brick-override');
 
             if (resultadoCodigo) resultadoCodigo.textContent = formattedZip;
             
-            if (resultadoBrickLabel) {
-                resultadoBrickLabel.textContent = brickName ? `${brickId.split('|')[0]} - ${brickName}` : "Sem Brick";
-            }
-
-            // Popula o override dropdown com as localidades que estão realmente atribuídas aos motoristas
+            // Popula o override dropdown com as localidades ativas
             if (modalBrickOverride) {
                 modalBrickOverride.innerHTML = '<option value="">Sem Alteração (Auto)</option>';
                 window.drivers.forEach(drv => {
                     if (Array.isArray(drv.brickIds)) {
                         drv.brickIds.forEach(id => {
                             const opt = document.createElement('option');
-                            opt.value = id; // Guarda o identificador composto 'Freguesia|Localidade'
+                            opt.value = id; 
                             opt.textContent = `${id.split('|')[0]} - ${id.split('|')[1]} (${drv.name})`;
                             modalBrickOverride.appendChild(opt);
                         });
@@ -214,24 +216,46 @@ export function setupTriagemLogic() {
                 });
             }
 
-            if (driver) {
-                if (resultadoMotorista) resultadoMotorista.textContent = driver.name;
-                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = driver.color;
-                window.lastAnalysisResult = { 
-                    zip: formattedZip, 
-                    driverId: driver.id,
-                    brickId: brickId,
-                    brickName: brickName
-                };
-            } else {
-                if (resultadoMotorista) resultadoMotorista.textContent = "Sem Motorista";
-                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#9CA3AF"; 
+            if (!brickId) {
+                // NOVO: Código Postal NÃO encontrado na base de dados de Mafra (Aviso de Alerta)
+                if (resultadoMotorista) resultadoMotorista.textContent = "CP Não Encontrado";
+                if (resultadoBrickLabel) resultadoBrickLabel.textContent = "Verifique / Confirme o Código Postal";
+                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#EA580C"; // Cor Laranja de Alerta
+                
                 window.lastAnalysisResult = { 
                     zip: formattedZip, 
                     driverId: null,
-                    brickId: brickId,
-                    brickName: brickName
+                    brickId: null,
+                    brickName: "Não Encontrado",
+                    isInvalid: true
                 };
+            } else {
+                // CASO: Código Postal VÁLIDO em Mafra
+                if (resultadoBrickLabel) {
+                    resultadoBrickLabel.textContent = `${brickId.split('|')[0]} - ${brickName}`;
+                }
+
+                if (driver) {
+                    if (resultadoMotorista) resultadoMotorista.textContent = driver.name;
+                    if (resultadoCorBg) resultadoCorBg.style.backgroundColor = driver.color;
+                    window.lastAnalysisResult = { 
+                        zip: formattedZip, 
+                        driverId: driver.id,
+                        brickId: brickId,
+                        brickName: brickName,
+                        isInvalid: false
+                    };
+                } else {
+                    if (resultadoMotorista) resultadoMotorista.textContent = "Sem Motorista";
+                    if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#9CA3AF"; 
+                    window.lastAnalysisResult = { 
+                        zip: formattedZip, 
+                        driverId: null,
+                        brickId: brickId,
+                        brickName: brickName,
+                        isInvalid: false
+                    };
+                }
             }
 
             if (chkPrioridade) chkPrioridade.checked = false;
@@ -246,7 +270,6 @@ export function setupTriagemLogic() {
             const chkPrioridade = document.getElementById('chk-prioridade');
             const isPriority = chkPrioridade ? chkPrioridade.checked : false;
 
-            // Determina se o utilizador escolheu outro Brick manualmente ou aceita o automático
             const modalBrickOverride = document.getElementById('modal-brick-override');
             let finalDriverId = window.lastAnalysisResult.driverId;
             let finalBrickId = window.lastAnalysisResult.brickId;
@@ -266,7 +289,7 @@ export function setupTriagemLogic() {
                 zip: window.lastAnalysisResult.zip,
                 driverId: finalDriverId,
                 brickId: finalBrickId,
-                brickName: finalBrickName, // Grava fisicamente o Brick de destino no histórico
+                brickName: finalBrickName,
                 priority: isPriority,
                 date: new Date().toISOString().split('T')[0]
             });
@@ -276,6 +299,8 @@ export function setupTriagemLogic() {
             window.renderizarSetoresUI(); // Força a reciclagem rápida
 
             modalResultado.classList.add('hidden');
+            
+            // NOVO: Limpa imediatamente o visor do teclado virtual ao confirmar
             window.currentInput = "";
             const visorCodigo = document.getElementById('visor-codigo');
             if (visorCodigo) {
@@ -283,10 +308,6 @@ export function setupTriagemLogic() {
             }
             window.lastAnalysisResult = null;
         });
-    }
-
-    if (btnCancelarAtribuir) {
-        btnCancelarAtribuir.addEventListener('click', cancelarAtribuicao);
     }
 
     if (modalResultado) {
@@ -322,67 +343,7 @@ export function setupCancelButtons() {
 // RECONHECIMENTO DE VOZ DA TRIAGEM (MÉTODO UNIFICADO VIA VOZ.JS)
 // =========================================================================
 export function setupVozTriagemLogic() {
-    const btnVoz = document.getElementById('btn-voz-triagem');
-    const buscaMoradaInput = document.getElementById('busca-morada-triagem');
-    const micAtivo = document.getElementById('mic-ativo-triagem');
-    const micInativo = document.getElementById('mic-inativo-triagem');
-
-    if (!btnVoz || !buscaMoradaInput) return;
-
-    criarReconhecimentoVoz({
-        btnElement: btnVoz,
-        micAtivoElement: micAtivo,
-        micInativoElement: micInativo,
-        activeClasses: ['bg-red-500', 'text-white', 'border-red-600'],
-        inactiveClasses: ['bg-blue-50', 'text-blue-700', 'border-blue-200'],
-        onResult: (transcript) => {
-            buscaMoradaInput.value = transcript;
-            console.log("Voz captada na Triagem:", transcript);
-
-            if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
-                const geocoder = new google.maps.Geocoder();
-                geocoder.geocode({ address: transcript + ", Mafra, Portugal", componentRestrictions: { country: 'PT' } }, (results, status) => {
-                    if (status === "OK" && results[0]) {
-                        const matchedPlace = results[0];
-                        let postalCode = "";
-
-                        for (const component of matchedPlace.address_components) {
-                            if (component.types.includes('postal_code')) {
-                                postalCode = component.long_name;
-                                break;
-                            }
-                        }
-
-                        if (postalCode) {
-                            const cleanCode = postalCode.replace(/\D/g, '');
-                            if (cleanCode.length === 7) {
-                                window.currentInput = cleanCode;
-                                const visorCodigo = document.getElementById('visor-codigo');
-                                if (visorCodigo) {
-                                    updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-                                }
-                                
-                                console.log(`Morada ditada detetada com sucesso! Código: ${postalCode}`);
-                                
-                                const btnAnalisar = document.getElementById('btn-analisar');
-                                if (btnAnalisar) btnAnalisar.click();
-                            } else {
-                                alert(`Morada detetada por voz: "${matchedPlace.formatted_address}".\nContudo, o Código Postal está incompleto (${postalCode}). Insira manualmente.`);
-                            }
-                        } else {
-                            alert(`Encontrámos a morada ditada: "${matchedPlace.formatted_address}".\nMas não conseguimos extrair o Código Postal de 7 dígitos.`);
-                        }
-                    } else {
-                        buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        buscaMoradaInput.focus();
-                    }
-                });
-            } else {
-                buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
-                buscaMoradaInput.focus();
-            }
-        }
-    });
+    // Desativado reativamente para manter a triagem pura no Código Postal
 }
 
 // =========================================================================

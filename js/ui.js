@@ -143,9 +143,10 @@ export function setupPrefixLock() {
             inputPrefixo.focus();
             
             window.lockedPrefixValue = sanitizeDigits(inputPrefixo.value).substring(0, 4);
+            // NOVO: Prefixo inicial adaptado para Mafra (2640) de forma centralizada
             if (!window.lockedPrefixValue) {
-                window.lockedPrefixValue = "2700";
-                inputPrefixo.value = "2700";
+                window.lockedPrefixValue = "2640";
+                inputPrefixo.value = "2640";
             }
         } else {
             inputPrefixo.disabled = true;

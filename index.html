@@ -78,7 +78,26 @@
                     <h3 id="resultado-codigo" class="text-white text-3xl font-mono font-black tracking-widest bg-black/25 px-4 py-1.5 rounded-lg">---</h3>
                     <p class="text-white text-sm font-semibold tracking-wider uppercase opacity-85 mt-2">Motorista Designado</p>
                     <h2 id="resultado-motorista" class="text-white text-2xl font-bold tracking-wide drop-shadow-md">---</h2>
+                    
+                    <!-- Estante (Brick) Selecionada para organizar o Pacote -->
+                    <p class="text-white text-xs font-semibold tracking-wider uppercase opacity-85 mt-2">Arrumar na Estante (Brick)</p>
+                    <div class="flex items-center space-x-2 bg-black/25 px-3 py-1 rounded-lg">
+                        <i class="fa-solid fa-boxes-stacked text-yellow-300 text-xs"></i>
+                        <span id="resultado-brick-label" class="text-white text-base font-bold tracking-wide">---</span>
+                    </div>
                 </div>
+
+                <!-- Seletor de Brick (Estante) para alteração em tempo real -->
+                <div class="flex-shrink-0 p-3 bg-gray-50 border-b flex items-center justify-between">
+                    <label class="text-xs font-bold text-gray-700 uppercase flex items-center space-x-1.5 cursor-pointer">
+                        <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
+                        <span>Alterar Estante (Brick)</span>
+                    </label>
+                    <select id="modal-brick-override" class="text-xs font-bold p-1.5 border border-gray-300 rounded bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none w-1/2">
+                        <option value="">Sem Brick (Auto)</option>
+                    </select>
+                </div>
+
                 <div class="flex-shrink-0 p-3 bg-gray-50 border-t border-b flex items-center justify-center">
                     <label class="flex items-center space-x-3 text-base font-bold text-gray-700 cursor-pointer">
                         <input type="checkbox" id="chk-prioridade" class="w-6 h-6 text-orange-600 rounded focus:ring-orange-500 border-gray-300">
@@ -88,12 +107,12 @@
                         </span>
                     </label>
                 </div>
-                <div class="flex-shrink-0 p-3 bg-gray-50 flex space-x-3">
-                    <button id="btn-cancelar-atribuir" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-base py-3.5 rounded-xl shadow-md">
-                        <i class="fa-solid fa-xmark mr-1"></i> Cancelar
-                    </button>
-                    <button id="btn-confirmar-atribuir" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold text-base py-3.5 rounded-xl shadow-md">
-                        <i class="fa-solid fa-check mr-1"></i> Confirmar
+                
+                <!-- NOVO DESIGN: Apenas um botão de confirmação gigante "OK (Próximo)" que limpa tudo -->
+                <div class="flex-shrink-0 p-3 bg-gray-50">
+                    <button id="btn-confirmar-atribuir" class="w-full bg-blue-600 active:bg-blue-700 text-white font-extrabold text-base py-4 rounded-xl shadow-md flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-check"></i>
+                        <span>OK (Arrumado)</span>
                     </button>
                 </div>
             </div>
