@@ -1,6 +1,7 @@
 /**
  * setores.js
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
+ *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -10,6 +11,9 @@ import { saveData } from './storage.js';
 
 // ID do motorista que está atualmente selecionado na interface para atribuição
 let motoristaAtivoId = null;
+
+// NOVO: Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
+let freguesiasExpandidas = new Set();
 
 // =========================================================================
 // FUNÇÃO INTERNA AUXILIAR DE PERSISTÊNCIA
@@ -117,6 +121,17 @@ export function renderGeographicTree() {
         const localidadesMap = GEOGRAPHY[concelho][freguesiaName];
         const localidadesKeys = Object.keys(localidadesMap).sort();
 
+        // NOVO: Verifica se todas as localidades desta freguesia pertencem a este motorista
+        const allLocs = Object.keys(localidadesMap);
+        const ownedLocs = allLocs.filter(locName => {
+            const brickId = `${freguesiaName}|${locName}`;
+            return Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
+        });
+        const isAllOwned = allLocs.length > 0 && ownedLocs.length === allLocs.length;
+
+        // NOVO: Recupera o estado de expansão desta freguesia
+        const isExpanded = freguesiasExpandidas.has(freguesiaName);
+
         const fregDiv = document.createElement('div');
         fregDiv.className = "border rounded-lg bg-white overflow-hidden shadow-xs border-gray-200";
 
@@ -125,16 +140,24 @@ export function renderGeographicTree() {
 
         header.innerHTML = `
             <div class="flex items-center space-x-2">
-                <button type="button" class="btn-expand-tree text-gray-500 hover:text-blue-600 font-mono text-xs px-1.5 py-0.5 rounded border bg-white focus:outline-none shadow-sm transition">
-                    + Expandir Freguesia
+                <button type="button" class="btn-expand-tree text-gray-500 hover:text-blue-600 font-mono text-[10px] px-2 py-0.5 rounded border bg-white focus:outline-none shadow-sm transition flex items-center space-x-1">
+                    ${isExpanded 
+                        ? "<span><i class='fa-solid fa-minus mr-0.5'></i> Recolher</span>" 
+                        : "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir Freguesia</span>"
+                    }
                 </button>
-                <span class="font-bold text-gray-700 text-xs">${freguesiaName}</span>
+                <div class="flex items-center space-x-1.5">
+                    <!-- NOVO: Checkbox de seleção rápida de Freguesia inteira -->
+                    <input type="checkbox" ${isAllOwned ? 'checked' : ''} class="freg-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
+                    <span class="font-bold text-gray-700 text-xs">${freguesiaName}</span>
+                </div>
             </div>
             <span class="text-[9px] text-gray-400 font-semibold">${localidadesKeys.length} Bricks</span>
         `;
 
         const subContainer = document.createElement('div');
-        subContainer.className = "hidden p-2 bg-gray-50/50 border-t border-dashed space-y-2.5 pl-6 animate-fade-in";
+        // Mantém a visibilidade da pasta de acordo com a memória de expansão
+        subContainer.className = `${isExpanded ? '' : 'hidden'} p-2 bg-gray-50/50 border-t border-dashed space-y-2.5 pl-6 animate-fade-in`;
 
         localidadesKeys.forEach(locName => {
             const brickId = `${freguesiaName}|${locName}`;
@@ -185,12 +208,42 @@ export function renderGeographicTree() {
 
                     sincronizarPersistencia();
                     renderDriversForAttribution(); // Atualiza as contagens no painel esquerdo
-                    renderGeographicTree(); // Recarrega os estados das caixas de seleção
+                    renderGeographicTree(); // Recarrega os estados mantendo as pastas abertas
                 });
             }
 
             subContainer.appendChild(label);
         });
+
+        // Evento de alteração em lote de toda a Freguesia
+        const fregCb = header.querySelector('.freg-checkbox');
+        if (fregCb) {
+            fregCb.addEventListener('change', (e) => {
+                if (!Array.isArray(activeDriver.brickIds)) {
+                    activeDriver.brickIds = [];
+                }
+
+                allLocs.forEach(locName => {
+                    const brickId = `${freguesiaName}|${locName}`;
+                    const motoristaDono = localidadeParaMotorista.get(brickId);
+                    const isOwnedByOther = motoristaDono && motoristaDono.id !== activeDriver.id;
+
+                    if (e.target.checked) {
+                        // Associa em lote apenas as localidades que estão realmente livres
+                        if (!isOwnedByOther && !activeDriver.brickIds.includes(brickId)) {
+                            activeDriver.brickIds.push(brickId);
+                        }
+                    } else {
+                        // Remove todas as localidades desta freguesia que pertenciam a este motorista
+                        activeDriver.brickIds = activeDriver.brickIds.filter(id => id !== brickId);
+                    }
+                });
+
+                sincronizarPersistencia();
+                renderDriversForAttribution();
+                renderGeographicTree();
+            });
+        }
 
         fregDiv.appendChild(header);
         fregDiv.appendChild(subContainer);
@@ -201,10 +254,12 @@ export function renderGeographicTree() {
             e.stopPropagation();
             if (subContainer.classList.contains('hidden')) {
                 subContainer.classList.remove('hidden');
-                btnExpand.innerHTML = "<i class='fa-solid fa-minus mr-1'></i> Recolher";
+                freguesiasExpandidas.add(freguesiaName);
+                btnExpand.innerHTML = "<span><i class='fa-solid fa-minus mr-0.5'></i> Recolher</span>";
             } else {
                 subContainer.classList.add('hidden');
-                btnExpand.innerHTML = "<i class='fa-solid fa-plus mr-1'></i> Expandir Freguesia";
+                freguesiasExpandidas.delete(freguesiaName);
+                btnExpand.innerHTML = "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir Freguesia</span>";
             }
         });
     });
