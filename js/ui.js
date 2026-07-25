@@ -1,6 +1,7 @@
 /**
  * ui.js
  * Faz: Controla a navegação entre abas, atualização do visor principal e os eventos do teclado numérico virtual.
+ *      Despoleta automaticamente a triagem no instante em que o último dígito do código postal é inserido.
  * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
  * Depende de: Nenhuns módulos.
  */
@@ -94,6 +95,14 @@ export function setupKeypad() {
             if (window.currentInput.length < maxDigits) {
                 window.currentInput += val;
                 if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                
+                // NOVO: Quando atinge o número total de dígitos, despoleta de imediato a triagem de forma automática!
+                if (window.currentInput.length === maxDigits) {
+                    const btnAnalisar = document.getElementById('btn-analisar');
+                    if (btnAnalisar) {
+                        btnAnalisar.click();
+                    }
+                }
             }
         });
     });

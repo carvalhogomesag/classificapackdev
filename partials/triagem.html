@@ -1,6 +1,6 @@
 <!--
   triagem.html
-  Faz: Contém a estrutura visual integral da Seção de Triagem, incluindo o banner inteligente do PWA, o visor principal, o leitor de voz e o teclado numérico gigante.
+  Faz: Contém a estrutura visual simplificada da Seção de Triagem, focada exclusivamente na análise ultra-rápida de Código Postal de 7 dígitos pelo teclado virtual.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -41,23 +41,6 @@
         </div>
     </div>
 
-    <!-- Procurar Código por Morada (Com reconhecimento de voz) -->
-    <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 space-y-2">
-        <label class="block text-xs font-bold uppercase text-blue-800">
-            <i class="fa-solid fa-microphone mr-1"></i> Procurar Código por Voz:
-        </label>
-        <div class="flex space-x-2">
-            <input type="text" id="busca-morada-triagem" placeholder="Fale ou digite a morada..." 
-                   class="flex-1 p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-            <button type="button" id="btn-voz-triagem" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm transition animate-none" title="Ditar morada">
-                <i class="fa-solid fa-microphone text-lg" id="mic-inativo-triagem"></i>
-                <i class="fa-solid fa-microphone text-lg animate-pulse text-red-500 hidden" id="mic-ativo-triagem"></i>
-            </button>
-        </div>
-        <!-- Input de captura da câmara mantido oculto para reativação nativa (Tesseract) -->
-        <input type="file" id="input-camera-captura" accept="image/*" capture="environment" class="hidden">
-    </div>
-
     <!-- Teclado Numérico Gigante para Operação Rápida -->
     <div class="grid grid-cols-3 gap-3 flex-1">
         <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="1">1</button>
@@ -79,7 +62,7 @@
         </button>
     </div>
 
-    <!-- Botão de Ação de Triagem -->
+    <!-- Botão de Ação de Triagem manual mantido apenas como backup alternativo -->
     <button id="btn-analisar" class="w-full bg-green-600 active:bg-green-700 text-white font-bold text-xl py-4 rounded-xl shadow-md transition duration-150">
         Analisar Código
     </button>
