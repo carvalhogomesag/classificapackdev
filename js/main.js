@@ -9,7 +9,6 @@ import './state.js'; // Garante o arranque do estado global e migração física
 import { saveData } from './storage.js';
 import { setupNavigation, showTab, setupKeypad, setupPrefixLock, updateVisor } from './ui.js';
 import { renderDrivers, handleDriverSubmit } from './motoristas.js';
-import { handleSectorSubmit } from './setores.js';
 import { setupTriagemLogic, setupCancelButtons, setupVozTriagemLogic, setupCameraOcrLogic } from './triagem.js';
 import { setupRotasLogic, setupModaisEdicao, setupVozLogic, sincronizarInterfaceRota } from './rotas.js';
 import { setupPWAInstallationLogic } from './pwa.js';
@@ -151,37 +150,25 @@ function renderColorPicker() {
 }
 
 // =========================================================================
-// GESTÃO DE FORMULÁRIOS OPERACIONAIS (MOTORISTAS E SETORES)
+// GESTÃO DE FORMULÁRIOS OPERACIONAIS (MOTORISTAS)
 // =========================================================================
 function setupForms() {
     const formMotorista = document.getElementById('form-motorista');
-    const formSetor = document.getElementById('form-setor');
     const listaMotoristas = document.getElementById('lista-motoristas');
 
     if (formMotorista && listaMotoristas) {
         formMotorista.addEventListener('submit', (e) => {
             handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
-                renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
+                renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
                 window.atualizarSummaryUI();
                 window.renderizarSetoresUI();
-            });
-        });
-    }
-
-    if (formSetor) {
-        formSetor.addEventListener('submit', (e) => {
-            handleSectorSubmit(e, window.sectors, () => {
-                window.renderizarSetoresUI();
-                if (listaMotoristas) {
-                    renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
-                }
             });
         });
     }
 }
 
 // ==========================================
-// CENTRALIZAÇÃO DA LIMPEZA DE LEITURAS
+// CENTRALIZAÇÃO DE LIMPEZA DE LEITURAS
 // ==========================================
 function setupResetLeituras() {
     const btnLimparLeituras = document.getElementById('btn-limpar-leituras');
@@ -197,10 +184,10 @@ function setupResetLeituras() {
                     window.moradasEntregas,
                     window.rotaOtimizada,
                     window.dataRotaSelecionada, 
-                    window.rotaIniciada,
-                    window.sectors
+                    window.rotaIniciada
                 );
                 window.atualizarSummaryUI();
+                window.renderizarSetoresUI(); // Força a reciclagem da contagem de bricks
             }
         });
     }
@@ -238,10 +225,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
     }
     
-    // 5. Renderizações visuais automáticas baseadas nas memórias físicas do telemóvel
+    // 5. Renderizações visuais automáticas baseadas nas memórias físicas
     const listaMotoristas = document.getElementById('lista-motoristas');
     if (listaMotoristas) {
-        renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
+        renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
     }
     
     if (typeof window.renderizarSetoresUI === 'function') {
