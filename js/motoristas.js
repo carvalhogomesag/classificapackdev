@@ -40,7 +40,7 @@ export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, e
         div.innerHTML = `
             <div class="flex-1 truncate pr-2">
                 <div class="flex items-center space-x-3">
-                    <span class="w-4 h-4 rounded-full border shadow-sm" style="background-color: ${driver.color}"></span>
+                    <span class="w-4 h-4 rounded-full border shadow-sm flex-shrink-0" style="background-color: ${driver.color}"></span>
                     <span class="font-semibold text-gray-700 text-sm">${driver.name}</span>
                 </div>
                 <div class="text-[10px] text-gray-400 mt-1.5 flex items-center flex-wrap gap-1">
@@ -100,6 +100,16 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
 }
 
 // ==========================================
+// REGISTO DA ASSINATURA DA JANELA TÁTIL (NOVO)
+// ==========================================
+window.renderizarMotoristasUI = () => {
+    const listaMotoristas = document.getElementById('lista-motoristas');
+    if (listaMotoristas) {
+        renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
+    }
+};
+
+// ==========================================
 // FUNÇÃO DESATIVADA COM A SIMPLIFICAÇÃO DOS SETORES
 // ==========================================
 export function renderSectorCheckboxes() {
@@ -152,11 +162,9 @@ window.deleteDriver = (id) => {
         window.assignments = window.assignments.filter(a => a.driverId !== id); 
         sincronizarPersistencia();
         
-        const listaMotoristas = document.getElementById('lista-motoristas');
-        if (listaMotoristas) {
-            renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
+        if (typeof window.renderizarMotoristasUI === 'function') {
+            window.renderizarMotoristasUI();
         }
-        
         if (typeof window.renderizarSetoresUI === 'function') {
             window.renderizarSetoresUI();
         }

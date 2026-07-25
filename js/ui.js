@@ -46,6 +46,14 @@ export function showTab(tabName) {
         activeNav.classList.remove('text-gray-400', 'font-semibold');
     }
 
+    // NOVO: Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba!
+    if (tabName === 'intervalos' && typeof window.renderizarSetoresUI === 'function') {
+        window.renderizarSetoresUI();
+    }
+    if (tabName === 'motoristas' && typeof window.renderizarMotoristasUI === 'function') {
+        window.renderizarMotoristasUI();
+    }
+
     // Corrige renderização do mapa Google se entrar na aba Rotas
     if (tabName === 'rotas' && window.googleMapInstance) {
         setTimeout(() => {
