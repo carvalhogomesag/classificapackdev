@@ -27,6 +27,7 @@ export function safeJSONParse(key, fallback) {
 
 /**
  * Grava fisicamente no telemóvel todos os dados importantes da aplicação num único ciclo.
+ * Adaptado de forma retrocompatível para persistir o novo estado de Bricks de forma segura.
  */
 export function saveData(drivers, intervals, assignments, partida, entregas, rota, dataRota, iniciada, zones = []) {
     localStorage.setItem('cp_drivers', JSON.stringify(drivers));
@@ -42,4 +43,9 @@ export function saveData(drivers, intervals, assignments, partida, entregas, rot
 
     // Gravação física das Zonas/Setores territoriais criados
     localStorage.setItem('cp_zones', JSON.stringify(zones));
+
+    // Gravação física do novo estado de Bricks sem necessitar de alterar parâmetros noutros ficheiros
+    if (window.bricks !== undefined) {
+        localStorage.setItem('cp_bricks', JSON.stringify(window.bricks));
+    }
 }

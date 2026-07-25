@@ -14,6 +14,9 @@ window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
 window.sectors = safeJSONParse('cp_zones', []); // Setores carregados em memória
 
+// NOVO: Recuperação segura dos Bricks (Estantes/Localizadores físicos) do armazenamento
+window.bricks = safeJSONParse('cp_bricks', []);
+
 // ==========================================
 // MIGRAÇÃO DE DADOS AUTOMÁTICA
 // Converte motoristas antigos (com 'sectorId' único) para o novo
