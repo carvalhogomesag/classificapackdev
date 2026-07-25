@@ -78,7 +78,26 @@
                     <h3 id="resultado-codigo" class="text-white text-3xl font-mono font-black tracking-widest bg-black/25 px-4 py-1.5 rounded-lg">---</h3>
                     <p class="text-white text-sm font-semibold tracking-wider uppercase opacity-85 mt-2">Motorista Designado</p>
                     <h2 id="resultado-motorista" class="text-white text-2xl font-bold tracking-wide drop-shadow-md">---</h2>
+                    
+                    <!-- NOVO ELEMENTO VISUAL: Estante (Brick) Selecionada para organizar o Pacote -->
+                    <p class="text-white text-xs font-semibold tracking-wider uppercase opacity-85 mt-2">Arrumar na Estante (Brick)</p>
+                    <div class="flex items-center space-x-2 bg-black/25 px-3 py-1 rounded-lg">
+                        <i class="fa-solid fa-boxes-stacked text-yellow-300 text-xs"></i>
+                        <span id="resultado-brick-label" class="text-white text-base font-bold tracking-wide">---</span>
+                    </div>
                 </div>
+
+                <!-- NOVO SELETOR RÁPIDO: Permite alterar a estante (override manual) na hora da confirmação -->
+                <div class="flex-shrink-0 p-3 bg-gray-50 border-b flex items-center justify-between">
+                    <label class="text-xs font-bold text-gray-700 uppercase flex items-center space-x-1.5 cursor-pointer">
+                        <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
+                        <span>Alterar Estante (Brick)</span>
+                    </label>
+                    <select id="modal-brick-override" class="text-xs font-bold p-1.5 border border-gray-300 rounded bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none w-1/2">
+                        <option value="">Sem Brick (Auto)</option>
+                    </select>
+                </div>
+
                 <div class="flex-shrink-0 p-3 bg-gray-50 border-t border-b flex items-center justify-center">
                     <label class="flex items-center space-x-3 text-base font-bold text-gray-700 cursor-pointer">
                         <input type="checkbox" id="chk-prioridade" class="w-6 h-6 text-orange-600 rounded focus:ring-orange-500 border-gray-300">

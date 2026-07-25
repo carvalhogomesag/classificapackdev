@@ -1,6 +1,6 @@
 <!--
   setores.html
-  Faz: Contém a estrutura visual integral do ecrã de Gestão de Setores de Entrega, incluindo o formulário de atribuição de freguesias/localidades de Mafra e a lista de setores ativos.
+  Faz: Contém a estrutura visual integral do ecrã de Gestão de Setores de Entrega e a Gestão de Bricks (Estantes físicas de armazenamento), incluindo os respetivos formulários de criação e listagens.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -42,6 +42,41 @@
         <h3 class="text-sm font-bold uppercase text-gray-500 mb-1">Setores Ativos</h3>
         <div id="lista-setores" class="space-y-2 max-h-64 overflow-y-auto pr-1">
             <p class="text-sm text-gray-400 italic text-center py-4">Nenhum sector registado.</p>
+        </div>
+    </div>
+
+    <!-- NOVA SECÇÃO: FORMULÁRIO DE CRIAÇÃO DE BRICKS (ESTANTES) -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+        <h2 class="text-xl font-bold text-gray-800">Criar Estante (Brick)</h2>
+        <form id="form-brick" class="space-y-3">
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-600">Identificador / Nome do Brick</label>
+                <input type="text" id="brick-nome" required placeholder="Ex: A1, B3, Cesto Azul"
+                       class="w-full mt-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-600">Associar a um Setor (Opcional)</label>
+                <select id="brick-setor-assoc" class="w-full mt-1 p-2 border rounded bg-white outline-none focus:ring-2 focus:ring-blue-500 text-xs text-gray-700 font-medium">
+                    <option value="">Nenhum Setor</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold uppercase text-gray-600">Associar a um Motorista (Opcional)</label>
+                <select id="brick-motorista-assoc" class="w-full mt-1 p-2 border rounded bg-white outline-none focus:ring-2 focus:ring-blue-500 text-xs text-gray-700 font-medium">
+                    <option value="">Nenhum Motorista</option>
+                </select>
+            </div>
+            <button type="submit" id="btn-submit-brick" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700 transition text-xs">
+                Adicionar Brick
+            </button>
+        </form>
+    </div>
+
+    <!-- NOVA SECÇÃO: LISTA DE BRICKS REGISTADOS -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+        <h3 class="text-sm font-bold uppercase text-gray-500 mb-1">Bricks Registados</h3>
+        <div id="lista-bricks" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+            <p class="text-sm text-gray-400 italic text-center py-4">Nenhum brick registado.</p>
         </div>
     </div>
 

@@ -1,6 +1,6 @@
 /**
  * setores.js
- * Faz: Desenha e gere os setores geográficos ativos, renderiza a árvore hierárquica interativa de Mafra e garante a exclusividade de cada localidade.
+ * Faz: Desenha e gere os setores geográficos ativos, renderiza a árvore hierárquica interativa de Mafra, garante a exclusividade de cada localidade e gere a criação/associação dos Bricks (Estantes físicas).
  * NÃO faz: Não gere o registo de motoristas (motoristas.js) nem as coordenadas geográficas dos mapas das rotas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -8,6 +8,8 @@
 import { GEOGRAPHY } from './geografia-data.js';
 import { saveData } from './storage.js';
 import { renderDrivers, renderSectorCheckboxes } from './motoristas.js';
+
+let formBrickConfigured = false;
 
 // =========================================================================
 // FUNÇÃO INTERNA AUXILIAR DE PERSISTÊNCIA
@@ -123,7 +125,7 @@ export function handleSectorSubmit(e, sectors, renderCallback) {
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
     renderCallback();
-    alert(emEdicao ? 'Setor atualizado com sucesso!' : 'Setor criado com sucesso!');
+    alert(emEdicao ? 'Setor updated com sucesso!' : 'Setor criado com sucesso!');
 }
 
 // =========================================================================
@@ -287,7 +289,100 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
 export const renderIntervalCheckboxes = renderAreaCheckboxes;
 
 // =========================================================================
-// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES
+// RENDERIZAÇÃO DA LISTA DE BRICKS (ESTANTES)
+// =========================================================================
+export function renderBricks(bricks, listaBricks, sectors, drivers) {
+    if (!listaBricks) return;
+    listaBricks.innerHTML = bricks.length === 0 
+        ? '<p class="text-sm text-gray-400 italic text-center py-4">Nenhuma estante (Brick) registada.</p>' 
+        : '';
+
+    bricks.forEach(brick => {
+        const matchedSector = sectors.find(s => s.id === brick.sectorId);
+        const matchedDriver = drivers.find(d => d.id === brick.driverId);
+
+        let associationText = "Sem Associação";
+        if (matchedSector && matchedDriver) {
+            associationText = `Setor: ${matchedSector.name} | Motorista: ${matchedDriver.name}`;
+        } else if (matchedSector) {
+            associationText = `Setor: ${matchedSector.name}`;
+        } else if (matchedDriver) {
+            associationText = `Motorista: ${matchedDriver.name}`;
+        }
+
+        const div = document.createElement('div');
+        div.className = "flex items-center justify-between p-3 bg-gray-50 border rounded-lg text-xs animate-fade-in";
+        div.innerHTML = `
+            <div class="flex-1 truncate pr-2">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-boxes-stacked text-blue-500"></i>
+                    <span class="font-bold text-gray-800 text-sm">${brick.name}</span>
+                </div>
+                <div class="text-[10px] text-gray-400 mt-1">
+                    <i class="fa-solid fa-link mr-0.5"></i> ${associationText}
+                </div>
+            </div>
+            <button class="btn-del-brick text-red-500 hover:text-red-700 font-bold p-1.5"><i class="fa-solid fa-trash-can"></i></button>
+        `;
+        div.querySelector('.btn-del-brick').onclick = () => {
+            if (confirm(`Deseja apagar o Brick "${brick.name}"?`)) {
+                window.bricks = window.bricks.filter(b => b.id !== brick.id);
+                sincronizarPersistencia();
+                window.renderizarSetoresUI();
+            }
+        };
+        listaBricks.appendChild(div);
+    });
+}
+
+// =========================================================================
+// ATUALIZADOR DOS SELETORES DO FORMULÁRIO DE BRICKS E MODAL TRIAGEM
+// =========================================================================
+function atualizarSelectsBricks() {
+    const selectSetor = document.getElementById('brick-setor-assoc');
+    const selectMotorista = document.getElementById('brick-motorista-assoc');
+    const modalSelect = document.getElementById('modal-brick-override');
+
+    if (selectSetor) {
+        const currentVal = selectSetor.value;
+        selectSetor.innerHTML = '<option value="">Nenhum Setor</option>';
+        window.sectors.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.name;
+            selectSetor.appendChild(opt);
+        });
+        selectSetor.value = currentVal;
+    }
+
+    if (selectMotorista) {
+        const currentVal = selectMotorista.value;
+        selectMotorista.innerHTML = '<option value="">Nenhum Motorista</option>';
+        window.drivers.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = d.name;
+            selectMotorista.appendChild(opt);
+        });
+        selectMotorista.value = currentVal;
+    }
+
+    // Popula automaticamente o seletor rápido no modal global de Triagem
+    if (modalSelect) {
+        const currentVal = modalSelect.value;
+        modalSelect.innerHTML = '<option value="">Sem Brick (Auto)</option>';
+        window.bricks.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.name;
+            opt.textContent = b.name;
+            modalSelect.appendChild(opt);
+        });
+        modalSelect.value = currentVal;
+    }
+}
+
+// =========================================================================
+// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES E BRICKS
 // =========================================================================
 window.renderizarSetoresUI = () => {
     const listaSetores = document.getElementById('lista-setores');
@@ -305,6 +400,53 @@ window.renderizarSetoresUI = () => {
     if (checkboxesSetoresMotorista) {
         const editingDriverId = window.driverSendoEditado ? window.driverSendoEditado.id : null;
         renderSectorCheckboxes(window.sectors, checkboxesSetoresMotorista, window.drivers, editingDriverId);
+    }
+
+    // Renderiza e sincroniza os Bricks criados
+    const listaBricks = document.getElementById('lista-bricks');
+    if (listaBricks) {
+        renderBricks(window.bricks, listaBricks, window.sectors, window.drivers);
+    }
+
+    atualizarSelectsBricks();
+
+    // Configuração segura do formulário de submissão de Bricks sem intervir no bootstrap global
+    if (!formBrickConfigured) {
+        const formBrick = document.getElementById('form-brick');
+        if (formBrick) {
+            formBrick.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const nomeInput = document.getElementById('brick-nome');
+                const selectSetor = document.getElementById('brick-setor-assoc');
+                const selectMotorista = document.getElementById('brick-motorista-assoc');
+
+                const name = nomeInput.value.trim();
+                if (!name) return;
+
+                const sectorId = selectSetor.value || null;
+                const driverId = selectMotorista.value || null;
+
+                if (window.bricks.some(b => b.name.toLowerCase() === name.toLowerCase())) {
+                    alert("Já existe uma Estante (Brick) registada com este nome.");
+                    return;
+                }
+
+                window.bricks.push({
+                    id: 'b_' + Date.now(),
+                    name: name,
+                    sectorId: sectorId,
+                    driverId: driverId
+                });
+
+                sincronizarPersistencia();
+                nomeInput.value = "";
+                selectSetor.value = "";
+                selectMotorista.value = "";
+                window.renderizarSetoresUI();
+                alert("Estante (Brick) adicionada com sucesso!");
+            });
+            formBrickConfigured = true;
+        }
     }
 };
 
