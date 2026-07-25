@@ -2,7 +2,7 @@
  * js/rotas.js
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
  *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
- *      atribui a estante (Brick) de arrumação e apresenta etiquetas visuais de organização nas listas.
+ *      atribui o Brick correspondente à localidade do pacote e apresenta etiquetas visuais de arrumação física.
  * NÃO faz: Não executa cálculos de linha reta locais (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js
  */
@@ -99,11 +99,11 @@ export function setupVozLogic() {
     });
 }
 
-// =========================================================================
-// ALGORITMO COMPATÍVEL INTERNO DE RESOLUÇÃO DE BRICK (ROTAS)
-// =========================================================================
+// ==========================================
+// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS)
+// ==========================================
 function resolveBrickForZip(zip, drivers) {
-    if (!zip) return { brickId: null, brickName: null };
+    if (!zip || !drivers) return { brickId: null, brickName: null };
     const regexZip = /\d{4}-\d{3}/;
     const match = zip.match(regexZip);
     const normalizedZip = match ? match[0] : zip.trim();
@@ -300,7 +300,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     try {
         // Envia as coordenadas para o endpoint dinâmico (Local ou Render)
-        const response = await fetch(`${API_BASE_URL}/api/optimize-route`, {
+        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -386,7 +386,7 @@ export function renderizarItinerarioOtimizado() {
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
 
-        // NOVO: Resolve e recupera reativamente o Brick (Estante) associado à paragem
+        // NOVO FALLBACK: Tenta obter o Brick de forma dinâmica para paragens legadas
         const { brickId, brickName } = resolveBrickForZip(paragem.address, window.drivers);
         const finalBrickName = paragem.brickName || brickName;
         const finalBrickId = paragem.brickId || brickId;

@@ -1,6 +1,6 @@
 /**
  * triagem.js
- * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick designados para código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
+ * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick (Localidade) designados para o código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js
  */
@@ -34,14 +34,14 @@ function sincronizarPersistencia() {
 // ALGORITMO DE RESOLUÇÃO GEOGRÁFICA DE BRICK E MOTORISTA
 // =========================================================================
 export function findBrickAndDriverForZip(zip, drivers) {
-    if (!zip) return { brickId: null, brickName: null, driver: null };
-    const normalizedZip = zip.trim();
+    if (!zip || !drivers) return { brickId: null, brickName: null, driver: null };
+    const normalizedZip = zip.trim(); // Esperado: "2665-018"
     const concelho = "MAFRA";
 
     let matchedFreguesia = null;
     let matchedLocalidade = null;
 
-    // Procura na árvore estática a localidade correspondente a este Código Postal
+    // Varre as freguesias e localidades de Mafra para encontrar o Código Postal correspondente
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
             if (cpList.includes(normalizedZip)) {
@@ -60,10 +60,18 @@ export function findBrickAndDriverForZip(zip, drivers) {
     const brickId = `${matchedFreguesia}|${matchedLocalidade}`;
     const brickName = matchedLocalidade;
 
-    // Encontra o motorista que tem esta localidade (Brick) assinalada no seu perfil
+    // Encontra o motorista ativo que tem esta localidade (Brick) assinalada na sua lista
     const driver = drivers.find(d => Array.isArray(d.brickIds) && d.brickIds.includes(brickId));
 
     return { brickId, brickName, driver };
+}
+
+// ==========================================
+// MANTIDO POR EXIGÊNCIAS DE EVENTOS AUXILIARES
+// ==========================================
+export function findDriverForZip(zip, sectors, drivers) {
+    const res = findBrickAndDriverForZip(zip, drivers);
+    return res.driver;
 }
 
 // =========================================================================
@@ -191,7 +199,7 @@ export function setupTriagemLogic() {
                 resultadoBrickLabel.textContent = brickName ? `${brickId.split('|')[0]} - ${brickName}` : "Sem Brick";
             }
 
-            // Popula reativamente o override dropdown com as localidades ativas/atribuídas aos motoristas
+            // Popula o override dropdown com as localidades que estão realmente atribuídas aos motoristas
             if (modalBrickOverride) {
                 modalBrickOverride.innerHTML = '<option value="">Sem Alteração (Auto)</option>';
                 window.drivers.forEach(drv => {
@@ -258,14 +266,14 @@ export function setupTriagemLogic() {
                 zip: window.lastAnalysisResult.zip,
                 driverId: finalDriverId,
                 brickId: finalBrickId,
-                brickName: finalBrickName, // Grava fisicamente a estante correspondente à localidade
+                brickName: finalBrickName, // Grava fisicamente o Brick de destino no histórico
                 priority: isPriority,
                 date: new Date().toISOString().split('T')[0]
             });
 
             sincronizarPersistencia();
             window.atualizarSummaryUI();
-            window.renderizarSetoresUI(); // Força a reciclagem de contagem rápida
+            window.renderizarSetoresUI(); // Força a reciclagem rápida
 
             modalResultado.classList.add('hidden');
             window.currentInput = "";
