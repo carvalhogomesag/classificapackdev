@@ -26,60 +26,22 @@ function sincronizarPersistencia() {
         window.moradasEntregas,
         window.rotaOtimizada,
         window.dataRotaSelecionada, 
-        window.rotaIniciada,
-        window.sectors
+        window.rotaIniciada
     );
 }
 
 // =========================================================================
-// ALGORITMO DE TRIAGEM HIERÁRQUICA E DETEÇÃO DE MOTORISTA
+// ALGORITMO DE RESOLUÇÃO GEOGRÁFICA DE BRICK E MOTORISTA
 // =========================================================================
-export function findDriverForZip(zip, sectors, drivers) {
-    if (!zip) return null;
-    const normalizedZip = zip.trim(); // Formato esperado: "2665-018"
-
-    let matchedFreguesia = null;
-    let matchedLocalidade = null;
-    const concelho = "MAFRA";
-
-    // 1. Cruza o código postal de 7 dígitos com a lista estática de Mafra
-    for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
-        for (const [localidade, cpList] of Object.entries(localidades)) {
-            if (cpList.includes(normalizedZip)) {
-                matchedFreguesia = freguesia;
-                matchedLocalidade = localidade;
-                break;
-            }
-        }
-        if (matchedFreguesia) break;
-    }
-
-    if (!matchedFreguesia) return null;
-
-    // 2. Procura o Setor ativo encarregue deste território
-    const matchedSector = sectors.find(s => {
-        const areaNames = Array.isArray(s.areaNames) ? s.areaNames : [];
-        return areaNames.includes(matchedFreguesia) || areaNames.includes(`${matchedFreguesia}|${matchedLocalidade}`);
-    });
-
-    if (!matchedSector) return null;
-
-    // 3. Devolve o motorista ativo que tem este Setor sob a sua responsabilidade
-    const matchedDriver = drivers.find(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(matchedSector.id));
-    return matchedDriver || null; 
-}
-
-// =========================================================================
-// ALGORITMO DE DETEÇÃO AUTOMÁTICA DE BRICK (ESTANTE)
-// =========================================================================
-export function findBrickForZip(zip, sectors, drivers, bricks) {
-    if (!zip || !bricks) return null;
+export function findBrickAndDriverForZip(zip, drivers) {
+    if (!zip) return { brickId: null, brickName: null, driver: null };
     const normalizedZip = zip.trim();
+    const concelho = "MAFRA";
 
     let matchedFreguesia = null;
     let matchedLocalidade = null;
-    const concelho = "MAFRA";
 
+    // Procura na árvore estática a localidade correspondente a este Código Postal
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
             if (cpList.includes(normalizedZip)) {
@@ -91,27 +53,17 @@ export function findBrickForZip(zip, sectors, drivers, bricks) {
         if (matchedFreguesia) break;
     }
 
-    if (!matchedFreguesia) return null;
-
-    const matchedSector = sectors.find(s => {
-        const areaNames = Array.isArray(s.areaNames) ? s.areaNames : [];
-        return areaNames.includes(matchedFreguesia) || areaNames.includes(`${matchedFreguesia}|${matchedLocalidade}`);
-    });
-
-    if (!matchedSector) return null;
-
-    // 1. Procura um Brick diretamente associado ao Setor
-    let matchedBrick = bricks.find(b => b.sectorId === matchedSector.id);
-    if (matchedBrick) return matchedBrick;
-
-    // 2. Se não encontrar, procura um Brick associado ao Motorista desse Setor (Fallback)
-    const matchedDriver = drivers.find(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(matchedSector.id));
-    if (matchedDriver) {
-        matchedBrick = bricks.find(b => b.driverId === matchedDriver.id);
-        if (matchedBrick) return matchedBrick;
+    if (!matchedFreguesia) {
+        return { brickId: null, brickName: null, driver: null };
     }
 
-    return null;
+    const brickId = `${matchedFreguesia}|${matchedLocalidade}`;
+    const brickName = matchedLocalidade;
+
+    // Encontra o motorista que tem esta localidade (Brick) assinalada no seu perfil
+    const driver = drivers.find(d => Array.isArray(d.brickIds) && d.brickIds.includes(brickId));
+
+    return { brickId, brickName, driver };
 }
 
 // =========================================================================
@@ -220,10 +172,9 @@ export function setupTriagemLogic() {
             }
 
             const formattedZip = `${cleanDigits.substring(0, 4)}-${cleanDigits.substring(4, 7)}`;
-            const driver = findDriverForZip(formattedZip, window.sectors, window.drivers);
             
-            // NOVO: Resolução dinâmica de estante (Brick) para a triagem
-            const brick = findBrickForZip(formattedZip, window.sectors, window.drivers, window.bricks);
+            // NOVO: Resolução dinâmica de Brick (Localidade) e Motorista
+            const { brickId, brickName, driver } = findBrickAndDriverForZip(formattedZip, window.drivers);
             
             const resultadoCodigo = document.getElementById('resultado-codigo');
             const resultadoMotorista = document.getElementById('resultado-motorista');
@@ -236,17 +187,23 @@ export function setupTriagemLogic() {
 
             if (resultadoCodigo) resultadoCodigo.textContent = formattedZip;
             
-            let resolvedBrickName = "Sem Brick";
-            if (brick) {
-                resolvedBrickName = brick.name;
-            }
-
             if (resultadoBrickLabel) {
-                resultadoBrickLabel.textContent = resolvedBrickName;
+                resultadoBrickLabel.textContent = brickName ? `${brickId.split('|')[0]} - ${brickName}` : "Sem Brick";
             }
 
+            // Popula reativamente o override dropdown com as localidades ativas/atribuídas aos motoristas
             if (modalBrickOverride) {
-                modalBrickOverride.value = ""; // Default "Sem Brick (Auto)" utiliza o sugerido automaticamente
+                modalBrickOverride.innerHTML = '<option value="">Sem Alteração (Auto)</option>';
+                window.drivers.forEach(drv => {
+                    if (Array.isArray(drv.brickIds)) {
+                        drv.brickIds.forEach(id => {
+                            const opt = document.createElement('option');
+                            opt.value = id; // Guarda o identificador composto 'Freguesia|Localidade'
+                            opt.textContent = `${id.split('|')[0]} - ${id.split('|')[1]} (${drv.name})`;
+                            modalBrickOverride.appendChild(opt);
+                        });
+                    }
+                });
             }
 
             if (driver) {
@@ -255,7 +212,8 @@ export function setupTriagemLogic() {
                 window.lastAnalysisResult = { 
                     zip: formattedZip, 
                     driverId: driver.id,
-                    defaultBrickName: resolvedBrickName
+                    brickId: brickId,
+                    brickName: brickName
                 };
             } else {
                 if (resultadoMotorista) resultadoMotorista.textContent = "Sem Motorista";
@@ -263,7 +221,8 @@ export function setupTriagemLogic() {
                 window.lastAnalysisResult = { 
                     zip: formattedZip, 
                     driverId: null,
-                    defaultBrickName: resolvedBrickName
+                    brickId: brickId,
+                    brickName: brickName
                 };
             }
 
@@ -279,24 +238,34 @@ export function setupTriagemLogic() {
             const chkPrioridade = document.getElementById('chk-prioridade');
             const isPriority = chkPrioridade ? chkPrioridade.checked : false;
 
-            // NOVO: Determina se o utilizador escolheu outro Brick manualmente ou aceita o automático
+            // Determina se o utilizador escolheu outro Brick manualmente ou aceita o automático
             const modalBrickOverride = document.getElementById('modal-brick-override');
-            let finalBrickName = window.lastAnalysisResult.defaultBrickName;
+            let finalDriverId = window.lastAnalysisResult.driverId;
+            let finalBrickId = window.lastAnalysisResult.brickId;
+            let finalBrickName = window.lastAnalysisResult.brickName;
+
             if (modalBrickOverride && modalBrickOverride.value) {
-                finalBrickName = modalBrickOverride.value;
+                const selectedBrickId = modalBrickOverride.value;
+                const ownerDriver = window.drivers.find(d => Array.isArray(d.brickIds) && d.brickIds.includes(selectedBrickId));
+                
+                finalDriverId = ownerDriver ? ownerDriver.id : null;
+                finalBrickId = selectedBrickId;
+                finalBrickName = selectedBrickId.split('|')[1];
             }
 
             window.assignments.push({
                 id: 'a_' + Date.now(),
                 zip: window.lastAnalysisResult.zip,
-                driverId: window.lastAnalysisResult.driverId,
+                driverId: finalDriverId,
+                brickId: finalBrickId,
+                brickName: finalBrickName, // Grava fisicamente a estante correspondente à localidade
                 priority: isPriority,
-                brickName: finalBrickName, // Grava fisicamente a estante no histórico
                 date: new Date().toISOString().split('T')[0]
             });
 
             sincronizarPersistencia();
             window.atualizarSummaryUI();
+            window.renderizarSetoresUI(); // Força a reciclagem de contagem rápida
 
             modalResultado.classList.add('hidden');
             window.currentInput = "";
