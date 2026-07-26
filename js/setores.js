@@ -2,6 +2,7 @@
  * setores.js
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
+ *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -12,7 +13,7 @@ import { saveData } from './storage.js';
 // ID do motorista que está atualmente selecionado na interface para atribuição
 let motoristaAtivoId = null;
 
-// NOVO: Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
+// Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
 let freguesiasExpandidas = new Set();
 
 // =========================================================================
@@ -121,7 +122,7 @@ export function renderGeographicTree() {
         const localidadesMap = GEOGRAPHY[concelho][freguesiaName];
         const localidadesKeys = Object.keys(localidadesMap).sort();
 
-        // NOVO: Verifica se todas as localidades desta freguesia pertencem a este motorista
+        // Verifica se todas as localidades desta freguesia pertencem a este motorista
         const allLocs = Object.keys(localidadesMap);
         const ownedLocs = allLocs.filter(locName => {
             const brickId = `${freguesiaName}|${locName}`;
@@ -129,7 +130,7 @@ export function renderGeographicTree() {
         });
         const isAllOwned = allLocs.length > 0 && ownedLocs.length === allLocs.length;
 
-        // NOVO: Recupera o estado de expansão desta freguesia
+        // Recupera o estado de expansão desta freguesia
         const isExpanded = freguesiasExpandidas.has(freguesiaName);
 
         const fregDiv = document.createElement('div');
@@ -147,7 +148,7 @@ export function renderGeographicTree() {
                     }
                 </button>
                 <div class="flex items-center space-x-1.5">
-                    <!-- NOVO: Checkbox de seleção rápida de Freguesia inteira -->
+                    <!-- Checkbox de seleção rápida de Freguesia inteira -->
                     <input type="checkbox" ${isAllOwned ? 'checked' : ''} class="freg-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
                     <span class="font-bold text-gray-700 text-xs">${freguesiaName}</span>
                 </div>
@@ -168,10 +169,11 @@ export function renderGeographicTree() {
             const label = document.createElement('label');
 
             if (motoristaDono && motoristaDono.id !== activeDriver.id) {
-                // Se a localidade já estiver sob a responsabilidade de outro motorista
-                label.className = "flex items-center justify-between p-2 rounded bg-gray-100/50 text-gray-400 cursor-not-allowed select-none text-[11px] border border-transparent";
+                // NOVO DESIGN: Se a localidade já estiver sob a responsabilidade de outro motorista (Adicionado Cadeado Vermelho, Opacidade de bloqueio e fundo tátil de aviso)
+                label.className = "flex items-center justify-between p-2 rounded bg-red-50/20 text-gray-400 cursor-not-allowed select-none text-[11px] border border-red-100/10 opacity-70";
                 label.innerHTML = `
                     <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-lock text-red-400 text-[10px] animate-none"></i>
                         <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-3.5 h-3.5 cursor-not-allowed">
                         <span class="font-bold text-gray-400 line-through">${locName}</span>
                     </div>
