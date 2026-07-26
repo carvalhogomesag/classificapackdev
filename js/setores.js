@@ -4,6 +4,7 @@
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
  *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
+ *      Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 550 metros.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -81,7 +82,7 @@ function sincronizarPersistencia() {
 }
 
 // ==========================================
-// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
+// GEOCÓDIGO DETERMINÍSTICO SÍNCRONO (NUNCA GERA REDREWS ASSÍNCRONOS CONCORRENTES!)
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -181,7 +182,7 @@ function desenharBricksNoMapa() {
                 const [freg, loc] = id.split('|');
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
 
-                // Círculo Translúcido de Atribuição (Efeito Nuvem de Calor)
+                // Círculo Translúcido de Atribuição (NOVO: Raio reduzido a metade, fixado em exactamente 550 metros!)
                 const circle = new google.maps.Circle({
                     strokeColor: drv.color,
                     strokeOpacity: 0.6,
@@ -190,11 +191,11 @@ function desenharBricksNoMapa() {
                     fillOpacity: 0.2, // Visual nebuloso ultra-agradável
                     map: dashboardMap,
                     center: coords,
-                    radius: 1100 // Raio de cobertura de 1.1 km por nuvem
+                    radius: 550 // Reduzido de 1100m para 550m
                 });
                 dashboardOverlays.push(circle);
 
-                // NOVO: Ouvinte de passagem de rato (Hover) sobre o círculo para mostrar balão explicativo instantâneo
+                // Ouvinte de passagem de rato (Hover) sobre o círculo para mostrar balão explicativo instantâneo
                 circle.addListener('mouseover', () => {
                     if (dashboardInfoWindow) {
                         dashboardInfoWindow.setContent(`
@@ -419,7 +420,7 @@ export function renderGeographicTree() {
                     sincronizarPersistencia();
                     renderDriversForAttribution(); // Para atualizar a contagem rápida esquerda
                     renderGeographicTree(); // Recarrega os estados mantendo as pastas abertas
-                    desenharBricksNoMapa(); // Atualiza reativamente as nuvens de calor no mapa de forma síncrona
+                    desenharBricksNoMapa(); // Updates map and circles instantly
                 });
             }
 
