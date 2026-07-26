@@ -3,7 +3,7 @@
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
- *      Desenha e atualiza nuvens de calor reativas no mapa geral do gestor com georreferenciação exata de localidades e cache local.
+ *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura e cache local.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -80,18 +80,17 @@ function sincronizarPersistencia() {
 }
 
 // ==========================================
-// GEOCÓDIGO DETERMINÍSTICO E RECUPERAÇÃO EM SEGUNDO PLANO (A COORDENADA EXATA DA LOCALIDADE!)
+// GEOCÓDIGO DETERMINÍSTICO SÍNCRONO (NUNCA GERA REDREWS ASSÍNCRONOS CONCORRENTES!)
 // ==========================================
-function obterCoordenadaPrecisaBrick(freguesia, localidade, callback) {
+function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
 
     // 1. Devolve instantaneamente se já estiver na cache local do dispositivo
     if (brickCoordsCache[brickId]) {
-        callback(brickCoordsCache[brickId]);
-        return;
+        return brickCoordsCache[brickId];
     }
 
-    // 2. Fallback temporário (centroide de freguesia com desvio inteligente) para evitar ecrã vazio
+    // 2. Fallback síncrono ultra-rápido (centroide de freguesia com desvio inteligente) para evitar lag
     const base = FREGUESIA_COORDS[freguesia] || { lat: 38.9376, lng: -9.3276 };
     let hash = 0;
     for (let i = 0; i < localidade.length; i++) {
@@ -100,13 +99,19 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade, callback) {
     const latOffset = ((hash % 100) / 10000) - 0.005;
     const lngOffset = (((hash >> 8) % 100) / 10000) - 0.005;
 
-    const fallbackCoords = {
+    return {
         lat: base.lat + latOffset,
         lng: base.lng + lngOffset
     };
-    callback(fallbackCoords);
+}
 
-    // 3. Pesquisa silenciosa no Google Geocoding (Executada apenas 1 vez por Brick, poupando a vossa quota da Google!)
+// ==========================================
+// GEOCÓDIGO SOB PROCURA (ACIONADO EXCLUSIVAMENTE SOB PROCURA/INTERAÇÃO TÁTIL)
+// ==========================================
+function geocodificarBrickSobProcura(freguesia, localidade) {
+    const brickId = `${freguesia}|${localidade}`;
+    if (brickCoordsCache[brickId]) return; // Evita gastos se já estiver na cache
+
     if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
         const geocoder = new google.maps.Geocoder();
         const cleanFregName = freguesia.replace(/\s+MFR$/i, "");
@@ -115,13 +120,10 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade, callback) {
         geocoder.geocode({ address: queryAddress }, (results, status) => {
             if (status === "OK" && results[0]) {
                 const loc = results[0].geometry.location;
-                const preciseCoords = { lat: loc.lat(), lng: loc.lng() };
-
-                // Atualiza a cache física e RAM
-                brickCoordsCache[brickId] = preciseCoords;
+                brickCoordsCache[brickId] = { lat: loc.lat(), lng: loc.lng() };
                 salvarCacheCoordenadas();
 
-                // Redesenha o mapa para fazer o "snap" reativo do círculo para o vilarejo exato
+                // Redesenha reativamente o mapa apenas após o sucesso, movendo o circulo para o local real
                 desenharBricksNoMapa();
             }
         });
@@ -156,48 +158,46 @@ function inicializarMapaBricksDashboard() {
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
 
-    // Limpa desenhos e marcas antigas do mapa
+    // Limpa desenhos e marcas antigas do mapa de forma síncrona
     dashboardOverlays.forEach(overlay => overlay.setMap(null));
     dashboardOverlays = [];
 
-    // Mapeamento em tempo real
+    // Mapeamento síncrono e ultra-estável
     window.drivers.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
             if (id.includes('|')) {
                 const [freg, loc] = id.split('|');
-                
-                // Dispara a leitura da coordenada precisa (completamente tátil e snap reativo)
-                obterCoordenadaPrecisaBrick(freg, loc, (coords) => {
-                    // Círculo Translúcido de Atribuição (Efeito Nuvem de Calor)
-                    const circle = new google.maps.Circle({
-                        strokeColor: drv.color,
-                        strokeOpacity: 0.6,
-                        strokeWeight: 1,
-                        fillColor: drv.color,
-                        fillOpacity: 0.2, // Visual nebuloso ultra-agradável
-                        map: dashboardMap,
-                        center: coords,
-                        radius: 1100 // Raio de cobertura de 1.1 km por nuvem
-                    });
-                    dashboardOverlays.push(circle);
+                const coords = obterCoordenadaPrecisaBrick(freg, loc);
 
-                    // Pequeno ponto de ancoragem no centro da nuvem
-                    const marker = new google.maps.Marker({
-                        position: coords,
-                        map: dashboardMap,
-                        icon: {
-                            path: google.maps.SymbolPath.CIRCLE,
-                            scale: 4,
-                            fillColor: drv.color,
-                            fillOpacity: 0.9,
-                            strokeWeight: 1,
-                            strokeColor: "#FFFFFF"
-                        },
-                        title: `${freg} - ${loc} (${drv.name})`
-                    });
-                    dashboardOverlays.push(marker);
+                // Círculo Translúcido de Atribuição (Efeito Nuvem de Calor)
+                const circle = new google.maps.Circle({
+                    strokeColor: drv.color,
+                    strokeOpacity: 0.6,
+                    strokeWeight: 1,
+                    fillColor: drv.color,
+                    fillOpacity: 0.2, // Visual nebuloso ultra-agradável
+                    map: dashboardMap,
+                    center: coords,
+                    radius: 1100 // Raio de cobertura de 1.1 km por nuvem
                 });
+                dashboardOverlays.push(circle);
+
+                // Pequeno ponto de ancoragem no centro da nuvem
+                const marker = new google.maps.Marker({
+                    position: coords,
+                    map: dashboardMap,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 4,
+                        fillColor: drv.color,
+                        fillOpacity: 0.9,
+                        strokeWeight: 1,
+                        strokeColor: "#FFFFFF"
+                    },
+                    title: `${freg} - ${loc} (${drv.name})`
+                });
+                dashboardOverlays.push(marker);
             }
         });
     });
@@ -375,6 +375,9 @@ export function renderGeographicTree() {
 
                     if (e.target.checked) {
                         activeDriver.brickIds.push(brickId);
+                        
+                        // NOVO: Geocodifica sob procura apenas a localidade interada, evitando sobrecarga
+                        geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
                         activeDriver.brickIds = activeDriver.brickIds.filter(id => id !== brickId);
                     }
@@ -382,7 +385,7 @@ export function renderGeographicTree() {
                     sincronizarPersistencia();
                     renderDriversForAttribution(); // Atualiza as contagens no painel esquerdo
                     renderGeographicTree(); // Recarrega os estados mantendo as pastas abertas
-                    desenharBricksNoMapa(); // Atualiza reativamente as nuvens de calor no mapa!
+                    desenharBricksNoMapa(); // Atualiza reativamente as nuvens de calor no mapa de forma síncrona
                 });
             }
 
@@ -397,6 +400,8 @@ export function renderGeographicTree() {
                     activeDriver.brickIds = [];
                 }
 
+                let delayPacing = 0; // Atraso progressivo para evitar over limit
+
                 allLocs.forEach(locName => {
                     const brickId = `${freguesiaName}|${locName}`;
                     const motoristaDono = localidadeParaMotorista.get(brickId);
@@ -406,6 +411,12 @@ export function renderGeographicTree() {
                         // Associa em lote apenas as localidades que estão realmente livres
                         if (!isOwnedByOther && !activeDriver.brickIds.includes(brickId)) {
                             activeDriver.brickIds.push(brickId);
+
+                            // Geocodifica com compassamento de 300ms entre localidades para respeitar o Google
+                            setTimeout(() => {
+                                geocodificarBrickSobProcura(freguesiaName, locName);
+                            }, delayPacing);
+                            delayPacing += 300;
                         }
                     } else {
                         // Remove todas as localidades desta freguesia que pertenciam a este motorista
@@ -416,7 +427,7 @@ export function renderGeographicTree() {
                 sincronizarPersistencia();
                 renderDriversForAttribution();
                 renderGeographicTree();
-                desenharBricksNoMapa(); // Atualiza em lote reativo as nuvens de calor no mapa!
+                desenharBricksNoMapa(); // Atualiza em lote de forma síncrona estável
             });
         }
 
@@ -450,6 +461,6 @@ window.renderizarSetoresUI = () => {
     // Renderiza a árvore de Mafra reativa
     renderGeographicTree();
 
-    // Inicializa e redesenha o mapa geral de Bricks com as nuvens de calor em tempo real
+    // Inicializa e redesenha o mapa de forma síncrona estável
     setTimeout(inicializarMapaBricksDashboard, 150);
 };
