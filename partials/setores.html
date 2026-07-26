@@ -1,17 +1,28 @@
 <!--
   setores.html
   Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks (Localidades) aos Motoristas.
-       Suporta layout adaptável em duas colunas paralelas (split-pane) em ecrãs grandes de PC ou Tablet.
+       Suporta mapa interativo de distribuição de nuvens de calor e layout em duas colunas paralelas (split-pane) em ecrãs grandes de PC ou Tablet.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
 
 <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
     
+    <!-- NOVO ELEMENTO VISUAL: MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
+        <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
+            <i class="fa-solid fa-map-location-dot text-blue-600"></i>
+            <span>Visão do Gestor: Distribuição Geográfica de Bricks (Estantes)</span>
+        </h3>
+        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+            <div id="map-dashboard-bricks" class="w-full h-80 bg-gray-50"></div>
+        </div>
+    </div>
+
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
-        <h2 class="text-xl font-bold text-gray-800 flex items-center space-x-2">
+        <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
             <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
-            <span>Atribuição de Bricks (Localidades)</span>
+            <span>Painel de Atribuição Direta</span>
         </h2>
         <p class="text-xs text-gray-500 leading-relaxed">
             Selecione um motorista na lista à esquerda (ou topo) e assinale na árvore à direita as localidades que pretende entregar a essa estante de arrumação.

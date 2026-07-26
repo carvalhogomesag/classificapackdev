@@ -3,6 +3,7 @@
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
+ *      Desenha e atualiza nuvens de calor reativas no mapa geral do gestor a cada alteração.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -15,6 +16,31 @@ let motoristaAtivoId = null;
 
 // Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
 let freguesiasExpandidas = new Set();
+
+// Instâncias internas seguras do mapa do gestor
+let dashboardMap = null;
+let dashboardOverlays = [];
+
+// Coordenadas centrais estáticas aproximadas das Freguesias de Mafra para desenho de nuvens de calor
+const FREGUESIA_COORDS = {
+    "AZUEIRA": { lat: 38.9900, lng: -9.2500 },
+    "CARVOEIRA MFR": { lat: 38.9300, lng: -9.4100 },
+    "CHELEIROS": { lat: 38.8894, lng: -9.3283 },
+    "ENCARNAÇÃO": { lat: 39.0200, lng: -9.3800 },
+    "ENXARA DO BISPO": { lat: 38.9800, lng: -9.2300 },
+    "ERICEIRA": { lat: 38.9628, lng: -9.4156 },
+    "GRADIL": { lat: 38.9690, lng: -9.2840 },
+    "IGREJA NOVA MFR": { lat: 38.9100, lng: -9.3400 },
+    "MAFRA": { lat: 38.9376, lng: -9.3276 },
+    "MALVEIRA": { lat: 38.9321, lng: -9.2578 },
+    "MILHARADO": { lat: 38.9400, lng: -9.2000 },
+    "SANTO ESTEVÃO DAS GALÉS": { lat: 38.8950, lng: -9.2450 },
+    "SANTO ISIDORO MFR": { lat: 38.9900, lng: -9.3800 },
+    "SOBRAL DA ABELHEIRA": { lat: 39.0100, lng: -9.2900 },
+    "SÃO MIGUEL DE ALCAINÇA": { lat: 38.9400, lng: -9.2900 },
+    "VENDA DO PINHEIRO": { lat: 38.9236, lng: -9.2318 },
+    "VILA FRANCA DO ROSÁRIO": { lat: 38.9700, lng: -9.2500 }
+};
 
 // =========================================================================
 // FUNÇÃO INTERNA AUXILIAR DE PERSISTÊNCIA
@@ -30,6 +56,100 @@ function sincronizarPersistencia() {
         window.dataRotaSelecionada, 
         window.rotaIniciada
     );
+}
+
+// ==========================================
+// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
+// ==========================================
+function obterCoordenadasBrick(freguesia, localidade) {
+    const base = FREGUESIA_COORDS[freguesia] || { lat: 38.9376, lng: -9.3276 };
+    
+    // Algoritmo matemático simples para gerar deslocamento único e fixado para cada localidade
+    let hash = 0;
+    for (let i = 0; i < localidade.length; i++) {
+        hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    
+    const latOffset = ((hash % 100) / 10000) - 0.005; // Desvio tátil leve no mapa (~300 metros)
+    const lngOffset = (((hash >> 8) % 100) / 10000) - 0.005;
+
+    return {
+        lat: base.lat + latOffset,
+        lng: base.lng + lngOffset
+    };
+}
+
+// =========================================================================
+// INICIALIZAÇÃO DO MAPA DENTAL DO GESTOR
+// =========================================================================
+function inicializarMapaBricksDashboard() {
+    const mapEl = document.getElementById('map-dashboard-bricks');
+    if (!mapEl || typeof google === 'undefined') return;
+
+    if (!dashboardMap) {
+        dashboardMap = new google.maps.Map(mapEl, {
+            zoom: 11,
+            center: { lat: 38.9500, lng: -9.3000 }, // Centralizado no concelho de Mafra
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false
+        });
+    } else {
+        google.maps.event.trigger(dashboardMap, 'resize');
+    }
+
+    desenharBricksNoMapa();
+}
+
+// ==========================================
+// DESENHAR NUVENS DE COR DE CADA MOTORISTA NO MAPA GERAL
+// ==========================================
+function desenharBricksNoMapa() {
+    if (!dashboardMap) return;
+
+    // Limpa desenhos e marcas antigas do mapa
+    dashboardOverlays.forEach(overlay => overlay.setMap(null));
+    dashboardOverlays = [];
+
+    // Mapeamento em tempo real
+    window.drivers.forEach(drv => {
+        const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
+        bIds.forEach(id => {
+            if (id.includes('|')) {
+                const [freg, loc] = id.split('|');
+                const coords = obterCoordenadasBrick(freg, loc);
+
+                // Círculo Translúcido de Atribuição (Efeito Nuvem de Calor)
+                const circle = new google.maps.Circle({
+                    strokeColor: drv.color,
+                    strokeOpacity: 0.6,
+                    strokeWeight: 1,
+                    fillColor: drv.color,
+                    fillOpacity: 0.2, // Visual nebuloso ultra-agradável
+                    map: dashboardMap,
+                    center: coords,
+                    radius: 1300 // Raio de cobertura de 1.3 km por nuvem
+                });
+                dashboardOverlays.push(circle);
+
+                // Pequeno ponto de ancoragem no centro da nuvem
+                const marker = new google.maps.Marker({
+                    position: coords,
+                    map: dashboardMap,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 4,
+                        fillColor: drv.color,
+                        fillOpacity: 0.9,
+                        strokeWeight: 1,
+                        strokeColor: "#FFFFFF"
+                    },
+                    title: `${freg} - ${loc} (${drv.name})`
+                });
+                dashboardOverlays.push(marker);
+            }
+        });
+    });
 }
 
 // =========================================================================
@@ -169,7 +289,7 @@ export function renderGeographicTree() {
             const label = document.createElement('label');
 
             if (motoristaDono && motoristaDono.id !== activeDriver.id) {
-                // NOVO DESIGN: Se a localidade já estiver sob a responsabilidade de outro motorista (Adicionado Cadeado Vermelho, Opacidade de bloqueio e fundo tátil de aviso)
+                // Se a localidade já estiver sob a responsabilidade de outro motorista (Adicionado Cadeado Vermelho, Opacidade de bloqueio e fundo tátil de aviso)
                 label.className = "flex items-center justify-between p-2 rounded bg-red-50/20 text-gray-400 cursor-not-allowed select-none text-[11px] border border-red-100/10 opacity-70";
                 label.innerHTML = `
                     <div class="flex items-center space-x-2">
@@ -211,6 +331,7 @@ export function renderGeographicTree() {
                     sincronizarPersistencia();
                     renderDriversForAttribution(); // Atualiza as contagens no painel esquerdo
                     renderGeographicTree(); // Recarrega os estados mantendo as pastas abertas
+                    desenharBricksNoMapa(); // Atualiza reativamente as nuvens de calor no mapa!
                 });
             }
 
@@ -244,6 +365,7 @@ export function renderGeographicTree() {
                 sincronizarPersistencia();
                 renderDriversForAttribution();
                 renderGeographicTree();
+                desenharBricksNoMapa(); // Atualiza em lote reativo as nuvens de calor no mapa!
             });
         }
 
@@ -276,4 +398,7 @@ window.renderizarSetoresUI = () => {
 
     // Renderiza a árvore de Mafra reativa
     renderGeographicTree();
+
+    // Inicializa e redesenha o mapa geral de Bricks com as nuvens de calor em tempo real
+    setTimeout(inicializarMapaBricksDashboard, 150);
 };
