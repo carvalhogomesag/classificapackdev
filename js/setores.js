@@ -3,7 +3,7 @@
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
- *      Desenha e atualiza nuvens de calor reativas no mapa geral do gestor a cada alteração.
+ *      Desenha e atualiza nuvens de calor reativas no mapa geral do gestor com georreferenciação exata de localidades e cache local.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -21,7 +21,28 @@ let freguesiasExpandidas = new Set();
 let dashboardMap = null;
 let dashboardOverlays = [];
 
-// Coordenadas centrais estáticas aproximadas das Freguesias de Mafra para desenho de nuvens de calor
+// Cache local em memória RAM das coordenadas já geocodificadas para evitar chamadas redundantes ao Google
+let brickCoordsCache = {};
+
+// Carrega as coordenadas anteriormente guardadas do armazenamento persistente ao arrancar
+try {
+    const cached = localStorage.getItem('cp_brick_coords');
+    if (cached) {
+        brickCoordsCache = JSON.parse(cached);
+    }
+} catch (e) {
+    console.warn("[PWA] Erro ao carregar cache local de coordenadas de Bricks:", e);
+}
+
+function salvarCacheCoordenadas() {
+    try {
+        localStorage.setItem('cp_brick_coords', JSON.stringify(brickCoordsCache));
+    } catch (e) {
+        console.warn("[PWA] Erro ao persistir cache local de coordenadas de Bricks:", e);
+    }
+}
+
+// Coordenadas centrais aproximadas das Freguesias de Mafra (funcionam como Fallback temporário)
 const FREGUESIA_COORDS = {
     "AZUEIRA": { lat: 38.9900, lng: -9.2500 },
     "CARVOEIRA MFR": { lat: 38.9300, lng: -9.4100 },
@@ -59,24 +80,52 @@ function sincronizarPersistencia() {
 }
 
 // ==========================================
-// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
+// GEOCÓDIGO DETERMINÍSTICO E RECUPERAÇÃO EM SEGUNDO PLANO (A COORDENADA EXATA DA LOCALIDADE!)
 // ==========================================
-function obterCoordenadasBrick(freguesia, localidade) {
+function obterCoordenadaPrecisaBrick(freguesia, localidade, callback) {
+    const brickId = `${freguesia}|${localidade}`;
+
+    // 1. Devolve instantaneamente se já estiver na cache local do dispositivo
+    if (brickCoordsCache[brickId]) {
+        callback(brickCoordsCache[brickId]);
+        return;
+    }
+
+    // 2. Fallback temporário (centroide de freguesia com desvio inteligente) para evitar ecrã vazio
     const base = FREGUESIA_COORDS[freguesia] || { lat: 38.9376, lng: -9.3276 };
-    
-    // Algoritmo matemático simples para gerar deslocamento único e fixado para cada localidade
     let hash = 0;
     for (let i = 0; i < localidade.length; i++) {
         hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
     }
-    
-    const latOffset = ((hash % 100) / 10000) - 0.005; // Desvio tátil leve no mapa (~300 metros)
+    const latOffset = ((hash % 100) / 10000) - 0.005;
     const lngOffset = (((hash >> 8) % 100) / 10000) - 0.005;
 
-    return {
+    const fallbackCoords = {
         lat: base.lat + latOffset,
         lng: base.lng + lngOffset
     };
+    callback(fallbackCoords);
+
+    // 3. Pesquisa silenciosa no Google Geocoding (Executada apenas 1 vez por Brick, poupando a vossa quota da Google!)
+    if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+        const geocoder = new google.maps.Geocoder();
+        const cleanFregName = freguesia.replace(/\s+MFR$/i, "");
+        const queryAddress = `${localidade}, ${cleanFregName}, Mafra, Portugal`;
+
+        geocoder.geocode({ address: queryAddress }, (results, status) => {
+            if (status === "OK" && results[0]) {
+                const loc = results[0].geometry.location;
+                const preciseCoords = { lat: loc.lat(), lng: loc.lng() };
+
+                // Atualiza a cache física e RAM
+                brickCoordsCache[brickId] = preciseCoords;
+                salvarCacheCoordenadas();
+
+                // Redesenha o mapa para fazer o "snap" reativo do círculo para o vilarejo exato
+                desenharBricksNoMapa();
+            }
+        });
+    }
 }
 
 // =========================================================================
@@ -117,36 +166,38 @@ function desenharBricksNoMapa() {
         bIds.forEach(id => {
             if (id.includes('|')) {
                 const [freg, loc] = id.split('|');
-                const coords = obterCoordenadasBrick(freg, loc);
-
-                // Círculo Translúcido de Atribuição (Efeito Nuvem de Calor)
-                const circle = new google.maps.Circle({
-                    strokeColor: drv.color,
-                    strokeOpacity: 0.6,
-                    strokeWeight: 1,
-                    fillColor: drv.color,
-                    fillOpacity: 0.2, // Visual nebuloso ultra-agradável
-                    map: dashboardMap,
-                    center: coords,
-                    radius: 1300 // Raio de cobertura de 1.3 km por nuvem
-                });
-                dashboardOverlays.push(circle);
-
-                // Pequeno ponto de ancoragem no centro da nuvem
-                const marker = new google.maps.Marker({
-                    position: coords,
-                    map: dashboardMap,
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 4,
-                        fillColor: drv.color,
-                        fillOpacity: 0.9,
+                
+                // Dispara a leitura da coordenada precisa (completamente tátil e snap reativo)
+                obterCoordenadaPrecisaBrick(freg, loc, (coords) => {
+                    // Círculo Translúcido de Atribuição (Efeito Nuvem de Calor)
+                    const circle = new google.maps.Circle({
+                        strokeColor: drv.color,
+                        strokeOpacity: 0.6,
                         strokeWeight: 1,
-                        strokeColor: "#FFFFFF"
-                    },
-                    title: `${freg} - ${loc} (${drv.name})`
+                        fillColor: drv.color,
+                        fillOpacity: 0.2, // Visual nebuloso ultra-agradável
+                        map: dashboardMap,
+                        center: coords,
+                        radius: 1100 // Raio de cobertura de 1.1 km por nuvem
+                    });
+                    dashboardOverlays.push(circle);
+
+                    // Pequeno ponto de ancoragem no centro da nuvem
+                    const marker = new google.maps.Marker({
+                        position: coords,
+                        map: dashboardMap,
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 4,
+                            fillColor: drv.color,
+                            fillOpacity: 0.9,
+                            strokeWeight: 1,
+                            strokeColor: "#FFFFFF"
+                        },
+                        title: `${freg} - ${loc} (${drv.name})`
+                    });
+                    dashboardOverlays.push(marker);
                 });
-                dashboardOverlays.push(marker);
             }
         });
     });
