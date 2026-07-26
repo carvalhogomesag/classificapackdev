@@ -1,7 +1,7 @@
 /**
  * triagem.js
  * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick (Localidade) designados para o código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
- *      Implementa avisos visuais explícitos de confirmação para códigos ausentes na base de dados de Mafra.
+ *      Implementa algoritmo de dupla passagem para priorizar localidades específicas sobre as capitais genéricas homónimas.
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js
  */
@@ -31,20 +31,35 @@ function sincronizarPersistencia() {
     );
 }
 
+// Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
+function isCatchAllLocality(freguesia, localidade) {
+    const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
+    const cleanLoc = localidade.toLowerCase();
+    if (cleanLoc === cleanFreg) return true;
+    // Exceção de normalização: Alcainça é a catch-all de São Miguel de Alcainça
+    if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
+    return false;
+}
+
 // =========================================================================
-// ALGORITMO DE RESOLUÇÃO GEOGRÁFICA DE BRICK E MOTORISTA
+// ALGORITMO DE RESOLUÇÃO GEOGRÁFICA DE BRICK E MOTORISTA (COM PRIORIZAÇÃO)
 // =========================================================================
 export function findBrickAndDriverForZip(zip, drivers) {
     if (!zip || !drivers) return { brickId: null, brickName: null, driver: null };
-    const normalizedZip = zip.trim(); // Esperado: "2665-018"
+    const normalizedZip = zip.trim(); // Esperado: "2640-401"
     const concelho = "MAFRA";
 
     let matchedFreguesia = null;
     let matchedLocalidade = null;
 
-    // Varre as freguesias e localidades de Mafra para encontrar o Código Postal correspondente
+    // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas (ignorando as catch-all genéricas)
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
+            // Se for localidade catch-all (ex: Mafra dentro da freguesia MAFRA), ignora nesta primeira passagem
+            if (isCatchAllLocality(freguesia, localidade)) {
+                continue;
+            }
+
             if (cpList.includes(normalizedZip)) {
                 matchedFreguesia = freguesia;
                 matchedLocalidade = localidade;
@@ -52,6 +67,22 @@ export function findBrickAndDriverForZip(zip, drivers) {
             }
         }
         if (matchedFreguesia) break;
+    }
+
+    // PASSAGEM 2: Fallback - Se não encontrou em nenhuma específica, procura nas genéricas (catch-all)
+    if (!matchedFreguesia) {
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+            for (const [localidade, cpList] of Object.entries(localidades)) {
+                if (isCatchAllLocality(freguesia, localidade)) {
+                    if (cpList.includes(normalizedZip)) {
+                        matchedFreguesia = freguesia;
+                        matchedLocalidade = localidade;
+                        break;
+                    }
+                }
+            }
+            if (matchedFreguesia) break;
+        }
     }
 
     if (!matchedFreguesia) {
@@ -163,7 +194,7 @@ export function setupTriagemLogic() {
         if (modalResultado) modalResultado.classList.add('hidden');
         window.lastAnalysisResult = null;
         
-        // NOVO: Limpa visor ao fechar (cancelamento no clique fora do modal)
+        // Limpa visor ao fechar (cancelamento no clique fora do modal)
         window.currentInput = "";
         const visorCodigo = document.getElementById('visor-codigo');
         if (visorCodigo) {
@@ -188,7 +219,7 @@ export function setupTriagemLogic() {
 
             const formattedZip = `${cleanDigits.substring(0, 4)}-${cleanDigits.substring(4, 7)}`;
             
-            // NOVO: Resolução dinâmica de Brick (Localidade) e Motorista
+            // Resolução dinâmica priorizada de Brick (Localidade) e Motorista
             const { brickId, brickName, driver } = findBrickAndDriverForZip(formattedZip, window.drivers);
             
             const resultadoCodigo = document.getElementById('resultado-codigo');
@@ -217,9 +248,9 @@ export function setupTriagemLogic() {
             }
 
             if (!brickId) {
-                // NOVO: Código Postal NÃO encontrado na base de dados de Mafra (Aviso de Alerta)
+                // Código Postal NÃO encontrado na base de dados de Mafra (Aviso de Alerta)
                 if (resultadoMotorista) resultadoMotorista.textContent = "CP Não Encontrado";
-                if (resultadoBrickLabel) resultadoBrickLabel.textContent = "Verifique / Confirme o Código Postal";
+                if (resultadoBrickLabel) resultadoBrickLabel.textContent = "Confirmar Código Postal";
                 if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#EA580C"; // Cor Laranja de Alerta
                 
                 window.lastAnalysisResult = { 
@@ -300,7 +331,7 @@ export function setupTriagemLogic() {
 
             modalResultado.classList.add('hidden');
             
-            // NOVO: Limpa imediatamente o visor do teclado virtual ao confirmar
+            // Limpa imediatamente o visor do teclado virtual ao confirmar
             window.currentInput = "";
             const visorCodigo = document.getElementById('visor-codigo');
             if (visorCodigo) {
