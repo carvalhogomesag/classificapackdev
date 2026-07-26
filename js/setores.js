@@ -3,7 +3,7 @@
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
- *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura e cache local.
+ *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
  */
@@ -17,9 +17,10 @@ let motoristaAtivoId = null;
 // Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
 let freguesiasExpandidas = new Set();
 
-// Instâncias internas seguras do mapa do gestor
+// Instâncias internas seguras do mapa do gestor e balão de informação
 let dashboardMap = null;
 let dashboardOverlays = [];
+let dashboardInfoWindow = null; // Instância única partilhada para balão de hover
 
 // Cache local em memória RAM das coordenadas já geocodificadas para evitar chamadas redundantes ao Google
 let brickCoordsCache = {};
@@ -80,7 +81,7 @@ function sincronizarPersistencia() {
 }
 
 // ==========================================
-// GEOCÓDIGO DETERMINÍSTICO SÍNCRONO (NUNCA GERA REDREWS ASSÍNCRONOS CONCORRENTES!)
+// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -145,6 +146,11 @@ function inicializarMapaBricksDashboard() {
             streetViewControl: false,
             fullscreenControl: false
         });
+
+        // Inicializa o balão partilhado de Hover
+        dashboardInfoWindow = new google.maps.InfoWindow({
+            disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
+        });
     } else {
         google.maps.event.trigger(dashboardMap, 'resize');
     }
@@ -157,6 +163,11 @@ function inicializarMapaBricksDashboard() {
 // ==========================================
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
+
+    // Fecha o balão se estiver aberto para evitar órfãos em re-desenhos
+    if (dashboardInfoWindow) {
+        dashboardInfoWindow.close();
+    }
 
     // Limpa desenhos e marcas antigas do mapa de forma síncrona
     dashboardOverlays.forEach(overlay => overlay.setMap(null));
@@ -182,6 +193,29 @@ function desenharBricksNoMapa() {
                     radius: 1100 // Raio de cobertura de 1.1 km por nuvem
                 });
                 dashboardOverlays.push(circle);
+
+                // NOVO: Ouvinte de passagem de rato (Hover) sobre o círculo para mostrar balão explicativo instantâneo
+                circle.addListener('mouseover', () => {
+                    if (dashboardInfoWindow) {
+                        dashboardInfoWindow.setContent(`
+                            <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 2px 4px; line-height: 1.4;">
+                                <div style="font-weight: bold; color: #1F2937; margin-bottom: 2px;">${freg} - ${loc}</div>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${drv.color};"></span>
+                                    <span style="color: ${drv.color}; font-weight: bold; font-size: 10px; text-transform: uppercase;">Estante de: ${drv.name}</span>
+                                </div>
+                            </div>
+                        `);
+                        dashboardInfoWindow.setPosition(coords);
+                        dashboardInfoWindow.open(dashboardMap);
+                    }
+                });
+
+                circle.addListener('mouseout', () => {
+                    if (dashboardInfoWindow) {
+                        dashboardInfoWindow.close();
+                    }
+                });
 
                 // Pequeno ponto de ancoragem no centro da nuvem
                 const marker = new google.maps.Marker({
@@ -376,14 +410,14 @@ export function renderGeographicTree() {
                     if (e.target.checked) {
                         activeDriver.brickIds.push(brickId);
                         
-                        // NOVO: Geocodifica sob procura apenas a localidade interada, evitando sobrecarga
+                        // Geocodifica sob procura apenas a localidade interada, evitando sobrecarga
                         geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
                         activeDriver.brickIds = activeDriver.brickIds.filter(id => id !== brickId);
                     }
 
                     sincronizarPersistencia();
-                    renderDriversForAttribution(); // Atualiza as contagens no painel esquerdo
+                    renderDriversForAttribution(); // Para atualizar a contagem rápida esquerda
                     renderGeographicTree(); // Recarrega os estados mantendo as pastas abertas
                     desenharBricksNoMapa(); // Atualiza reativamente as nuvens de calor no mapa de forma síncrona
                 });
