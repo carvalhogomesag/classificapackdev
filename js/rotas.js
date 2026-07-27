@@ -4,6 +4,7 @@
  *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
  *      atribui o Brick correspondente à localidade do pacote e apresenta etiquetas visuais de arrumação física.
  *      NOVO: Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
+ *      NOVO: Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js
  */
@@ -165,7 +166,7 @@ function resolveBrickForZip(zip, drivers) {
 }
 
 // ==========================================
-// NOVO ALGORITMO SÍNCRONO LOCAL DE CONTINGÊNCIA (VIZINHO MAIS PRÓXIMO)
+// ALGORITMO SÍNCRONO LOCAL DE CONTINGÊNCIA (VIZINHO MAIS PRÓXIMO)
 // ==========================================
 function calcularRotaVizinhoMaisProximoLocal() {
     if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
@@ -367,7 +368,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     try {
         // Envia as coordenadas para o endpoint dinâmico (Local ou Render)
-        const response = await fetch(`${API_BASE_URL}/api/optimize-route`, {
+        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -743,6 +744,11 @@ function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
+    // NOVO/CORRIGIDO: Evita a criação duplicada de instâncias no mesmo elemento do DOM! (Previne que o código postal anterior regresse)
+    if (inputMorada.dataset.autocompleteBound === "true") {
+        return;
+    }
+
     // Se o SDK do Google Maps ainda não terminou de carregar, tenta novamente brevemente
     if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
         setTimeout(inicializarAutocompleteMorada, 500);
@@ -762,6 +768,9 @@ function inicializarAutocompleteMorada() {
             bounds: limitesMafra,
             strictBounds: false // false prioriza geograficamente Mafra mas permite resultados próximos em caso de fronteira
         });
+
+        // Marca o elemento para evitar duplicações de instâncias concorrentes
+        inputMorada.dataset.autocompleteBound = "true";
 
         // Evento disparado quando o utilizador toca numa morada ou estabelecimento sugerido pela Google
         autocompleteInstancia.addListener('place_changed', () => {
