@@ -2,6 +2,7 @@
  * main.js
  * Faz: Atua como ponto de entrada (bootstrapper) principal da app. Carrega de forma assíncrona os partials HTML, importa e ativa o estado global, e inicializa as escutas de eventos e renderizações de todos os sub-módulos.
  *      NOVO: Escuta as mudanças de utilizador do Firebase Auth, valida permissões no Firestore e gere o overlay do formulário de login de forma segura.
+ *      NOVO: Inicia e pára escuta ativa do Firestore onSnapshot ao ligar e desligar sessão.
  * NÃO faz: Não executa diretamente lógica de dados, georreferenciação ou renderizadores de listas (delegação direta aos módulos importados).
  * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./firebase-init.js
  */
@@ -16,7 +17,7 @@ import { setupRotasLogic, setupModaisEdicao, setupVozLogic, sincronizarInterface
 import { setupPWAInstallationLogic } from './pwa.js';
 import { inicializarGoogleAutocompleteTriagem } from './maps.js';
 
-// NOVO: Importa instâncias seguras do Firebase para o arranque de sessão
+// Importa instâncias seguras do Firebase para o arranque de sessão
 import { auth, db } from './firebase-init.js';
 
 // ==========================================
@@ -27,6 +28,44 @@ const colorPalette = [
     "#7C3AED", "#DB2777", "#0891B2", "#D97706", 
     "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
 ];
+
+// Variável para guardar o cancelamento seguro da escuta em tempo real do Firebase
+let unsubDrivers = null;
+
+// ==========================================
+// NOVO: ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (onSnapshot)
+// ==========================================
+function escutarDriversEmTempoReal() {
+    if (unsubDrivers) {
+        unsubDrivers(); // Evita conexões duplicadas abertas
+    }
+
+    console.log("[FIREBASE] A iniciar escuta em tempo real de motoristas...");
+    unsubDrivers = db.collection('drivers').onSnapshot((querySnapshot) => {
+        const drivers = [];
+        querySnapshot.forEach((doc) => {
+            drivers.push(doc.data());
+        });
+
+        // Sincroniza em memória global
+        window.drivers = drivers;
+        console.log("[FIREBASE] Motoristas sincronizados em tempo real:", window.drivers.length);
+
+        // Grava no localStorage como cache secundário offline de salvaguarda
+        localStorage.setItem('cp_drivers', JSON.stringify(window.drivers));
+
+        // Redesenha instantaneamente todas as interfaces tátil
+        const listaMotoristas = document.getElementById('lista-motoristas');
+        if (listaMotoristas) {
+            renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
+        }
+        if (typeof window.renderizarSetoresUI === 'function') {
+            window.renderizarSetoresUI();
+        }
+    }, (error) => {
+        console.error("[FIREBASE] Erro ao escutar motoristas no Firestore:", error);
+    });
+}
 
 // =========================================================================
 // CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS (TEMPLATES HTML)
@@ -199,7 +238,7 @@ function setupResetLeituras() {
 }
 
 // =========================================================================
-// NOVO: SUBMISSÃO E ENTRADA DE SESSÃO DO FORMULÁRIO DE LOGIN CLOUD
+// ENTRADA DE SESSÃO DO FORMULÁRIO DE LOGIN CLOUD
 // =========================================================================
 function setupAuthForms() {
     const formLogin = document.getElementById('form-login');
@@ -247,7 +286,7 @@ function setupAuthForms() {
 }
 
 // ==========================================
-// NOVO: ESCUTADOR DE ALTERAÇÃO DE ESTADO DE AUTENTICAÇÃO E PERFIS DO FIRESTORE
+// ESCUTADOR DE ALTERAÇÃO DE ESTADO DE AUTENTICAÇÃO E PERFIS DO FIRESTORE
 // ==========================================
 function inicializarMonitorizacaoAuth() {
     auth.onAuthStateChanged(async (user) => {
@@ -256,6 +295,9 @@ function inicializarMonitorizacaoAuth() {
 
         if (user) {
             console.log("[AUTH] Utilizador autenticado:", user.email);
+
+            // NOVO: Liga o ouvinte em tempo real no Firestore para sincronizar motoristas de imediato!
+            escutarDriversEmTempoReal();
 
             // Carrega o documento do utilizador a partir da coleção 'users' no Firestore
             try {
@@ -279,6 +321,13 @@ function inicializarMonitorizacaoAuth() {
             if (btnLogout) btnLogout.classList.remove('hidden'); // Revela botão de logout
         } else {
             console.log("[AUTH] Nenhum utilizador ativo. A bloquear ecrã...");
+
+            // NOVO: Desliga o ouvinte em tempo real para poupar dados de internet ao terminar sessão
+            if (unsubDrivers) {
+                unsubDrivers();
+                unsubDrivers = null;
+            }
+
             if (modalLogin) modalLogin.classList.remove('hidden'); // Exibe obrigatoriamente ecrã de login
             if (btnLogout) btnLogout.classList.add('hidden'); // Oculta botão de logout
         }

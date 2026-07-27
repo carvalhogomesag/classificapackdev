@@ -5,12 +5,16 @@
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
  *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
  *      Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 550 metros.
+ *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
- * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
+ * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
 
 import { GEOGRAPHY } from './geografia-data.js';
 import { saveData } from './storage.js';
+
+// Importa a instância segura do Firestore
+import { db } from './firebase-init.js';
 
 // ID do motorista que está atualmente selecionado na interface para atribuição
 let motoristaAtivoId = null;
@@ -65,24 +69,8 @@ const FREGUESIA_COORDS = {
     "VILA FRANCA DO ROSÁRIO": { lat: 38.9700, lng: -9.2500 }
 };
 
-// =========================================================================
-// FUNÇÃO INTERNA AUXILIAR DE PERSISTÊNCIA
-// =========================================================================
-function sincronizarPersistencia() {
-    saveData(
-        window.drivers, 
-        [], // intervals obsoletos
-        window.assignments,
-        window.partidaLocalizacao,
-        window.moradasEntregas,
-        window.rotaOtimizada,
-        window.dataRotaSelecionada, 
-        window.rotaIniciada
-    );
-}
-
 // ==========================================
-// GEOCÓDIGO DETERMINÍSTICO SÍNCRONO (NUNCA GERA REDREWS ASSÍNCRONOS CONCORRENTES!)
+// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -401,33 +389,39 @@ export function renderGeographicTree() {
                     }
                 `;
 
-                // Guarda reativamente a alteração com um simples clique
+                // Guarda reativamente a alteração com um simples clique (GRAVAÇÃO DIRETA NO FIRESTORE!)
                 const cb = label.querySelector('.brick-checkbox');
                 cb.addEventListener('change', (e) => {
                     if (!Array.isArray(activeDriver.brickIds)) {
                         activeDriver.brickIds = [];
                     }
 
+                    let updatedBrickIds = [...activeDriver.brickIds];
                     if (e.target.checked) {
-                        activeDriver.brickIds.push(brickId);
+                        updatedBrickIds.push(brickId);
                         
                         // Geocodifica sob procura apenas a localidade interada, evitando sobrecarga
                         geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
-                        activeDriver.brickIds = activeDriver.brickIds.filter(id => id !== brickId);
+                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
                     }
 
-                    sincronizarPersistencia();
-                    renderDriversForAttribution(); // Para atualizar a contagem rápida esquerda
-                    renderGeographicTree(); // Recarrega os estados mantendo as pastas abertas
-                    desenharBricksNoMapa(); // Updates map and circles instantly
+                    // Grava diretamente no Firestore no documento do motorista correspondente
+                    db.collection('drivers').doc(activeDriver.id).update({
+                        brickIds: updatedBrickIds
+                    }).then(() => {
+                        console.log("[FIREBASE] Bricks do motorista sincronizados no Firestore.");
+                    }).catch((err) => {
+                        console.error("[FIREBASE] Erro ao sincronizar Bricks:", err);
+                        alert("Erro de ligação: Não foi possível guardar as alterações.");
+                    });
                 });
             }
 
             subContainer.appendChild(label);
         });
 
-        // Evento de alteração em lote de toda a Freguesia
+        // Evento de alteração em lote de toda a Freguesia (GRAVAÇÃO DIRETA NO FIRESTORE!)
         const fregCb = header.querySelector('.freg-checkbox');
         if (fregCb) {
             fregCb.addEventListener('change', (e) => {
@@ -435,6 +429,7 @@ export function renderGeographicTree() {
                     activeDriver.brickIds = [];
                 }
 
+                let updatedBrickIds = [...activeDriver.brickIds];
                 let delayPacing = 0; // Atraso progressivo para evitar over limit
 
                 allLocs.forEach(locName => {
@@ -444,8 +439,8 @@ export function renderGeographicTree() {
 
                     if (e.target.checked) {
                         // Associa em lote apenas as localidades que estão realmente livres
-                        if (!isOwnedByOther && !activeDriver.brickIds.includes(brickId)) {
-                            activeDriver.brickIds.push(brickId);
+                        if (!isOwnedByOther && !updatedBrickIds.includes(brickId)) {
+                            updatedBrickIds.push(brickId);
 
                             // Geocodifica com compassamento de 300ms entre localidades para respeitar o Google
                             setTimeout(() => {
@@ -455,14 +450,19 @@ export function renderGeographicTree() {
                         }
                     } else {
                         // Remove todas as localidades desta freguesia que pertenciam a este motorista
-                        activeDriver.brickIds = activeDriver.brickIds.filter(id => id !== brickId);
+                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
                     }
                 });
 
-                sincronizarPersistencia();
-                renderDriversForAttribution();
-                renderGeographicTree();
-                desenharBricksNoMapa(); // Atualiza em lote de forma síncrona estável
+                // Envia a lista atualizada de uma só vez para o Firestore
+                db.collection('drivers').doc(activeDriver.id).update({
+                    brickIds: updatedBrickIds
+                }).then(() => {
+                    console.log("[FIREBASE] Alterações de Bricks em lote sincronizadas no Firestore.");
+                }).catch((err) => {
+                    console.error("[FIREBASE] Erro ao sincronizar Bricks em lote:", err);
+                    alert("Erro de ligação: Não foi possível guardar as alterações.");
+                });
             });
         }
 

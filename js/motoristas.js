@@ -1,27 +1,11 @@
 /**
  * motoristas.js
- * Faz: Gere o registo, edição, eliminação, listagem e coloração dos motoristas ativos, adaptando para a contagem direta de Bricks associados.
+ * Faz: Gere o registo, edição, eliminação, listagem e coloração dos motoristas ativos, integrando diretamente as gravações no Cloud Firestore.
  * NÃO faz: Não gere a atribuição geográfica direta de Bricks (atribuídos no painel de Bricks).
- * Depende de: ./storage.js
+ * Depende de: ./firebase-init.js (para aceder ao banco de dados Firestore db)
  */
 
-import { saveData } from './storage.js';
-
-// =========================================================================
-// FUNÇÃO INTERNA AUXILIAR DE PERSISTÊNCIA
-// =========================================================================
-function sincronizarPersistencia() {
-    saveData(
-        window.drivers, 
-        [], // intervals obsoletos
-        window.assignments,
-        window.partidaLocalizacao,
-        window.moradasEntregas,
-        window.rotaOtimizada,
-        window.dataRotaSelecionada, 
-        window.rotaIniciada
-    );
-}
+import { db } from './firebase-init.js';
 
 // =========================================================================
 // RENDERIZAÇÃO DA LISTA DE MOTORISTAS ATIVOS
@@ -60,7 +44,7 @@ export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, e
 }
 
 // =========================================================================
-// SUBMISSÃO E EDIÇÃO DE MOTORISTA
+// SUBMISSÃO E EDIÇÃO DE MOTORISTA (GRAVAÇÃO DIRETA NO FIRESTORE!)
 // =========================================================================
 export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     e.preventDefault();
@@ -74,33 +58,42 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     const emEdicao = window.driverSendoEditado;
 
     if (emEdicao) {
-        const driverIndex = drivers.findIndex(d => d.id === emEdicao.id);
-        if (driverIndex !== -1) {
-            drivers[driverIndex].name = nome;
-            drivers[driverIndex].color = selectedColor;
-        }
+        // Atualiza o motorista no Firestore
+        db.collection('drivers').doc(emEdicao.id).update({
+            name: nome,
+            color: selectedColor
+        }).then(() => {
+            console.log("[FIREBASE] Motorista atualizado com sucesso no Firestore.");
+        }).catch((err) => {
+            console.error("[FIREBASE] Erro ao atualizar motorista:", err);
+            alert("Erro de ligação: Não foi possível atualizar o motorista.");
+        });
         window.driverSendoEditado = null;
     } else {
-        drivers.push({ 
-            id: 'd_' + Date.now(), 
+        // Insere o novo motorista no Firestore
+        const newId = 'd_' + Date.now();
+        db.collection('drivers').doc(newId).set({ 
+            id: newId, 
             name: nome, 
             color: selectedColor,
             brickIds: [] // Inicia uma lista de Bricks vazia para nova atribuição
+        }).then(() => {
+            console.log("[FIREBASE] Novo motorista inserido com sucesso no Firestore.");
+        }).catch((err) => {
+            console.error("[FIREBASE] Erro ao inserir motorista:", err);
+            alert("Erro de ligação: Não foi possível registar o motorista.");
         });
     }
-
-    sincronizarPersistencia();
     
     nomeInput.value = "";
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
     renderCallback();
-    alert(emEdicao ? 'Motorista atualizado com sucesso!' : 'Motorista registado com sucesso!');
 }
 
 // ==========================================
-// REGISTO DA ASSINATURA DA JANELA TÁTIL (NOVO)
+// REGISTO DA ASSINATURA DA JANELA TÁTIL
 // ==========================================
 window.renderizarMotoristasUI = () => {
     const listaMotoristas = document.getElementById('lista-motoristas');
@@ -158,18 +151,14 @@ window.cancelarEdicaoDriver = () => {
 
 window.deleteDriver = (id) => {
     if (confirm("Ao apagar este motorista, as suas contagens de pacotes também serão removidas. Confirmar?")) {
-        window.drivers = window.drivers.filter(d => d.id !== id);
-        window.assignments = window.assignments.filter(a => a.driverId !== id); 
-        sincronizarPersistencia();
-        
-        if (typeof window.renderizarMotoristasUI === 'function') {
-            window.renderizarMotoristasUI();
-        }
-        if (typeof window.renderizarSetoresUI === 'function') {
-            window.renderizarSetoresUI();
-        }
-        if (typeof window.atualizarSummaryUI === 'function') {
-            window.atualizarSummaryUI();
-        }
+        // Elimina o motorista do Firestore de forma síncrona
+        db.collection('drivers').doc(id).delete()
+            .then(() => {
+                console.log("[FIREBASE] Motorista eliminado no Firestore.");
+            })
+            .catch((err) => {
+                console.error("[FIREBASE] Erro ao eliminar motorista:", err);
+                alert("Erro de ligação: Não foi possível apagar o motorista.");
+            });
     }
 };
