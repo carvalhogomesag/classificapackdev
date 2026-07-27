@@ -5,6 +5,7 @@
  *      NOVO: Inicia e pára escuta ativa do Firestore onSnapshot ao ligar e desligar sessão.
  *      NOVO: Escuta em tempo real as leituras de triagem da data de hoje para manter contagens globais automáticas.
  *      NOVO: Sincroniza e herda a rota ativa em tempo real para o driver que iniciou sessão.
+ *      NOVO: Bloqueia e oculta reativamente a barra de navegação inferior global antes de iniciar sessão na nuvem.
  * NÃO faz: Não executa diretamente lógica de dados, georreferenciação ou renderizadores de listas (delegação direta aos módulos importados).
  * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./firebase-init.js
  */
@@ -125,7 +126,7 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaIniciada = data.rotaIniciada || false;
             console.log("[FIREBASE] Rota do condutor carregada com sucesso do Firestore.");
         } else {
-            console.log("[FIREBASE] Nenhuma rota ativa encontrada na nuvem. A iniciar limpo.");
+            console.log("[FIREBASE] Nenhuma rota activa encontrada na nuvem. A iniciar limpo.");
             window.partidaLocalizacao = null;
             window.moradasEntregas = [];
             window.rotaOtimizada = [];
@@ -373,12 +374,16 @@ function inicializarMonitorizacaoAuth() {
     auth.onAuthStateChanged(async (user) => {
         const modalLogin = document.getElementById('modal-login');
         const btnLogout = document.getElementById('btn-logout');
+        const navBarraInferior = document.getElementById('nav-barra-inferior');
 
         if (user) {
             console.log("[AUTH] Utilizador autenticado:", user.email);
             window.currentUserUid = user.uid; // Grava o UID na memória global de rotas
 
-            // Liga a sincronização de dados em nuvem em tempo real!
+            // Revela a barra de navegação inferior global ao iniciar sessão com sucesso!
+            if (navBarraInferior) navBarraInferior.classList.remove('hidden');
+
+            // Liga o ouvinte em tempo real no Firestore para sincronizar motoristas de imediato!
             escutarDriversEmTempoReal();
             escutarAssignmentsEmTempoReal();
             escutarRotaEmTempoReal(user.uid);
@@ -407,7 +412,10 @@ function inicializarMonitorizacaoAuth() {
             console.log("[AUTH] Nenhum utilizador ativo. A bloquear ecrã...");
             window.currentUserUid = null;
 
-            // Desliga todos os ouvintes em tempo real para poupar bateria e dados de internet ao sair
+            // Oculta a barra de navegação inferior global de forma reativa antes de iniciar sessão!
+            if (navBarraInferior) navBarraInferior.classList.add('hidden');
+
+            // Desliga todos os ouvintes em tempo real para poupar dados de internet ao terminar sessão
             if (unsubDrivers) {
                 unsubDrivers();
                 unsubDrivers = null;
