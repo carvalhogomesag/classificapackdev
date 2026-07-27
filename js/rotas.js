@@ -3,7 +3,8 @@
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
  *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
  *      atribui o Brick correspondente à localidade do pacote e apresenta etiquetas visuais de arrumação física.
- * NÃO faz: Não executa cálculos de linha reta locais (delegado à API remota da Google).
+ *      NOVO: Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
+ * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js
  */
 
@@ -99,8 +100,17 @@ export function setupVozLogic() {
     });
 }
 
+// Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
+function isCatchAllLocality(freguesia, localidade) {
+    const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
+    const cleanLoc = localidade.toLowerCase();
+    if (cleanLoc === cleanFreg) return true;
+    if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
+    return false;
+}
+
 // ==========================================
-// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS)
+// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS COM DUPLA PASSAGEM)
 // ==========================================
 function resolveBrickForZip(zip, drivers) {
     if (!zip || !drivers) return { brickId: null, brickName: null };
@@ -112,8 +122,13 @@ function resolveBrickForZip(zip, drivers) {
     let matchedLocalidade = null;
     const concelho = "MAFRA";
 
+    // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
+            if (isCatchAllLocality(freguesia, localidade)) {
+                continue;
+            }
+
             if (cpList.includes(normalizedZip)) {
                 matchedFreguesia = freguesia;
                 matchedLocalidade = localidade;
@@ -121,6 +136,22 @@ function resolveBrickForZip(zip, drivers) {
             }
         }
         if (matchedFreguesia) break;
+    }
+
+    // PASSAGEM 2: Fallback - Se não encontrou, procura nas genéricas (catch-all)
+    if (!matchedFreguesia) {
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+            for (const [localidade, cpList] of Object.entries(localidades)) {
+                if (isCatchAllLocality(freguesia, localidade)) {
+                    if (cpList.includes(normalizedZip)) {
+                        matchedFreguesia = freguesia;
+                        matchedLocalidade = localidade;
+                        break;
+                    }
+                }
+            }
+            if (matchedFreguesia) break;
+        }
     }
 
     if (!matchedFreguesia) {
@@ -131,6 +162,42 @@ function resolveBrickForZip(zip, drivers) {
         brickId: `${matchedFreguesia}|${matchedLocalidade}`, 
         brickName: matchedLocalidade 
     };
+}
+
+// ==========================================
+// NOVO ALGORITMO SÍNCRONO LOCAL DE CONTINGÊNCIA (VIZINHO MAIS PRÓXIMO)
+// ==========================================
+function calcularRotaVizinhoMaisProximoLocal() {
+    if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
+
+    const unvisited = [...window.moradasEntregas];
+    const optimized = [];
+    let currentCoords = { lat: window.partidaLocalizacao.lat, lng: window.partidaLocalizacao.lng };
+
+    while (unvisited.length > 0) {
+        let nearestIndex = 0;
+        let minDistance = Infinity;
+
+        for (let i = 0; i < unvisited.length; i++) {
+            const dist = calcularDistanciaHaversine(
+                currentCoords.lat,
+                currentCoords.lng,
+                unvisited[i].lat,
+                unvisited[i].lng
+            );
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestIndex = i;
+            }
+        }
+
+        const nextStop = unvisited.splice(nearestIndex, 1)[0];
+        nextStop.distanciaDoAnterior = minDistance;
+        optimized.push(nextStop);
+        currentCoords = { lat: nextStop.lat, lng: nextStop.lng };
+    }
+
+    window.rotaOtimizada = optimized;
 }
 
 // =========================================================================
@@ -178,7 +245,7 @@ export async function processarAdicaoPorPostal() {
             throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
         }
 
-        // NOVO: Resolve e associa estante física (Brick) na criação da paragem
+        // Resolve e associa estante física (Brick) na criação da paragem
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
 
         // 4. Constrói o objeto de morada mapeada vinda da Google
@@ -300,7 +367,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     try {
         // Envia as coordenadas para o endpoint dinâmico (Local ou Render)
-        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+        const response = await fetch(`${API_BASE_URL}/api/optimize-route`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -310,7 +377,13 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         });
 
         if (!response.ok) {
-            throw new Error("O servidor local falhou ou a Google rejeitou as credenciais de teste.");
+            // Deteta reativamente o código e erro HTTP real do Render para diagnosticar timeout ou chaves
+            let errorDetails = `Erro ${response.status} (${response.statusText})`;
+            try {
+                const errJson = await response.json();
+                if (errJson.error) errorDetails += ` - ${errJson.error}`;
+            } catch(e) {}
+            throw new Error(errorDetails);
         }
 
         const data = await response.json();
@@ -334,7 +407,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
                 window.rotaOtimizada.push(paragemOriginal);
             });
         } else {
-            // Se a API não devolveu uma rota nova por alguma restrição, mantém a original
+            // Se a API não deu erro mas não ordenou, mantém a original
             window.rotaOtimizada = [...window.moradasEntregas];
             window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
         }
@@ -354,8 +427,26 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         alternarModoRota('conducao');
 
     } catch (err) {
-        console.error("Erro na comunicação local DEV:", err);
-        alert(`Ocorreu um erro no teste: ${err.message}\n\nGaranta que iniciou o servidor no terminal escrevendo: node --env-file=.env js/dev-rotas-backend.js`);
+        // Novo: Resolvedor de Contingência Local Ativo se o Render falhar, der timeout ou estiver a dormir
+        console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
+        
+        calcularRotaVizinhoMaisProximoLocal();
+        
+        alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo para que possa trabalhar!`);
+        
+        const containerMapa = document.getElementById('container-mapa');
+        const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+        if (containerMapa) containerMapa.classList.remove('hidden');
+        if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+
+        renderizarItinerarioOtimizado();
+        sincronizarPersistencia();
+        
+        setTimeout(() => {
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }, 300);
+
+        alternarModoRota('conducao');
     } finally {
         if (btnOtimizar) {
             btnOtimizar.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>';
@@ -386,7 +477,7 @@ export function renderizarItinerarioOtimizado() {
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
 
-        // NOVO FALLBACK: Tenta obter o Brick de forma dinâmica para paragens legadas
+        // Resolve e recupera reativamente o Brick (Estante) usando o novo algoritmo prioritário de duas passagens
         const { brickId, brickName } = resolveBrickForZip(paragem.address, window.drivers);
         const finalBrickName = paragem.brickName || brickName;
         const finalBrickId = paragem.brickId || brickId;
