@@ -1,19 +1,23 @@
 /**
  * main.js
  * Faz: Atua como ponto de entrada (bootstrapper) principal da app. Carrega de forma assíncrona os partials HTML, importa e ativa o estado global, e inicializa as escutas de eventos e renderizações de todos os sub-módulos.
+ *      NOVO: Escuta as mudanças de utilizador do Firebase Auth, valida permissões no Firestore e gere o overlay do formulário de login de forma segura.
  * NÃO faz: Não executa diretamente lógica de dados, georreferenciação ou renderizadores de listas (delegação direta aos módulos importados).
- * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js
+ * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./firebase-init.js
  */
 
 import './state.js'; // Garante o arranque do estado global e migração física imediata de dados
 import { saveData } from './storage.js';
-import { setupNavigation, showTab, setupKeypad, setupPrefixLock, updateVisor } from './ui.js';
+import { setupNavigation, showTab, setupKeypad, setupPrefixLock, updateVisor, aplicarPermissoesPorRole } from './ui.js';
 import { renderDrivers, handleDriverSubmit } from './motoristas.js';
-import './setores.js'; // IMPORTANTE: Ativa e regista o novo motor tátil de Bricks e atribuições
+import './setores.js'; // Ativa e regista o novo motor tátil de Bricks e atribuições
 import { setupTriagemLogic, setupCancelButtons, setupVozTriagemLogic, setupCameraOcrLogic } from './triagem.js';
 import { setupRotasLogic, setupModaisEdicao, setupVozLogic, sincronizarInterfaceRota } from './rotas.js';
 import { setupPWAInstallationLogic } from './pwa.js';
 import { inicializarGoogleAutocompleteTriagem } from './maps.js';
+
+// NOVO: Importa instâncias seguras do Firebase para o arranque de sessão
+import { auth, db } from './firebase-init.js';
 
 // ==========================================
 // PALETE DE CORES DOS MOTORISTAS
@@ -195,6 +199,93 @@ function setupResetLeituras() {
 }
 
 // =========================================================================
+// NOVO: SUBMISSÃO E ENTRADA DE SESSÃO DO FORMULÁRIO DE LOGIN CLOUD
+// =========================================================================
+function setupAuthForms() {
+    const formLogin = document.getElementById('form-login');
+    const btnSubmit = document.getElementById('btn-login-submit');
+
+    if (formLogin) {
+        formLogin.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const senha = document.getElementById('login-senha').value;
+
+            if (btnSubmit) {
+                btnSubmit.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A autenticar...</span>';
+                btnSubmit.disabled = true;
+            }
+
+            try {
+                await auth.signInWithEmailAndPassword(email, senha);
+                console.log("[AUTH] Login efetuado com sucesso!");
+            } catch (err) {
+                console.error("[AUTH] Falha ao iniciar sessão:", err);
+                alert("Falha ao iniciar sessão: Email ou palavra-passe incorretos.");
+            } finally {
+                if (btnSubmit) {
+                    btnSubmit.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> <span>Entrar no Sistema</span>';
+                    btnSubmit.disabled = false;
+                }
+            }
+        });
+    }
+
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+            if (confirm("Deseja realmente terminar a sua sessão?")) {
+                try {
+                    await auth.signOut();
+                    showTab('triagem'); // Redireciona limpo para triagem ao sair
+                } catch (err) {
+                    console.error("[AUTH] Erro ao terminar sessão:", err);
+                }
+            }
+        });
+    }
+}
+
+// ==========================================
+// NOVO: ESCUTADOR DE ALTERAÇÃO DE ESTADO DE AUTENTICAÇÃO E PERFIS DO FIRESTORE
+// ==========================================
+function inicializarMonitorizacaoAuth() {
+    auth.onAuthStateChanged(async (user) => {
+        const modalLogin = document.getElementById('modal-login');
+        const btnLogout = document.getElementById('btn-logout');
+
+        if (user) {
+            console.log("[AUTH] Utilizador autenticado:", user.email);
+
+            // Carrega o documento do utilizador a partir da coleção 'users' no Firestore
+            try {
+                const doc = await db.collection('users').doc(user.uid).get();
+                if (doc.exists) {
+                    const userData = doc.data();
+                    const role = userData.role || 'Motorista'; // Fallback seguro
+                    console.log("[AUTH] Perfil carregado do Firestore. Role:", role);
+                    
+                    aplicarPermissoesPorRole(role);
+                } else {
+                    console.warn("[AUTH] O documento do utilizador não existe. Assumindo permissões básicas.");
+                    aplicarPermissoesPorRole('Motorista');
+                }
+            } catch (err) {
+                console.error("[AUTH] Erro ao consultar perfil no Firestore:", err);
+                aplicarPermissoesPorRole('Motorista');
+            }
+
+            if (modalLogin) modalLogin.classList.add('hidden'); // Desbloqueia e oculta ecrã de login
+            if (btnLogout) btnLogout.classList.remove('hidden'); // Revela botão de logout
+        } else {
+            console.log("[AUTH] Nenhum utilizador ativo. A bloquear ecrã...");
+            if (modalLogin) modalLogin.classList.remove('hidden'); // Exibe obrigatoriamente ecrã de login
+            if (btnLogout) btnLogout.classList.add('hidden'); // Oculta botão de logout
+        }
+    });
+}
+
+// =========================================================================
 // CICLO DE VIDA DO DOM: CARREGAMENTO DE FICHEIROS E ATIVAÇÃO DOS MÓDULOS
 // =========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
@@ -209,15 +300,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupKeypad();
     setupPrefixLock();
     setupForms();
+    setupAuthForms(); // Configura os eventos de login/logout
+    inicializarMonitorizacaoAuth(); // Liga o monitor de segurança e acessos por perfil
     renderColorPicker();
     setupResetLeituras();
     setupRotasLogic();
     setupModaisEdicao();
     setupTriagemLogic();
     setupCancelButtons(); 
-    setupVozLogic(); 
-    setupVozTriagemLogic(); 
-    setupCameraOcrLogic(); 
     setupPWAInstallationLogic(); 
 
     // 4. Desenha o estado inicial do visor numérico

@@ -2,6 +2,7 @@
  * ui.js
  * Faz: Controla a navegação entre abas, atualização do visor principal e os eventos do teclado numérico virtual.
  *      Despoleta automaticamente a triagem no instante em que o último dígito do código postal é inserido.
+ *      NOVO: Oculta reativamente os menus de Motoristas e Bricks se o utilizador autenticado for da Role 'Motorista'.
  * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
  * Depende de: Nenhuns módulos.
  */
@@ -47,7 +48,7 @@ export function showTab(tabName) {
         activeNav.classList.remove('text-gray-400', 'font-semibold');
     }
 
-    // NOVO: Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba!
+    // Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba!
     if (tabName === 'intervalos' && typeof window.renderizarSetoresUI === 'function') {
         window.renderizarSetoresUI();
     }
@@ -63,6 +64,30 @@ export function showTab(tabName) {
                 window.ajustarLimitesMapaGoogle();
             }
         }, 200);
+    }
+}
+
+/**
+ * NOVO: Bloqueia e oculta os menus de administração para motoristas comuns
+ */
+export function aplicarPermissoesPorRole(role) {
+    const navMotoristas = document.getElementById('nav-motoristas');
+    const navIntervalos = document.getElementById('nav-intervalos');
+    
+    if (role === 'Motorista') {
+        console.log("[AUTH] A aplicar restrições de nível: Motorista.");
+        if (navMotoristas) navMotoristas.classList.add('hidden');
+        if (navIntervalos) navIntervalos.classList.add('hidden');
+        
+        // Se estiver num ecrã restrito, redireciona o utilizador para a triagem de segurança
+        const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
+        if (activeTab === 'motoristas' || activeTab === 'intervalos') {
+            showTab('triagem');
+        }
+    } else {
+        console.log("[AUTH] A aplicar acessos de nível: Gestor.");
+        if (navMotoristas) navMotoristas.classList.remove('hidden');
+        if (navIntervalos) navIntervalos.classList.remove('hidden');
     }
 }
 
@@ -96,7 +121,7 @@ export function setupKeypad() {
                 window.currentInput += val;
                 if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
                 
-                // NOVO: Quando atinge o número total de dígitos, despoleta de imediato a triagem de forma automática!
+                // Quando atinge o número total de dígitos, despoleta de imediato a triagem de forma automática!
                 if (window.currentInput.length === maxDigits) {
                     const btnAnalisar = document.getElementById('btn-analisar');
                     if (btnAnalisar) {
@@ -143,7 +168,7 @@ export function setupPrefixLock() {
             inputPrefixo.focus();
             
             window.lockedPrefixValue = sanitizeDigits(inputPrefixo.value).substring(0, 4);
-            // NOVO: Prefixo inicial adaptado para Mafra (2640) de forma centralizada
+            // Prefixo inicial adaptado para Mafra (2640) de forma centralizada
             if (!window.lockedPrefixValue) {
                 window.lockedPrefixValue = "2640";
                 inputPrefixo.value = "2640";
