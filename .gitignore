@@ -1,16 +1,12 @@
-# ==========================================
-# CLASSIFICA PACK - FILTRO DE SEGURANÇA (GITIGNORE)
-# ==========================================
-
-# Ignorar chaves e credenciais secretas (CRÍTICO)
+# Ficheiros de Configuração Secreta (API Keys)
+config.js
 .env
 google-credentials.json
 
-# Ignorar pastas de dependências do Node.js
+# Logs e Cache de Desenvolvimento
 node_modules/
-
-# Ignorar ficheiros temporários do sistema operativo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 .DS_Store
 Thumbs.db
-desktop.ini
-*.log

@@ -1,5 +1,5 @@
-// sw.js (Versão v39)
-const CACHE_NAME = 'classificapack-v39';
+// sw.js (Versão v41)
+const CACHE_NAME = 'classificapack-v41';
 
 const ASSETS = [
   './',
@@ -49,7 +49,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google')) {
+  if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google') || e.request.url.includes('firebase') || e.request.url.includes('firestore')) {
     return;
   }
   e.respondWith(
