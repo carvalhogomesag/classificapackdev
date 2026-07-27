@@ -2,14 +2,18 @@
  * triagem.js
  * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick (Localidade) designados para o código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
  *      Implementa algoritmo de dupla passagem para priorizar localidades específicas sobre as capitais genéricas homónimas.
+ *      NOVO: Grava as confirmações de triagem diretamente na coleção 'assignments' do Firestore para sincronização em nuvem de imediato.
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
- * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js
+ * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js, ./firebase-init.js (para aceder ao db)
  */
 
 import { GEOGRAPHY } from './geografia-data.js';
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
 import { updateVisor } from './ui.js';
+
+// Importa a instância ativa do Firestore
+import { db } from './firebase-init.js';
 
 // =========================================================================
 // FUNÇÕES AUXILIARES DE LIMPEZA E PERSISTÊNCIA
@@ -183,7 +187,7 @@ window.atualizarSummaryUI = () => {
 };
 
 // =========================================================================
-// LÓGICA DE DETEÇÃO DE CÓDIGOS E MODAL DE LEITURAS (TRIAGEM)
+// LÓGICA DE DETEÇÃO DE CÓDIGOS E MODAL DE LEITURAS (TRIAGEM - GRAVAÇÃO EM CLOUD!)
 // =========================================================================
 export function setupTriagemLogic() {
     const btnAnalisar = document.getElementById('btn-analisar');
@@ -315,19 +319,22 @@ export function setupTriagemLogic() {
                 finalBrickName = selectedBrickId.split('|')[1];
             }
 
-            window.assignments.push({
+            // NOVO: Grava a leitura de triagem diretamente na coleção global 'assignments' no Firestore!
+            db.collection('assignments').add({
                 id: 'a_' + Date.now(),
                 zip: window.lastAnalysisResult.zip,
                 driverId: finalDriverId,
                 brickId: finalBrickId,
                 brickName: finalBrickName,
                 priority: isPriority,
-                date: new Date().toISOString().split('T')[0]
+                date: new Date().toISOString().split('T')[0],
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                console.log("[FIREBASE] Triagem guardada com sucesso no Firestore.");
+            }).catch((err) => {
+                console.error("[FIREBASE] Erro ao gravar triagem:", err);
+                alert("Erro de ligação: Não foi possível sincronizar a triagem na nuvem.");
             });
-
-            sincronizarPersistencia();
-            window.atualizarSummaryUI();
-            window.renderizarSetoresUI(); // Força a reciclagem rápida
 
             modalResultado.classList.add('hidden');
             

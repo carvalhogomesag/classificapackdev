@@ -3,10 +3,11 @@
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
  *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
  *      atribui o Brick correspondente à localidade do pacote e apresenta etiquetas visuais de arrumação física.
- *      NOVO: Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
- *      NOVO: Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
+ *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
+ *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
+ *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
- * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js
+ * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
  */
 
 import { saveData } from './storage.js';
@@ -18,6 +19,9 @@ import {
     desenharMapaGoogle, 
     limparMapaVisual 
 } from './maps.js';
+
+// Importa a instância ativa do Firestore
+import { db } from './firebase-init.js';
 
 let itemSendoEditado = null; 
 let autocompleteInstancia = null; // Guarda a instância ativa do Google Places Autocomplete
@@ -34,9 +38,10 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
     : 'https://classificapack-backend.onrender.com'; // Link do seu Render ativo
 
 // ==========================================
-// CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS
+// CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS (SINC DE CLOUD REAL-TIME!)
 // ==========================================
 function sincronizarPersistencia() {
+    // Grava de cache síncrona no LocalStorage local
     saveData(
         window.drivers, 
         [], // intervals obsoletos
@@ -47,6 +52,22 @@ function sincronizarPersistencia() {
         window.dataRotaSelecionada, 
         window.rotaIniciada
     );
+
+    // NOVO: Se houver um utilizador autenticado, sincroniza reativamente com o seu documento correspondente em 'routes'!
+    if (window.currentUserUid) {
+        db.collection('routes').doc(window.currentUserUid).set({
+            partidaLocalizacao: window.partidaLocalizacao || null,
+            moradasEntregas: window.moradasEntregas || [],
+            rotaOtimizada: window.rotaOtimizada || [],
+            dataRotaSelecionada: window.dataRotaSelecionada || "",
+            rotaIniciada: window.rotaIniciada || false,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            console.log("[FIREBASE] Rota do utilizador sincronizada no Firestore.");
+        }).catch((err) => {
+            console.error("[FIREBASE] Erro ao sincronizar rota no Firestore:", err);
+        });
+    }
 }
 
 // ==========================================
@@ -368,7 +389,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     try {
         // Envia as coordenadas para o endpoint dinâmico (Local ou Render)
-        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+        const response = await fetch(`${API_BASE_URL}/api/optimize-route`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

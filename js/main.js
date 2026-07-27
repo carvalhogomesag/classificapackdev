@@ -3,6 +3,8 @@
  * Faz: Atua como ponto de entrada (bootstrapper) principal da app. Carrega de forma assíncrona os partials HTML, importa e ativa o estado global, e inicializa as escutas de eventos e renderizações de todos os sub-módulos.
  *      NOVO: Escuta as mudanças de utilizador do Firebase Auth, valida permissões no Firestore e gere o overlay do formulário de login de forma segura.
  *      NOVO: Inicia e pára escuta ativa do Firestore onSnapshot ao ligar e desligar sessão.
+ *      NOVO: Escuta em tempo real as leituras de triagem da data de hoje para manter contagens globais automáticas.
+ *      NOVO: Sincroniza e herda a rota ativa em tempo real para o driver que iniciou sessão.
  * NÃO faz: Não executa diretamente lógica de dados, georreferenciação ou renderizadores de listas (delegação direta aos módulos importados).
  * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./firebase-init.js
  */
@@ -29,11 +31,13 @@ const colorPalette = [
     "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
 ];
 
-// Variável para guardar o cancelamento seguro da escuta em tempo real do Firebase
+// Variáveis para guardar o cancelamento seguro de conexões ativas do Firestore
 let unsubDrivers = null;
+let unsubAssignments = null;
+let unsubRoute = null;
 
 // ==========================================
-// NOVO: ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (onSnapshot)
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (MOTORISTAS)
 // ==========================================
 function escutarDriversEmTempoReal() {
     if (unsubDrivers) {
@@ -64,6 +68,82 @@ function escutarDriversEmTempoReal() {
         }
     }, (error) => {
         console.error("[FIREBASE] Erro ao escutar motoristas no Firestore:", error);
+    });
+}
+
+// ==========================================
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (TRIAGENS DA DATA DE HOJE!)
+// ==========================================
+function escutarAssignmentsEmTempoReal() {
+    if (unsubAssignments) {
+        unsubAssignments();
+    }
+
+    // Filtra reativamente apenas as leituras da data de hoje para velocidade extrema no armazém!
+    const hoje = new Date().toISOString().split('T')[0];
+    console.log(`[FIREBASE] A escutar leituras da data de hoje (${hoje}) no Firestore...`);
+
+    unsubAssignments = db.collection('assignments').where('date', '==', hoje)
+        .onSnapshot((querySnapshot) => {
+            const list = [];
+            querySnapshot.forEach((doc) => {
+                list.push(doc.data());
+            });
+
+            window.assignments = list;
+            console.log("[FIREBASE] Leituras de hoje sincronizadas:", window.assignments.length);
+
+            // Gravação física local como cache de salvaguarda
+            localStorage.setItem('cp_assignments', JSON.stringify(window.assignments));
+
+            // Redesenha o painel de resumo de contagem em tempo real
+            if (typeof window.atualizarSummaryUI === 'function') {
+                window.atualizarSummaryUI();
+            }
+        }, (err) => {
+            console.error("[FIREBASE] Erro ao carregar triagens de hoje no Firestore:", err);
+        });
+}
+
+// ==========================================
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (ROTA ATIVA DO DRIVER AUTENTICADO!)
+// ==========================================
+function escutarRotaEmTempoReal(uid) {
+    if (unsubRoute) {
+        unsubRoute();
+    }
+
+    console.log(`[FIREBASE] A sincronizar rota pessoal em tempo real para o UID: ${uid}`);
+
+    unsubRoute = db.collection('routes').doc(uid).onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            window.partidaLocalizacao = data.partidaLocalizacao || null;
+            window.moradasEntregas = data.moradasEntregas || [];
+            window.rotaOtimizada = data.rotaOtimizada || [];
+            window.dataRotaSelecionada = data.dataRotaSelecionada || "";
+            window.rotaIniciada = data.rotaIniciada || false;
+            console.log("[FIREBASE] Rota do condutor carregada com sucesso do Firestore.");
+        } else {
+            console.log("[FIREBASE] Nenhuma rota ativa encontrada na nuvem. A iniciar limpo.");
+            window.partidaLocalizacao = null;
+            window.moradasEntregas = [];
+            window.rotaOtimizada = [];
+            window.dataRotaSelecionada = "";
+            window.rotaIniciada = false;
+        }
+
+        // Atualiza a cache física local offline do telemóvel
+        localStorage.setItem('cp_partida', JSON.stringify(window.partidaLocalizacao));
+        localStorage.setItem('cp_entregas', JSON.stringify(window.moradasEntregas));
+        localStorage.setItem('cp_rota_otimizada', JSON.stringify(window.rotaOtimizada));
+        localStorage.setItem('cp_data_rota', JSON.stringify(window.dataRotaSelecionada));
+        localStorage.setItem('cp_rota_iniciada', JSON.stringify(window.rotaIniciada));
+
+        // Redesenha e atualiza reativamente o ecrã e o mapa do condutor
+        sincronizarInterfaceRota();
+    }, (err) => {
+        console.error("[FIREBASE] Erro ao sincronizar rota em nuvem:", err);
     });
 }
 
@@ -212,26 +292,27 @@ function setupForms() {
 }
 
 // ==========================================
-// CENTRALIZAÇÃO DE LIMPEZA DE LEITURAS
+// CENTRALIZAÇÃO DE LIMPEZA DE LEITURAS (GRAVAÇÃO EM BATCH NO FIRESTORE!)
 // ==========================================
 function setupResetLeituras() {
     const btnLimparLeituras = document.getElementById('btn-limpar-leituras');
     if (btnLimparLeituras) {
-        btnLimparLeituras.addEventListener('click', () => {
-            if (confirm("Deseja realmente limpar todas as leituras?")) {
-                window.assignments = [];
-                saveData(
-                    window.drivers, 
-                    [], // intervals obsoletos
-                    window.assignments,
-                    window.partidaLocalizacao,
-                    window.moradasEntregas,
-                    window.rotaOtimizada,
-                    window.dataRotaSelecionada, 
-                    window.rotaIniciada
-                );
-                window.atualizarSummaryUI();
-                window.renderizarSetoresUI(); // Força a reciclagem da contagem de bricks
+        btnLimparLeituras.addEventListener('click', async () => {
+            if (confirm("Deseja realmente limpar todas as leituras de hoje na nuvem?")) {
+                const hoje = new Date().toISOString().split('T')[0];
+                try {
+                    // Consulta todas as leituras de hoje no Firestore e elimina-as em lote síncrono (Batch)
+                    const snapshot = await db.collection('assignments').where('date', '==', hoje).get();
+                    const batch = db.batch();
+                    snapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+                    console.log("[FIREBASE] Leituras de hoje limpas com sucesso no Firestore.");
+                } catch (err) {
+                    console.error("[FIREBASE] Erro ao limpar leituras:", err);
+                    alert("Erro de ligação: Não foi possível limpar as leituras na nuvem.");
+                }
             }
         });
     }
@@ -295,9 +376,12 @@ function inicializarMonitorizacaoAuth() {
 
         if (user) {
             console.log("[AUTH] Utilizador autenticado:", user.email);
+            window.currentUserUid = user.uid; // Grava o UID na memória global de rotas
 
-            // NOVO: Liga o ouvinte em tempo real no Firestore para sincronizar motoristas de imediato!
+            // Liga a sincronização de dados em nuvem em tempo real!
             escutarDriversEmTempoReal();
+            escutarAssignmentsEmTempoReal();
+            escutarRotaEmTempoReal(user.uid);
 
             // Carrega o documento do utilizador a partir da coleção 'users' no Firestore
             try {
@@ -321,11 +405,20 @@ function inicializarMonitorizacaoAuth() {
             if (btnLogout) btnLogout.classList.remove('hidden'); // Revela botão de logout
         } else {
             console.log("[AUTH] Nenhum utilizador ativo. A bloquear ecrã...");
+            window.currentUserUid = null;
 
-            // NOVO: Desliga o ouvinte em tempo real para poupar dados de internet ao terminar sessão
+            // Desliga todos os ouvintes em tempo real para poupar bateria e dados de internet ao sair
             if (unsubDrivers) {
                 unsubDrivers();
                 unsubDrivers = null;
+            }
+            if (unsubAssignments) {
+                unsubAssignments();
+                unsubAssignments = null;
+            }
+            if (unsubRoute) {
+                unsubRoute();
+                unsubRoute = null;
             }
 
             if (modalLogin) modalLogin.classList.remove('hidden'); // Exibe obrigatoriamente ecrã de login

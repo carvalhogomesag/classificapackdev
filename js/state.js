@@ -14,6 +14,9 @@ import { safeJSONParse } from './storage.js';
 window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
 
+// NOVO: Guarda o ID exclusivo do utilizador com sessão iniciada na nuvem
+window.currentUserUid = null;
+
 // ==========================================
 // MIGRAÇÃO DE DADOS AUTOMÁTICA
 // Garante que cada motorista possui o array 'brickIds' para guardar as localidades atribuídas
