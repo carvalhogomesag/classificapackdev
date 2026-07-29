@@ -133,6 +133,7 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = data.rotaOtimizada || [];
             window.dataRotaSelecionada = data.dataRotaSelecionada || "";
             window.rotaIniciada = data.rotaIniciada || false;
+            window.routingMethodUsed = data.routingMethodUsed || 'Cloud'; // Recupera o método de cálculo do Firestore
             console.log("[FIREBASE] Rota do condutor carregada com sucesso do Firestore.");
         } else {
             console.log("[FIREBASE] Nenhuma rota activa encontrada na nuvem. A iniciar limpo.");
@@ -141,6 +142,7 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = [];
             window.dataRotaSelecionada = "";
             window.rotaIniciada = false;
+            window.routingMethodUsed = 'Cloud';
         }
 
         // Atualiza a cache física local offline do telemóvel
@@ -149,6 +151,7 @@ function escutarRotaEmTempoReal(uid) {
         localStorage.setItem('cp_rota_otimizada', JSON.stringify(window.rotaOtimizada));
         localStorage.setItem('cp_data_rota', JSON.stringify(window.dataRotaSelecionada));
         localStorage.setItem('cp_rota_iniciada', JSON.stringify(window.rotaIniciada));
+        localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
 
         // Redesenha e atualiza reativamente o ecrã e o mapa do condutor
         sincronizarInterfaceRota();

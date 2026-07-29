@@ -53,6 +53,8 @@ function sincronizarPersistencia() {
         window.rotaIniciada
     );
 
+    localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
+
     // NOVO: Se houver um utilizador autenticado, sincroniza reativamente com o seu documento correspondente em 'routes'!
     if (window.currentUserUid) {
         db.collection('routes').doc(window.currentUserUid).set({
@@ -61,6 +63,7 @@ function sincronizarPersistencia() {
             rotaOtimizada: window.rotaOtimizada || [],
             dataRotaSelecionada: window.dataRotaSelecionada || "",
             rotaIniciada: window.rotaIniciada || false,
+            routingMethodUsed: window.routingMethodUsed || 'Cloud',
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         }).then(() => {
             console.log("[FIREBASE] Rota do utilizador sincronizada no Firestore.");
@@ -428,10 +431,15 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
                 
                 window.rotaOtimizada.push(paragemOriginal);
             });
+
+            window.routingMethodUsed = 'Cloud';
+            localStorage.setItem('cp_routing_method', 'Cloud');
         } else {
             // Se a API não deu erro mas não ordenou, mantém a original
             window.rotaOtimizada = [...window.moradasEntregas];
             window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
+            window.routingMethodUsed = 'Local';
+            localStorage.setItem('cp_routing_method', 'Local');
         }
 
         const containerMapa = document.getElementById('container-mapa');
@@ -453,6 +461,9 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
         
         calcularRotaVizinhoMaisProximoLocal();
+        
+        window.routingMethodUsed = 'Local';
+        localStorage.setItem('cp_routing_method', 'Local');
         
         alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo para que possa trabalhar!`);
         
@@ -597,7 +608,7 @@ export function renderizarItinerarioOtimizado() {
 }
 
 // ==========================================
-// PAINEL DE ESTATÍSTICAS DA ROTA ATIVA
+// PAINEL DE ESTATÍSTICAS DA ROTA ATIVA (ATUALIZADO: ESTIMATIVAS E SISTEMA EM USO)
 // ==========================================
 export function renderEstatisticasRota() {
     const htmlEl = document.getElementById('estatisticas-rota');
@@ -605,6 +616,11 @@ export function renderEstatisticasRota() {
     const statEntregues = document.getElementById('stat-entregues');
     const statFalhas = document.getElementById('stat-falhas'); 
     const statPendentes = document.getElementById('stat-pendentes');
+
+    // Novos elementos visuais para distância, tempo e motor de roteamento
+    const statDistancia = document.getElementById('stat-distancia');
+    const statTempo = document.getElementById('stat-tempo');
+    const statSistema = document.getElementById('stat-sistema');
 
     if (!htmlEl) return;
 
@@ -619,6 +635,44 @@ export function renderEstatisticasRota() {
     if (statEntregues) statEntregues.textContent = entregues;
     if (statFalhas) statFalhas.textContent = falhadas;
     if (statPendentes) statPendentes.textContent = pendentes;
+
+    // Calcular distância total acumulada (km)
+    let totalDist = 0;
+    window.rotaOtimizada.forEach(p => {
+        totalDist += p.distanciaDoAnterior || 0;
+    });
+
+    if (statDistancia) {
+        statDistancia.textContent = `${totalDist.toFixed(2)} km`;
+    }
+
+    // Estimar tempo com velocidade média de condução de 40 km/h (urban/rural mix em Mafra)
+    if (statTempo) {
+        if (totalDist === 0) {
+            statTempo.textContent = "0 min";
+        } else {
+            const tempoTotalMinutos = Math.round((totalDist / 40) * 60);
+            if (tempoTotalMinutos < 60) {
+                statTempo.textContent = `${tempoTotalMinutos} min`;
+            } else {
+                const horas = Math.floor(tempoTotalMinutos / 60);
+                const mins = tempoTotalMinutos % 60;
+                statTempo.textContent = `${horas}h ${mins}min`;
+            }
+        }
+    }
+
+    // Mostrar qual o motor de roteamento utilizado de forma visual e reativa
+    if (statSistema) {
+        const metodo = window.routingMethodUsed || localStorage.getItem('cp_routing_method') || 'Cloud';
+        if (metodo === 'Cloud') {
+            statSistema.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border bg-emerald-50 text-emerald-700 border-emerald-200 animate-none";
+            statSistema.innerHTML = `<i class="fa-solid fa-cloud"></i> <span>Google Cloud API (Real por Estrada)</span>`;
+        } else {
+            statSistema.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+            statSistema.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Contingência Local (Linha Reta)</span>`;
+        }
+    }
 }
 
 // ==========================================

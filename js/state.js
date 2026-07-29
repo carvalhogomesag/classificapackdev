@@ -53,3 +53,6 @@ window.rotaOtimizada = safeJSONParse('cp_rota_otimizada', []);
 window.dataRotaSelecionada = safeJSONParse('cp_data_rota', "");
 window.rotaIniciada = safeJSONParse('cp_rota_iniciada', false);
 window.definindoPartidaPorMorada = false;
+
+// Guarda reativamente o tipo de cálculo utilizado no percurso
+window.routingMethodUsed = localStorage.getItem('cp_routing_method') || 'Cloud';
