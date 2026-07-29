@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 25/07/2026, 20:47:28
+Gerado em: 29/07/2026, 21:33:48
 
 =========================================
 ARQUIVO: index.html
@@ -10,7 +10,7 @@ ARQUIVO: index.html
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v28, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v46, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -30,6 +30,11 @@ ARQUIVO: index.html
 
     <!-- Tesseract.js para processamento OCR local na câmara do telemóvel -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+    <!-- CARREGAMENTO SEGURO DO SDK GOOGLE FIREBASE COMPAT (AUTH E FIRESTORE CLOUD DATABASE) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
     <!-- CORREÇÕES VISUAIS PARA O AUTOCOMPLETE DO GOOGLE MAPS -->
     <style>
@@ -60,13 +65,46 @@ ARQUIVO: index.html
 </head>
 <body class="bg-gray-100 font-sans text-gray-900 select-none relative">
 
+    <!-- NOVO OVERLAY DE LOGIN / AUTENTICAÇÃO CLOUD (BLOQUEIO TOTAL E SÓLIDO DE ECRÃ E CLIQUES) -->
+    <div id="modal-login" class="fixed inset-0 bg-gray-100 z-[9999] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl p-6 space-y-6 shadow-2xl border border-gray-150">
+            <div class="text-center space-y-2">
+                <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto text-3xl shadow-sm animate-none">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <h2 class="text-2xl font-black text-gray-800">Classifica Pack Cloud</h2>
+                <p class="text-xs text-gray-400">Inicie sessão para aceder ao sistema partilhado de distribuição.</p>
+            </div>
+            <form id="form-login" class="space-y-4 w-full">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Email de Trabalho</label>
+                    <input type="email" id="login-email" required placeholder="Ex: motorista1@empresa.com" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <div class="flex justify-between items-center">
+                        <label class="block text-xs font-bold uppercase text-gray-500">Palavra-passe</label>
+                    </div>
+                    <input type="password" id="login-senha" required placeholder="••••••••" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <button type="submit" id="btn-login-submit" class="w-full bg-blue-600 active:bg-blue-700 text-white font-extrabold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all">
+                    <i class="fa-solid fa-right-to-bracket"></i>
+                    <span>Entrar no Sistema</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
-    <div class="max-w-md mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
+    <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v28 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v46 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v28</span>
+            <!-- Botão de Sair de Sessão / Logout para motoristas -->
+            <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
+                <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
+            </button>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v46</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -78,14 +116,33 @@ ARQUIVO: index.html
 
         <!-- OVERLAY DO RESULTADO DA TRIAGEM (Global/Partilhado) -->
         <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-            <div class="bg-white w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh]">
+            <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] mx-auto">
                 <div class="flex-shrink-0 bg-gray-100 p-3 border-b text-center font-bold text-gray-700">Resultado da Triagem</div>
                 <div id="resultado-cor-bg" class="flex-1 flex flex-col items-center justify-center p-5 text-center space-y-2 overflow-y-auto transition-colors duration-300">
                     <p class="text-white text-sm font-semibold tracking-wider uppercase opacity-85">Código Postal</p>
                     <h3 id="resultado-codigo" class="text-white text-3xl font-mono font-black tracking-widest bg-black/25 px-4 py-1.5 rounded-lg">---</h3>
                     <p class="text-white text-sm font-semibold tracking-wider uppercase opacity-85 mt-2">Motorista Designado</p>
                     <h2 id="resultado-motorista" class="text-white text-2xl font-bold tracking-wide drop-shadow-md">---</h2>
+                    
+                    <!-- Estante (Brick) Selecionada para organizar o Pacote -->
+                    <p class="text-white text-xs font-semibold tracking-wider uppercase opacity-85 mt-2">Arrumar na Estante (Brick)</p>
+                    <div class="flex items-center space-x-2 bg-black/25 px-3 py-1 rounded-lg">
+                        <i class="fa-solid fa-boxes-stacked text-yellow-300 text-xs"></i>
+                        <span id="resultado-brick-label" class="text-white text-base font-bold tracking-wide">---</span>
+                    </div>
                 </div>
+
+                <!-- Seletor de Brick (Estante) para alteração em tempo real -->
+                <div class="flex-shrink-0 p-3 bg-gray-50 border-b flex items-center justify-between">
+                    <label class="text-xs font-bold text-gray-700 uppercase flex items-center space-x-1.5 cursor-pointer">
+                        <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
+                        <span>Alterar Estante (Brick)</span>
+                    </label>
+                    <select id="modal-brick-override" class="text-xs font-bold p-1.5 border border-gray-300 rounded bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none w-1/2">
+                        <option value="">Sem Brick (Auto)</option>
+                    </select>
+                </div>
+
                 <div class="flex-shrink-0 p-3 bg-gray-50 border-t border-b flex items-center justify-center">
                     <label class="flex items-center space-x-3 text-base font-bold text-gray-700 cursor-pointer">
                         <input type="checkbox" id="chk-prioridade" class="w-6 h-6 text-orange-600 rounded focus:ring-orange-500 border-gray-300">
@@ -95,12 +152,12 @@ ARQUIVO: index.html
                         </span>
                     </label>
                 </div>
-                <div class="flex-shrink-0 p-3 bg-gray-50 flex space-x-3">
-                    <button id="btn-cancelar-atribuir" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold text-base py-3.5 rounded-xl shadow-md">
-                        <i class="fa-solid fa-xmark mr-1"></i> Cancelar
-                    </button>
-                    <button id="btn-confirmar-atribuir" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold text-base py-3.5 rounded-xl shadow-md">
-                        <i class="fa-solid fa-check mr-1"></i> Confirmar
+                
+                <!-- Novo botão de confirmação gigante "OK (Próximo)" que limpa tudo -->
+                <div class="flex-shrink-0 p-3 bg-gray-50">
+                    <button id="btn-confirmar-atribuir" class="w-full bg-blue-600 active:bg-blue-700 text-white font-extrabold text-base py-4 rounded-xl shadow-md flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-check"></i>
+                        <span>OK (Arrumado)</span>
                     </button>
                 </div>
             </div>
@@ -108,7 +165,7 @@ ARQUIVO: index.html
 
         <!-- MODAL DE EDIÇÃO DA PARAGEM (Global/Partilhado) -->
         <div id="modal-editar-paragem" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-            <div class="bg-white w-full rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-all">
+            <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-all mx-auto">
                 
                 <!-- Título do Modal -->
                 <div class="flex-shrink-0 bg-gray-50 p-4 border-b flex items-center space-x-2">
@@ -154,7 +211,7 @@ ARQUIVO: index.html
                             <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-origem="Zara">
                                 Zara
                             </button>
-                            <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-origem="China (Temu/Shein)">
+                            <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1" data-origem="China (Temu/Shein)">
                                 China (Temu/Shein)
                             </button>
                             <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1" data-origem="Fraldas">
@@ -195,8 +252,8 @@ ARQUIVO: index.html
             </div>
         </div>
 
-        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA (Global) -->
-        <nav class="fixed bottom-0 inset-x-0 max-w-md mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
+        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA (Global - NOVO: Adicionado identificador de bloqueio de login) -->
+        <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-4xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
             <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-lg"></i>
                 <span>Triagem</span>
@@ -206,8 +263,8 @@ ARQUIVO: index.html
                 <span>Motoristas</span>
             </button>
             <button id="nav-intervalos" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
-                <i class="fa-solid fa-map-location-dot text-lg"></i>
-                <span>Setores</span>
+                <i class="fa-solid fa-boxes-stacked text-lg"></i>
+                <span>Bricks</span>
             </button>
             <button id="nav-rotas" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
                 <i class="fa-solid fa-route text-lg"></i>
@@ -264,8 +321,8 @@ ARQUIVO: manifest.json
 ARQUIVO: sw.js
 =========================================
 
-// sw.js (Versão v28)
-const CACHE_NAME = 'classificapack-v28';
+// sw.js (Versão v46)
+const CACHE_NAME = 'classificapack-v46';
 
 const ASSETS = [
   './',
@@ -315,7 +372,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google')) {
+  if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google') || e.request.url.includes('firebase') || e.request.url.includes('firestore')) {
     return;
   }
   e.respondWith(
@@ -325,12 +382,20 @@ self.addEventListener('fetch', (e) => {
   );
 });
 
-
 =========================================
 ARQUIVO: config.js
 =========================================
 
 const GOOGLE_MAPS_API_KEY = "[CHAVE_OCULTADA_POR_SEGURANCA]";
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCtC4t6D7Dk3EOy5Fb1-UQK5wjW1uYtRbY",
+  authDomain: "classifica-pack-cloud.firebaseapp.com",
+  projectId: "classifica-pack-cloud",
+  storageBucket: "classifica-pack-cloud.firebasestorage.app",
+  messagingSenderId: "736912064185",
+  appId: "1:736912064185:web:bb80feaf3e8ca3ced92568"
+};
 
 =========================================
 ARQUIVO: js/dev-rotas-backend.js
@@ -649,12 +714,50 @@ app.listen(PORT, () => {
 });
 
 =========================================
+ARQUIVO: js/firebase-init.js
+=========================================
+
+/**
+ * js/firebase-init.js
+ * Faz: Centraliza as credenciais de segurança e inicializa o motor do Google Firebase (Auth e Firestore) na nossa aplicação.
+ *      Lê as credenciais seguras a partir do ficheiro global 'config.js' que está protegido no .gitignore.
+ * NÃO faz: Não processa lógicas de triagem ou navegação direta.
+ * Depende de: Bibliotecas Firebase App Compat carregadas no index.html e do objeto FIREBASE_CONFIG do config.js.
+ */
+
+// Verifica de forma defensiva se as chaves foram devidamente carregadas do config.js
+if (typeof FIREBASE_CONFIG === 'undefined' || !FIREBASE_CONFIG.apiKey) {
+    console.error("[FIREBASE] ERRO CRÍTICO: As credenciais do Firebase não foram encontradas no config.js!");
+}
+
+// Inicializa a Aplicação Firebase de forma segura e síncrona
+if (!firebase.apps.length) {
+    firebase.initializeApp(FIREBASE_CONFIG);
+}
+
+// Declaração de instâncias globais exportáveis para uso partilhado em toda a aplicação
+export const auth = firebase.auth();
+export const db = firebase.firestore();
+
+// Sincroniza a persistência local offline no Firestore de forma defensiva
+db.enablePersistence().catch((err) => {
+    if (err.code === 'failed-precondition') {
+        console.warn("[FIREBASE] A persistência offline falhou: Múltiplas abas abertas.");
+    } else if (err.code === 'unimplemented') {
+        console.warn("[FIREBASE] O navegador atual não suporta persistência offline.");
+    }
+});
+
+console.log("[FIREBASE] Sistema em Nuvem inicializado com sucesso via config.js.");
+
+=========================================
 ARQUIVO: js/geografia-data.js
 =========================================
 
 /**
  * geografia-data.js
  * Faz: Armazena exclusivamente a estrutura geográfica estática do Concelho de Mafra (Concelho -> Freguesias -> Localidades -> Códigos Postais) de forma pura.
+ *      Atualizado na versão v35 para incluir a Póvoa de Cima e Póvoa de Baixo como localidades de arrumação independentes.
  * NÃO faz: Não processa algoritmos de triagem, não renderiza ecrãs e não acede à memória do telemóvel.
  * Depende de: Nenhum (apenas exporta a constante de dados geográficos).
  */
@@ -740,7 +843,7 @@ export const GEOGRAPHY = {
         "ERICEIRA": {
             "Fonte Boa da Brincosa": ["2655-319", "2655-490", "2655-445", "2655-498"],
             "Lapa da Serra": ["2655-410", "2655-447"],
-            "Ericeira": ["2655-504", "2655-502", "2655-501", "2655-503", "2655-500", "2655-438", "2657-302", "2655-210", "2655-218", "2655-221", "2655-222", "2655-223", "2655-225", "2655-226", "2655-227", "2655-228", "2655-229", "2655-263", "2655-231", "2655-232", "2655-233", "2655-234", "2655-235", "2655-236", "2655-237", "2655-238", "2655-239", "2655-240", "2655-241", "2655-242", "2655-243", "2655-244", "2655-245", "2655-246", "2655-247", "2655-248", "2655-249", "2655-250", "2655-251", "2655-252", "2655-253", "2655-254", "2655-255", "2655-256", "2655-257", "2655-258", "2655-259", "2655-262", "2655-264", "2655-265", "2655-368", "2655-369", "2655-370", "2655-266", "2655-267", "2655-268", "2655-269", "2655-271", "2655-272", "2655-273", "2655-274", "2655-275", "2655-276", "2655-277", "2655-278", "2655-279", "2655-280", "2655-281", "2655-282", "2655-283", "2655-284", "2655-285", "2655-286", "2655-287", "2655-288", "2655-289", "2655-290", "2655-291", "2655-292", "2655-293", "2655-294", "2655-295", "2655-296", "2655-297", "2655-298", "2655-299", "2655-300", "2655-301", "2655-366", "2655-302", "2655-303", "2655-304", "2655-305", "2655-306", "2655-307", "2655-308", "2655-309", "2655-310", "2655-311", "2655-312", "2655-313", "2655-314", "2655-315", "2655-316", "2655-317", "2655-318", "2659-501", "2655-320", "2655-321", "2655-322", "2655-323", "2655-324", "2655-325", "2655-326", "2655-327", "2655-328", "2655-329", "2655-330", "2655-331", "2655-457", "2655-332", "2655-333", "2655-334", "2655-335", "2655-336", "2655-337", "2655-338", "2655-339", "2655-340", "2655-341", "2655-342", "2655-343", "2655-344", "2655-999", "2655-345", "2659-601", "2655-346", "2655-347", "2655-348", "2655-349", "2657-301", "2655-350", "2655-351", "2655-352", "2655-353", "2655-354", "2655-355", "2655-356", "2655-357", "2655-358", "2655-359", "2655-360", "2655-361", "2655-362", "2655-363", "2655-364", "2655-365", "2655-431", "2655-400", "2655-415", "2655-434", "2655-440", "2655-436", "2655-435", "2655-437", "2655-444", "2655-478", "2655-139", "2655-209", "2655-220", "2655-373", "2655-468", "2655-376", "2655-377", "2655-378", "2655-493", "2655-214", "2655-472", "2655-481", "2655-482", "2655-505", "2655-006", "2655-483", "2655-496", "2655-230", "2655-379", "2655-454", "2655-484", "2655-485", "2655-486", "2655-487", "2655-488", "2655-489", "2655-491", "2655-420", "2655-425", "2655-449", "2655-430", "2655-450", "2655-475", "2655-405", "2655-476", "2655-474", "2655-451", "2655-477", "2655-469", "2655-464", "2655-480", "2655-459", "2655-492", "2655-460", "2655-494"],
+            "Ericeira": ["2655-504", "2655-502", "2655-501", "2655-503", "2655-500", "2655-438", "2657-302", "2655-210", "2655-218", "2655-221", "2655-222", "2655-223", "2655-225", "2655-226", "2655-227", "2655-228", "2655-229", "2655-263", "2655-231", "2655-232", "2655-233", "2655-234", "2655-235", "2655-236", "2655-237", "2655-238", "2655-239", "2655-240", "2655-241", "2655-242", "2655-243", "2655-244", "2655-245", "2655-246", "2655-247", "2655-248", "2655-249", "2655-250", "2655-251", "2655-252", "2655-253", "2655-254", "2655-255", "2655-256", "2655-257", "2655-258", "2655-259", "2655-262", "2655-264", "2655-265", "2655-368", "2655-369", "2655-370", "2655-266", "2655-267", "2655-268", "2655-269", "2655-271", "2655-272", "2655-273", "2655-274", "2655-275", "2655-276", "2655-277", "2655-278", "2655-279", "2655-280", "2655-279", "2655-280", "2655-281", "2655-282", "2655-283", "2655-284", "2655-285", "2655-286", "2655-287", "2655-288", "2655-289", "2655-290", "2655-291", "2655-292", "2655-293", "2655-294", "2655-295", "2655-296", "2655-297", "2655-298", "2655-299", "2655-300", "2655-301", "2655-366", "2655-302", "2655-303", "2655-304", "2655-305", "2655-306", "2655-307", "2655-308", "2655-309", "2655-310", "2655-311", "2655-312", "2655-313", "2655-314", "2655-315", "2655-316", "2655-317", "2655-318", "2659-501", "2655-320", "2655-321", "2655-322", "2655-323", "2655-324", "2655-325", "2655-326", "2655-327", "2655-328", "2655-329", "2655-330", "2655-331", "2655-457", "2655-332", "2655-333", "2655-334", "2655-335", "2655-336", "2655-337", "2655-338", "2655-339", "2655-340", "2655-341", "2655-342", "2655-343", "2655-344", "2655-999", "2655-345", "2659-601", "2655-346", "2655-347", "2655-348", "2655-349", "2657-301", "2655-350", "2655-351", "2655-352", "2655-353", "2655-354", "2655-355", "2655-356", "2655-357", "2655-358", "2655-359", "2655-360", "2655-361", "2655-362", "2655-363", "2655-364", "2655-365", "2655-431", "2655-400", "2655-415", "2655-434", "2655-440", "2655-436", "2655-435", "2655-437", "2655-444", "2655-478", "2655-139", "2655-209", "2655-220", "2655-373", "2655-468", "2655-376", "2655-377", "2655-378", "2655-493", "2655-214", "2655-472", "2655-481", "2655-482", "2655-505", "2655-006", "2655-483", "2655-496", "2655-230", "2655-379", "2655-454", "2655-484", "2655-485", "2655-486", "2655-487", "2655-488", "2655-489", "2655-491", "2655-420", "2655-425", "2655-449", "2655-430", "2655-450", "2655-475", "2655-405", "2655-476", "2655-474", "2655-451", "2655-477", "2655-469", "2655-464", "2655-480", "2655-459", "2655-492", "2655-460", "2655-494"],
             "Casa Nova": ["2655-420", "2655-202", "2655-425", "2655-449"],
             "Seixal": ["2655-430", "2655-450", "2655-458", "2655-208", "2655-475"],
             "Fonte Boa dos Nabos": ["2655-405", "2655-476", "2655-474", "2655-451", "2655-477", "2655-469", "2655-464", "2655-480"],
@@ -785,7 +888,7 @@ export const GEOGRAPHY = {
         },
         "MAFRA": {
             "Casal da Serra": ["2640-487"],
-            "Mafra": ["2640-578", "2640-487", "2640-779", "2640-526", "2640-501", "2640-523", "2640-808", "2640-824", "2640-448", "2640-425", "2640-432", "2640-433", "2640-450", "2640-582", "2640-543", "2640-452", "2640-454", "2640-455", "2644-004", "2644-003", "2640-456", "2640-999", "2644-014", "2640-457", "2640-458", "2640-459", "2640-460", "2640-462", "2640-463", "2640-464", "2640-465", "2640-466", "2640-467", "2640-468", "2640-469", "2640-470", "2640-471", "2640-472", "2640-473", "2640-474", "2640-475", "2640-476", "2640-477", "2640-478", "2640-479", "2640-480", "2640-481", "2640-482", "2640-483", "2640-484", "2640-485", "2644-006", "2640-486", "2643-301", "2643-304", "2640-488", "2640-542", "2640-489", "2640-490", "2640-491", "2644-010", "2640-492", "2644-601", "2640-493", "2640-494", "2640-495", "2640-496", "2640-497", "2640-499", "2640-500", "2640-501", "2640-502", "2640-503", "2640-504", "2640-505", "2640-543", "2640-506", "2640-507", "2640-508", "2640-509", "2640-511", "2640-512", "2640-513", "2640-514", "2640-515", "2640-516", "2640-517", "2640-518", "2640-519", "2640-520", "2640-521", "2640-524", "2640-525", "2640-527", "2640-528", "2640-529", "2640-530", "2640-531", "2640-532", "2640-533", "2640-534", "2640-535", "2640-536", "2640-537", "2640-538", "2640-539", "2640-576", "2640-569", "2640-409", "2640-434", "2640-435", "2640-444", "2640-445", "2640-451", "2644-001", "2640-403", "2640-404", "2640-400", "2644-013", "2640-389", "2640-391", "2640-392", "2640-393", "2640-394", "2640-395", "2640-396", "2640-399", "2640-437", "2640-774", "2640-778", "2640-780", "2640-782", "2640-783", "2640-789", "2640-790", "2640-791", "2640-792", "2640-793", "2640-794", "2640-797", "2640-800", "2640-806", "2640-809", "2640-812", "2640-813", "2640-820", "2640-821", "2640-822", "2640-405", "2640-406", "2640-407", "2640-408", "2640-422", "2640-436", "2640-446", "2640-447", "2640-426", "2640-402", "2640-570", "2640-571", "2640-428", "2640-449", "2640-510", "2640-415", "2640-416", "2640-418", "2640-567", "2640-573", "2640-431", "2640-410", "2640-577", "2643-305", "2640-438", "2640-583", "2640-546", "2640-566", "2644-012", "2640-564", "2640-563", "2640-562", "2640-411", "2640-430", "2640-565", "2640-390", "2640-561", "2640-580", "2640-586", "2640-585", "2640-412", "2640-817", "2640-818", "2644-603", "2640-420", "2640-417", "2640-427", "2640-413", "2640-581", "2640-401", "2640-544", "2640-419", "2640-387"],
+            "Mafra": ["2640-578", "2640-487", "2640-779", "2640-526", "2640-501", "2640-523", "2640-808", "2640-824", "2640-448", "2640-425", "2640-432", "2640-433", "2640-450", "2640-582", "2640-543", "2640-452", "2640-454", "2640-455", "2644-004", "2644-003", "2640-456", "2640-999", "2644-014", "2640-457", "2640-458", "2640-459", "2640-460", "2640-462", "2640-463", "2640-464", "2640-465", "2640-466", "2640-467", "2640-468", "2640-469", "2640-470", "2640-471", "2640-472", "2640-473", "2640-474", "2640-475", "2640-476", "2640-477", "2640-478", "2640-479", "2640-480", "2640-481", "2640-482", "2640-483", "2640-484", "2640-484", "2640-485", "2644-006", "2640-486", "2643-301", "2643-304", "2640-488", "2640-542", "2640-489", "2640-490", "2640-491", "2644-010", "2640-492", "2644-601", "2640-493", "2640-494", "2640-495", "2640-496", "2640-497", "2640-499", "2640-500", "2640-501", "2640-502", "2640-503", "2640-504", "2640-505", "2640-543", "2640-506", "2640-507", "2640-508", "2640-509", "2640-511", "2640-512", "2640-513", "2640-514", "2640-515", "2640-516", "2640-517", "2640-518", "2640-519", "2640-520", "2640-521", "2640-524", "2640-525", "2640-527", "2640-528", "2640-529", "2640-530", "2640-531", "2640-532", "2640-533", "2640-534", "2640-535", "2640-536", "2640-537", "2640-538", "2640-539", "2640-576", "2640-569", "2640-409", "2640-434", "2640-435", "2640-444", "2640-445", "2640-451", "2644-001", "2640-403", "2640-404", "2640-400", "2644-013", "2640-389", "2640-391", "2640-392", "2640-393", "2640-394", "2640-395", "2640-396", "2640-399", "2640-437", "2640-774", "2640-778", "2640-780", "2640-782", "2640-783", "2640-789", "2640-790", "2640-791", "2640-792", "2640-793", "2640-794", "2640-797", "2640-800", "2640-806", "2640-809", "2640-812", "2640-813", "2640-820", "2640-821", "2640-822", "2640-405", "2640-406", "2640-407", "2640-408", "2640-422", "2640-436", "2640-446", "2640-447", "2640-426", "2640-402", "2640-428", "2640-449", "2640-510", "2640-415", "2640-416", "2640-418", "2640-567", "2640-573", "2640-431", "2640-410", "2640-577", "2643-305", "2640-438", "2640-583", "2640-546", "2640-566", "2644-012", "2640-564", "2640-563", "2640-562", "2640-411", "2640-430", "2640-565", "2640-390", "2640-561", "2640-580", "2640-586", "2640-585", "2640-412", "2640-817", "2640-818", "2644-603", "2640-420", "2640-417", "2640-427", "2640-413", "2640-581", "2640-401", "2640-544", "2640-419", "2640-387"],
             "Monte Godel": ["2640-561"],
             "Vilãs": ["2640-580", "2640-824"],
             "Casal Mangancha": ["2640-586"],
@@ -810,7 +913,9 @@ export const GEOGRAPHY = {
             "Almada": ["2640-411"],
             "Vale da Guarda": ["2640-420"],
             "Gonçalves": ["2640-430"],
-            "Paul da Bahia": ["2640-565"]
+            "Paul da Bahia": ["2640-565"],
+            "Póvoa de Cima": ["2640-571"],
+            "Póvoa de Baixo": ["2640-570"]
         },
         "MALVEIRA": {
             "Abrunheira": ["2665-191"],
@@ -895,7 +1000,7 @@ export const GEOGRAPHY = {
             "Santo Isidoro": ["2640-100", "2640-058", "2640-090", "2640-051", "2640-081", "2640-082", "2640-083", "2640-084", "2640-085", "2640-086", "2640-087", "2640-088", "2640-089", "2640-091", "2640-092", "2640-093", "2640-094", "2640-095", "2640-039", "2640-040", "2640-041", "2640-099", "2640-097", "2640-079", "2640-053"],
             "Achada": ["2640-097"],
             "Penegache": ["2640-079"],
-            "Cabeça Alta": ["2640-053"]
+            "Cabeço Alta": ["2640-053"]
         },
         "SOBRAL DA ABELHEIRA": {
             "Chanca": ["2640-601"],
@@ -927,6 +1032,7 @@ export const GEOGRAPHY = {
     }
 };
 
+
 =========================================
 ARQUIVO: js/main.js
 =========================================
@@ -934,19 +1040,27 @@ ARQUIVO: js/main.js
 /**
  * main.js
  * Faz: Atua como ponto de entrada (bootstrapper) principal da app. Carrega de forma assíncrona os partials HTML, importa e ativa o estado global, e inicializa as escutas de eventos e renderizações de todos os sub-módulos.
+ *      NOVO: Escuta as mudanças de utilizador do Firebase Auth, valida permissões no Firestore e gere o overlay do formulário de login de forma segura.
+ *      NOVO: Inicia e pára escuta ativa do Firestore onSnapshot ao ligar e desligar sessão.
+ *      NOVO: Escuta em tempo real as leituras de triagem da data de hoje para manter contagens globais automáticas.
+ *      NOVO: Sincroniza e herda a rota ativa em tempo real para o driver que iniciou sessão.
+ *      NOVO: Bloqueia e oculta reativamente a barra de navegação inferior global antes de iniciar sessão na nuvem.
  * NÃO faz: Não executa diretamente lógica de dados, georreferenciação ou renderizadores de listas (delegação direta aos módulos importados).
- * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js
+ * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./firebase-init.js
  */
 
 import './state.js'; // Garante o arranque do estado global e migração física imediata de dados
 import { saveData } from './storage.js';
-import { setupNavigation, showTab, setupKeypad, setupPrefixLock, updateVisor } from './ui.js';
+import { setupNavigation, showTab, setupKeypad, setupPrefixLock, updateVisor, aplicarPermissoesPorRole } from './ui.js';
 import { renderDrivers, handleDriverSubmit } from './motoristas.js';
-import { handleSectorSubmit } from './setores.js';
+import './setores.js'; // Ativa e regista o novo motor tátil de Bricks e atribuições
 import { setupTriagemLogic, setupCancelButtons, setupVozTriagemLogic, setupCameraOcrLogic } from './triagem.js';
 import { setupRotasLogic, setupModaisEdicao, setupVozLogic, sincronizarInterfaceRota } from './rotas.js';
 import { setupPWAInstallationLogic } from './pwa.js';
 import { inicializarGoogleAutocompleteTriagem } from './maps.js';
+
+// Importa instâncias seguras do Firebase para o arranque de sessão
+import { auth, db } from './firebase-init.js';
 
 // ==========================================
 // PALETE DE CORES DOS MOTORISTAS
@@ -956,6 +1070,122 @@ const colorPalette = [
     "#7C3AED", "#DB2777", "#0891B2", "#D97706", 
     "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
 ];
+
+// Variáveis para guardar o cancelamento seguro de conexões ativas do Firestore
+let unsubDrivers = null;
+let unsubAssignments = null;
+let unsubRoute = null;
+
+// ==========================================
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (MOTORISTAS)
+// ==========================================
+function escutarDriversEmTempoReal() {
+    if (unsubDrivers) {
+        unsubDrivers(); // Evita conexões duplicadas abertas
+    }
+
+    console.log("[FIREBASE] A iniciar escuta em tempo real de motoristas...");
+    unsubDrivers = db.collection('drivers').onSnapshot((querySnapshot) => {
+        const drivers = [];
+        querySnapshot.forEach((doc) => {
+            drivers.push(doc.data());
+        });
+
+        // Sincroniza em memória global
+        window.drivers = drivers;
+        console.log("[FIREBASE] Motoristas sincronizados em tempo real:", window.drivers.length);
+
+        // Grava no localStorage como cache secundário offline de salvaguarda
+        localStorage.setItem('cp_drivers', JSON.stringify(window.drivers));
+
+        // Redesenha instantaneamente todas as interfaces tátil
+        const listaMotoristas = document.getElementById('lista-motoristas');
+        if (listaMotoristas) {
+            renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
+        }
+        if (typeof window.renderizarSetoresUI === 'function') {
+            window.renderizarSetoresUI();
+        }
+    }, (error) => {
+        console.error("[FIREBASE] Erro ao escutar motoristas no Firestore:", error);
+    });
+}
+
+// ==========================================
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (TRIAGENS DA DATA DE HOJE!)
+// ==========================================
+function escutarAssignmentsEmTempoReal() {
+    if (unsubAssignments) {
+        unsubAssignments();
+    }
+
+    // Filtra reativamente apenas as leituras da data de hoje para velocidade extrema no armazém!
+    const hoje = new Date().toISOString().split('T')[0];
+    console.log(`[FIREBASE] A escutar leituras da data de hoje (${hoje}) no Firestore...`);
+
+    unsubAssignments = db.collection('assignments').where('date', '==', hoje)
+        .onSnapshot((querySnapshot) => {
+            const list = [];
+            querySnapshot.forEach((doc) => {
+                list.push(doc.data());
+            });
+
+            window.assignments = list;
+            console.log("[FIREBASE] Leituras de hoje sincronizadas:", window.assignments.length);
+
+            // Gravação física local como cache de salvaguarda
+            localStorage.setItem('cp_assignments', JSON.stringify(window.assignments));
+
+            // Redesenha o painel de resumo de contagem em tempo real
+            if (typeof window.atualizarSummaryUI === 'function') {
+                window.atualizarSummaryUI();
+            }
+        }, (err) => {
+            console.error("[FIREBASE] Erro ao carregar triagens de hoje no Firestore:", err);
+        });
+}
+
+// ==========================================
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (ROTA ATIVA DO DRIVER AUTENTICADO!)
+// ==========================================
+function escutarRotaEmTempoReal(uid) {
+    if (unsubRoute) {
+        unsubRoute();
+    }
+
+    console.log(`[FIREBASE] A sincronizar rota pessoal em tempo real para o UID: ${uid}`);
+
+    unsubRoute = db.collection('routes').doc(uid).onSnapshot((doc) => {
+        if (doc.exists) {
+            const data = doc.data();
+            window.partidaLocalizacao = data.partidaLocalizacao || null;
+            window.moradasEntregas = data.moradasEntregas || [];
+            window.rotaOtimizada = data.rotaOtimizada || [];
+            window.dataRotaSelecionada = data.dataRotaSelecionada || "";
+            window.rotaIniciada = data.rotaIniciada || false;
+            console.log("[FIREBASE] Rota do condutor carregada com sucesso do Firestore.");
+        } else {
+            console.log("[FIREBASE] Nenhuma rota activa encontrada na nuvem. A iniciar limpo.");
+            window.partidaLocalizacao = null;
+            window.moradasEntregas = [];
+            window.rotaOtimizada = [];
+            window.dataRotaSelecionada = "";
+            window.rotaIniciada = false;
+        }
+
+        // Atualiza a cache física local offline do telemóvel
+        localStorage.setItem('cp_partida', JSON.stringify(window.partidaLocalizacao));
+        localStorage.setItem('cp_entregas', JSON.stringify(window.moradasEntregas));
+        localStorage.setItem('cp_rota_otimizada', JSON.stringify(window.rotaOtimizada));
+        localStorage.setItem('cp_data_rota', JSON.stringify(window.dataRotaSelecionada));
+        localStorage.setItem('cp_rota_iniciada', JSON.stringify(window.rotaIniciada));
+
+        // Redesenha e atualiza reativamente o ecrã e o mapa do condutor
+        sincronizarInterfaceRota();
+    }, (err) => {
+        console.error("[FIREBASE] Erro ao sincronizar rota em nuvem:", err);
+    });
+}
 
 // =========================================================================
 // CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS (TEMPLATES HTML)
@@ -1084,59 +1314,164 @@ function renderColorPicker() {
 }
 
 // =========================================================================
-// GESTÃO DE FORMULÁRIOS OPERACIONAIS (MOTORISTAS E SETORES)
+// GESTÃO DE FORMULÁRIOS OPERACIONAIS (MOTORISTAS)
 // =========================================================================
 function setupForms() {
     const formMotorista = document.getElementById('form-motorista');
-    const formSetor = document.getElementById('form-setor');
     const listaMotoristas = document.getElementById('lista-motoristas');
 
     if (formMotorista && listaMotoristas) {
         formMotorista.addEventListener('submit', (e) => {
             handleDriverSubmit(e, window.drivers, window.selectedColor, () => {
-                renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
+                renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
                 window.atualizarSummaryUI();
                 window.renderizarSetoresUI();
-            });
-        });
-    }
-
-    if (formSetor) {
-        formSetor.addEventListener('submit', (e) => {
-            handleSectorSubmit(e, window.sectors, () => {
-                window.renderizarSetoresUI();
-                if (listaMotoristas) {
-                    renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
-                }
             });
         });
     }
 }
 
 // ==========================================
-// CENTRALIZAÇÃO DA LIMPEZA DE LEITURAS
+// CENTRALIZAÇÃO DE LIMPEZA DE LEITURAS (GRAVAÇÃO EM BATCH NO FIRESTORE!)
 // ==========================================
 function setupResetLeituras() {
     const btnLimparLeituras = document.getElementById('btn-limpar-leituras');
     if (btnLimparLeituras) {
-        btnLimparLeituras.addEventListener('click', () => {
-            if (confirm("Deseja realmente limpar todas as leituras?")) {
-                window.assignments = [];
-                saveData(
-                    window.drivers, 
-                    [], // intervals obsoletos
-                    window.assignments,
-                    window.partidaLocalizacao,
-                    window.moradasEntregas,
-                    window.rotaOtimizada,
-                    window.dataRotaSelecionada, 
-                    window.rotaIniciada,
-                    window.sectors
-                );
-                window.atualizarSummaryUI();
+        btnLimparLeituras.addEventListener('click', async () => {
+            if (confirm("Deseja realmente limpar todas as leituras de hoje na nuvem?")) {
+                const hoje = new Date().toISOString().split('T')[0];
+                try {
+                    // Consulta todas as leituras de hoje no Firestore e elimina-as em lote síncrono (Batch)
+                    const snapshot = await db.collection('assignments').where('date', '==', hoje).get();
+                    const batch = db.batch();
+                    snapshot.forEach((doc) => {
+                        batch.delete(doc.ref);
+                    });
+                    await batch.commit();
+                    console.log("[FIREBASE] Leituras de hoje limpas com sucesso no Firestore.");
+                } catch (err) {
+                    console.error("[FIREBASE] Erro ao limpar leituras:", err);
+                    alert("Erro de ligação: Não foi possível limpar as leituras na nuvem.");
+                }
             }
         });
     }
+}
+
+// =========================================================================
+// ENTRADA DE SESSÃO DO FORMULÁRIO DE LOGIN CLOUD
+// =========================================================================
+function setupAuthForms() {
+    const formLogin = document.getElementById('form-login');
+    const btnSubmit = document.getElementById('btn-login-submit');
+
+    if (formLogin) {
+        formLogin.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const senha = document.getElementById('login-senha').value;
+
+            if (btnSubmit) {
+                btnSubmit.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A autenticar...</span>';
+                btnSubmit.disabled = true;
+            }
+
+            try {
+                await auth.signInWithEmailAndPassword(email, senha);
+                console.log("[AUTH] Login efetuado com sucesso!");
+            } catch (err) {
+                console.error("[AUTH] Falha ao iniciar sessão:", err);
+                alert("Falha ao iniciar sessão: Email ou palavra-passe incorretos.");
+            } finally {
+                if (btnSubmit) {
+                    btnSubmit.innerHTML = '<i class="fa-solid fa-right-to-bracket"></i> <span>Entrar no Sistema</span>';
+                    btnSubmit.disabled = false;
+                }
+            }
+        });
+    }
+
+    const btnLogout = document.getElementById('btn-logout');
+    if (btnLogout) {
+        btnLogout.addEventListener('click', async () => {
+            if (confirm("Deseja realmente terminar a sua sessão?")) {
+                try {
+                    await auth.signOut();
+                    showTab('triagem'); // Redireciona limpo para triagem ao sair
+                } catch (err) {
+                    console.error("[AUTH] Erro ao terminar sessão:", err);
+                }
+            }
+        });
+    }
+}
+
+// ==========================================
+// ESCUTADOR DE ALTERAÇÃO DE ESTADO DE AUTENTICAÇÃO E PERFIS DO FIRESTORE
+// ==========================================
+function inicializarMonitorizacaoAuth() {
+    auth.onAuthStateChanged(async (user) => {
+        const modalLogin = document.getElementById('modal-login');
+        const btnLogout = document.getElementById('btn-logout');
+        const navBarraInferior = document.getElementById('nav-barra-inferior');
+
+        if (user) {
+            console.log("[AUTH] Utilizador autenticado:", user.email);
+            window.currentUserUid = user.uid; // Grava o UID na memória global de rotas
+
+            // Revela a barra de navegação inferior global ao iniciar sessão com sucesso!
+            if (navBarraInferior) navBarraInferior.classList.remove('hidden');
+
+            // Liga o ouvinte em tempo real no Firestore para sincronizar motoristas de imediato!
+            escutarDriversEmTempoReal();
+            escutarAssignmentsEmTempoReal();
+            escutarRotaEmTempoReal(user.uid);
+
+            // Carrega o documento do utilizador a partir da coleção 'users' no Firestore
+            try {
+                const doc = await db.collection('users').doc(user.uid).get();
+                if (doc.exists) {
+                    const userData = doc.data();
+                    const role = userData.role || 'Motorista'; // Fallback seguro
+                    console.log("[AUTH] Perfil carregado do Firestore. Role:", role);
+                    
+                    aplicarPermissoesPorRole(role);
+                } else {
+                    console.warn("[AUTH] O documento do utilizador não existe. Assumindo permissões básicas.");
+                    aplicarPermissoesPorRole('Motorista');
+                }
+            } catch (err) {
+                console.error("[AUTH] Erro ao consultar perfil no Firestore:", err);
+                aplicarPermissoesPorRole('Motorista');
+            }
+
+            if (modalLogin) modalLogin.classList.add('hidden'); // Desbloqueia e oculta ecrã de login
+            if (btnLogout) btnLogout.classList.remove('hidden'); // Revela botão de logout
+        } else {
+            console.log("[AUTH] Nenhum utilizador ativo. A bloquear ecrã...");
+            window.currentUserUid = null;
+
+            // Oculta a barra de navegação inferior global de forma reativa antes de iniciar sessão!
+            if (navBarraInferior) navBarraInferior.classList.add('hidden');
+
+            // Desliga todos os ouvintes em tempo real para poupar dados de internet ao terminar sessão
+            if (unsubDrivers) {
+                unsubDrivers();
+                unsubDrivers = null;
+            }
+            if (unsubAssignments) {
+                unsubAssignments();
+                unsubAssignments = null;
+            }
+            if (unsubRoute) {
+                unsubRoute();
+                unsubRoute = null;
+            }
+
+            if (modalLogin) modalLogin.classList.remove('hidden'); // Exibe obrigatoriamente ecrã de login
+            if (btnLogout) btnLogout.classList.add('hidden'); // Oculta botão de logout
+        }
+    });
 }
 
 // =========================================================================
@@ -1154,15 +1489,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupKeypad();
     setupPrefixLock();
     setupForms();
+    setupAuthForms(); // Configura os eventos de login/logout
+    inicializarMonitorizacaoAuth(); // Liga o monitor de segurança e acessos por perfil
     renderColorPicker();
     setupResetLeituras();
     setupRotasLogic();
     setupModaisEdicao();
     setupTriagemLogic();
     setupCancelButtons(); 
-    setupVozLogic(); 
-    setupVozTriagemLogic(); 
-    setupCameraOcrLogic(); 
     setupPWAInstallationLogic(); 
 
     // 4. Desenha o estado inicial do visor numérico
@@ -1171,10 +1505,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
     }
     
-    // 5. Renderizações visuais automáticas baseadas nas memórias físicas do telemóvel
+    // 5. Renderizações visuais automáticas baseadas nas memórias físicas
     const listaMotoristas = document.getElementById('lista-motoristas');
     if (listaMotoristas) {
-        renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
+        renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
     }
     
     if (typeof window.renderizarSetoresUI === 'function') {
@@ -1441,29 +1775,12 @@ ARQUIVO: js/motoristas.js
 
 /**
  * motoristas.js
- * Faz: Gere o registo, edição, eliminação, listagem e coloração dos motoristas ativos, bem como a associação exclusiva aos setores.
- * NÃO faz: Não cria setores geográficos (setores.js) nem processa algoritmos de voz ou triagem (triagem.js).
- * Depende de: ./storage.js
+ * Faz: Gere o registo, edição, eliminação, listagem e coloração dos motoristas ativos, integrando diretamente as gravações no Cloud Firestore.
+ * NÃO faz: Não gere a atribuição geográfica direta de Bricks (atribuídos no painel de Bricks).
+ * Depende de: ./firebase-init.js (para aceder ao banco de dados Firestore db)
  */
 
-import { saveData } from './storage.js';
-
-// =========================================================================
-// FUNÇÃO INTERNA AUXILIAR DE PERSISTÊNCIA
-// =========================================================================
-function sincronizarPersistencia() {
-    saveData(
-        window.drivers, 
-        [], // intervals obsoletos
-        window.assignments,
-        window.partidaLocalizacao,
-        window.moradasEntregas,
-        window.rotaOtimizada,
-        window.dataRotaSelecionada, 
-        window.rotaIniciada,
-        window.sectors
-    );
-}
+import { db } from './firebase-init.js';
 
 // =========================================================================
 // RENDERIZAÇÃO DA LISTA DE MOTORISTAS ATIVOS
@@ -1475,26 +1792,19 @@ export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, e
         : '';
     
     drivers.forEach(driver => {
-        const driverSectorIds = Array.isArray(driver.sectorIds) ? driver.sectorIds : [];
-        const sectorNames = driverSectorIds
-            .map(sid => sectors.find(s => s.id === sid))
-            .filter(Boolean)
-            .map(s => s.name);
-
-        const sectorBadgesHtml = sectorNames.length > 0
-            ? sectorNames.map(name => `<span class="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100 text-[9px] font-bold">${name}</span>`).join('')
-            : '<span class="italic text-gray-400 text-[10px]">Sem Setor associado</span>';
+        const brickCount = Array.isArray(driver.brickIds) ? driver.brickIds.length : 0;
 
         const div = document.createElement('div');
         div.className = "flex items-center justify-between p-3 bg-gray-50 border rounded-lg text-xs animate-fade-in";
         div.innerHTML = `
             <div class="flex-1 truncate pr-2">
                 <div class="flex items-center space-x-3">
-                    <span class="w-4 h-4 rounded-full border shadow-sm" style="background-color: ${driver.color}"></span>
-                    <span class="font-semibold text-gray-700">${driver.name}</span>
+                    <span class="w-4 h-4 rounded-full border shadow-sm flex-shrink-0" style="background-color: ${driver.color}"></span>
+                    <span class="font-semibold text-gray-700 text-sm">${driver.name}</span>
                 </div>
                 <div class="text-[10px] text-gray-400 mt-1.5 flex items-center flex-wrap gap-1">
-                    <i class="fa-solid fa-map-location-dot mr-0.5"></i> ${sectorBadgesHtml}
+                    <i class="fa-solid fa-boxes-stacked mr-0.5"></i>
+                    <span class="font-bold text-blue-600">${brickCount} Localidades (Bricks)</span> associadas
                 </div>
             </div>
             <div class="flex items-center space-x-1 flex-shrink-0">
@@ -1509,108 +1819,69 @@ export function renderDrivers(drivers, sectors, listaMotoristas, deleteDriver, e
 }
 
 // =========================================================================
-// SUBMISSÃO E EDIÇÃO DE MOTORISTA
+// SUBMISSÃO E EDIÇÃO DE MOTORISTA (GRAVAÇÃO DIRETA NO FIRESTORE!)
 // =========================================================================
 export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     e.preventDefault();
     const nomeInput = document.getElementById('nome-motorista');
-    const checkboxesContainer = document.getElementById('checkboxes-setores-motorista');
     const btnSubmit = document.getElementById('btn-submit-motorista');
     const btnCancelar = document.getElementById('btn-cancelar-motorista');
     
     const nome = nomeInput.value.trim();
     if (!nome) return;
 
-    const checkedBoxes = checkboxesContainer ? checkboxesContainer.querySelectorAll('input[type="checkbox"]:checked') : [];
-    const sectorIds = Array.from(checkedBoxes).map(cb => cb.value);
-
-    if (sectorIds.length === 0) {
-        alert('Por favor, selecione pelo menos um Setor para o motorista.');
-        return;
-    }
-
     const emEdicao = window.driverSendoEditado;
 
-    // Validação de Segurança: Garante que nenhum dos setores já esteja em uso por outro motorista ativo
-    const setorDuplicado = sectorIds.find(sid =>
-        drivers.some(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(sid) && (!emEdicao || d.id !== emEdicao.id))
-    );
-
-    if (setorDuplicado) {
-        alert('Erro de Segurança: um dos setores selecionados já está atribuído a outro motorista.');
-        return;
-    }
-
     if (emEdicao) {
-        const driverIndex = drivers.findIndex(d => d.id === emEdicao.id);
-        if (driverIndex !== -1) {
-            drivers[driverIndex].name = nome;
-            drivers[driverIndex].color = selectedColor;
-            drivers[driverIndex].sectorIds = sectorIds;
-        }
+        // Atualiza o motorista no Firestore
+        db.collection('drivers').doc(emEdicao.id).update({
+            name: nome,
+            color: selectedColor
+        }).then(() => {
+            console.log("[FIREBASE] Motorista atualizado com sucesso no Firestore.");
+        }).catch((err) => {
+            console.error("[FIREBASE] Erro ao atualizar motorista:", err);
+            alert("Erro de ligação: Não foi possível atualizar o motorista.");
+        });
         window.driverSendoEditado = null;
     } else {
-        drivers.push({ 
-            id: 'd_' + Date.now(), 
+        // Insere o novo motorista no Firestore
+        const newId = 'd_' + Date.now();
+        db.collection('drivers').doc(newId).set({ 
+            id: newId, 
             name: nome, 
             color: selectedColor,
-            sectorIds: sectorIds 
+            brickIds: [] // Inicia uma lista de Bricks vazia para nova atribuição
+        }).then(() => {
+            console.log("[FIREBASE] Novo motorista inserido com sucesso no Firestore.");
+        }).catch((err) => {
+            console.error("[FIREBASE] Erro ao inserir motorista:", err);
+            alert("Erro de ligação: Não foi possível registar o motorista.");
         });
     }
-
-    sincronizarPersistencia();
     
     nomeInput.value = "";
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
     renderCallback();
-    alert(emEdicao ? 'Motorista atualizado com sucesso!' : 'Motorista registado com sucesso!');
 }
 
-// =========================================================================
-// SELEÇÃO DE SETORES LIVRES NAS CHECKBOXES DO MOTORISTA
-// =========================================================================
-export function renderSectorCheckboxes(sectors, container, drivers = [], editingDriverId = null) {
-    if (!container) return;
-    container.innerHTML = "";
-
-    if (sectors.length === 0) {
-        container.innerHTML = '<p class="text-xs text-gray-400 italic text-center py-2">Nenhum setor registado. Crie um setor primeiro.</p>';
-        return;
+// ==========================================
+// REGISTO DA ASSINATURA DA JANELA TÁTIL
+// ==========================================
+window.renderizarMotoristasUI = () => {
+    const listaMotoristas = document.getElementById('lista-motoristas');
+    if (listaMotoristas) {
+        renderDrivers(window.drivers, [], listaMotoristas, window.deleteDriver, window.editDriver);
     }
+};
 
-    sectors.forEach(sector => {
-        const driverOwner = drivers.find(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(sector.id) && d.id !== editingDriverId);
-        const belongsToEditingDriver = !!(editingDriverId && drivers.some(d => d.id === editingDriverId && Array.isArray(d.sectorIds) && d.sectorIds.includes(sector.id)));
-
-        const label = document.createElement('label');
-
-        if (driverOwner) {
-            label.className = "flex items-center justify-between p-2 rounded bg-gray-100/50 text-gray-400 cursor-not-allowed select-none";
-            label.innerHTML = `
-                <div class="flex items-center space-x-2">
-                    <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-4 h-4 cursor-not-allowed">
-                    <span class="font-bold text-gray-400 line-through text-xs">${sector.name}</span>
-                </div>
-                <span class="text-[9px] bg-gray-100 text-gray-500 font-bold px-1.5 py-0.5 rounded border">
-                    Com: ${driverOwner.name}
-                </span>
-            `;
-        } else {
-            label.className = "flex items-center justify-between p-2 rounded hover:bg-gray-100 cursor-pointer text-xs";
-            label.innerHTML = `
-                <div class="flex items-center space-x-2 text-gray-700">
-                    <input type="checkbox" value="${sector.id}" ${belongsToEditingDriver ? 'checked' : ''} class="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
-                    <span class="font-bold">${sector.name}</span>
-                </div>
-                <span class="text-[9px] bg-green-50 text-green-700 font-bold px-1.5 py-0.5 rounded border border-green-200">
-                    Livre
-                </span>
-            `;
-        }
-        container.appendChild(label);
-    });
+// ==========================================
+// FUNÇÃO DESATIVADA COM A SIMPLIFICAÇÃO DOS SETORES
+// ==========================================
+export function renderSectorCheckboxes() {
+    // Mantido apenas assinatura de compatibilidade para evitar quebras em main.js
 }
 
 // =========================================================================
@@ -1639,10 +1910,6 @@ window.editDriver = (driver) => {
             }
         });
     }
-
-    if (typeof window.renderizarSetoresUI === 'function') {
-        window.renderizarSetoresUI();
-    }
 };
 
 window.cancelarEdicaoDriver = () => {
@@ -1655,29 +1922,19 @@ window.cancelarEdicaoDriver = () => {
     if (nomeInput) nomeInput.value = "";
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
-
-    if (typeof window.renderizarSetoresUI === 'function') {
-        window.renderizarSetoresUI();
-    }
 };
 
 window.deleteDriver = (id) => {
     if (confirm("Ao apagar este motorista, as suas contagens de pacotes também serão removidas. Confirmar?")) {
-        window.drivers = window.drivers.filter(d => d.id !== id);
-        window.assignments = window.assignments.filter(a => a.driverId !== id); 
-        sincronizarPersistencia();
-        
-        const listaMotoristas = document.getElementById('lista-motoristas');
-        if (listaMotoristas) {
-            renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
-        }
-        
-        if (typeof window.renderizarSetoresUI === 'function') {
-            window.renderizarSetoresUI();
-        }
-        if (typeof window.atualizarSummaryUI === 'function') {
-            window.atualizarSummaryUI();
-        }
+        // Elimina o motorista do Firestore de forma síncrona
+        db.collection('drivers').doc(id).delete()
+            .then(() => {
+                console.log("[FIREBASE] Motorista eliminado no Firestore.");
+            })
+            .catch((err) => {
+                console.error("[FIREBASE] Erro ao eliminar motorista:", err);
+                alert("Erro de ligação: Não foi possível apagar o motorista.");
+            });
     }
 };
 
@@ -1760,20 +2017,27 @@ ARQUIVO: js/rotas.js
 /**
  * js/rotas.js
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
- *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido
- *      e copia automaticamente o código postal para o campo de pesquisa para agilizar a digitação.
- * NÃO faz: Não executa cálculos de linha reta locais (delegado à API remota da Google).
- * Depende de: ./storage.js, ./voz.js, ./maps.js
+ *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
+ *      atribui o Brick correspondente à localidade do pacote e apresenta etiquetas visuais de arrumação física.
+ *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
+ *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
+ *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
+ * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
+ * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
  */
 
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
+import { GEOGRAPHY } from './geografia-data.js';
 import { 
     obterEnderecoPorGPSGoogle, 
     calcularDistanciaHaversine, 
     desenharMapaGoogle, 
     limparMapaVisual 
 } from './maps.js';
+
+// Importa a instância ativa do Firestore
+import { db } from './firebase-init.js';
 
 let itemSendoEditado = null; 
 let autocompleteInstancia = null; // Guarda a instância ativa do Google Places Autocomplete
@@ -1790,9 +2054,10 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
     : 'https://classificapack-backend.onrender.com'; // Link do seu Render ativo
 
 // ==========================================
-// CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS
+// CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS (SINC DE CLOUD REAL-TIME!)
 // ==========================================
 function sincronizarPersistencia() {
+    // Grava de cache síncrona no LocalStorage local
     saveData(
         window.drivers, 
         [], // intervals obsoletos
@@ -1801,9 +2066,24 @@ function sincronizarPersistencia() {
         window.moradasEntregas,
         window.rotaOtimizada,
         window.dataRotaSelecionada, 
-        window.rotaIniciada,
-        window.sectors
+        window.rotaIniciada
     );
+
+    // NOVO: Se houver um utilizador autenticado, sincroniza reativamente com o seu documento correspondente em 'routes'!
+    if (window.currentUserUid) {
+        db.collection('routes').doc(window.currentUserUid).set({
+            partidaLocalizacao: window.partidaLocalizacao || null,
+            moradasEntregas: window.moradasEntregas || [],
+            rotaOtimizada: window.rotaOtimizada || [],
+            dataRotaSelecionada: window.dataRotaSelecionada || "",
+            rotaIniciada: window.rotaIniciada || false,
+            lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        }).then(() => {
+            console.log("[FIREBASE] Rota do utilizador sincronizada no Firestore.");
+        }).catch((err) => {
+            console.error("[FIREBASE] Erro ao sincronizar rota no Firestore:", err);
+        });
+    }
 }
 
 // ==========================================
@@ -1858,6 +2138,106 @@ export function setupVozLogic() {
     });
 }
 
+// Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
+function isCatchAllLocality(freguesia, localidade) {
+    const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
+    const cleanLoc = localidade.toLowerCase();
+    if (cleanLoc === cleanFreg) return true;
+    if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
+    return false;
+}
+
+// ==========================================
+// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS COM DUPLA PASSAGEM)
+// ==========================================
+function resolveBrickForZip(zip, drivers) {
+    if (!zip || !drivers) return { brickId: null, brickName: null };
+    const regexZip = /\d{4}-\d{3}/;
+    const match = zip.match(regexZip);
+    const normalizedZip = match ? match[0] : zip.trim();
+
+    let matchedFreguesia = null;
+    let matchedLocalidade = null;
+    const concelho = "MAFRA";
+
+    // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas
+    for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+        for (const [localidade, cpList] of Object.entries(localidades)) {
+            if (isCatchAllLocality(freguesia, localidade)) {
+                continue;
+            }
+
+            if (cpList.includes(normalizedZip)) {
+                matchedFreguesia = freguesia;
+                matchedLocalidade = localidade;
+                break;
+            }
+        }
+        if (matchedFreguesia) break;
+    }
+
+    // PASSAGEM 2: Fallback - Se não encontrou, procura nas genéricas (catch-all)
+    if (!matchedFreguesia) {
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+            for (const [localidade, cpList] of Object.entries(localidades)) {
+                if (isCatchAllLocality(freguesia, localidade)) {
+                    if (cpList.includes(normalizedZip)) {
+                        matchedFreguesia = freguesia;
+                        matchedLocalidade = localidade;
+                        break;
+                    }
+                }
+            }
+            if (matchedFreguesia) break;
+        }
+    }
+
+    if (!matchedFreguesia) {
+        return { brickId: null, brickName: null };
+    }
+
+    return { 
+        brickId: `${matchedFreguesia}|${matchedLocalidade}`, 
+        brickName: matchedLocalidade 
+    };
+}
+
+// ==========================================
+// ALGORITMO SÍNCRONO LOCAL DE CONTINGÊNCIA (VIZINHO MAIS PRÓXIMO)
+// ==========================================
+function calcularRotaVizinhoMaisProximoLocal() {
+    if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
+
+    const unvisited = [...window.moradasEntregas];
+    const optimized = [];
+    let currentCoords = { lat: window.partidaLocalizacao.lat, lng: window.partidaLocalizacao.lng };
+
+    while (unvisited.length > 0) {
+        let nearestIndex = 0;
+        let minDistance = Infinity;
+
+        for (let i = 0; i < unvisited.length; i++) {
+            const dist = calcularDistanciaHaversine(
+                currentCoords.lat,
+                currentCoords.lng,
+                unvisited[i].lat,
+                unvisited[i].lng
+            );
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestIndex = i;
+            }
+        }
+
+        const nextStop = unvisited.splice(nearestIndex, 1)[0];
+        nextStop.distanciaDoAnterior = minDistance;
+        optimized.push(nextStop);
+        currentCoords = { lat: nextStop.lat, lng: nextStop.lng };
+    }
+
+    window.rotaOtimizada = optimized;
+}
+
 // =========================================================================
 // TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA (GEOCODIFICAÇÃO LOCAL/PROD)
 // =========================================================================
@@ -1903,6 +2283,9 @@ export async function processarAdicaoPorPostal() {
             throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
         }
 
+        // Resolve e associa estante física (Brick) na criação da paragem
+        const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
+
         // 4. Constrói o objeto de morada mapeada vinda da Google
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
@@ -1911,7 +2294,9 @@ export async function processarAdicaoPorPostal() {
             address: data.address, // Endereço oficial mapeado pela Google
             status: "Pendente",
             observation: "",
-            priority: false
+            priority: false,
+            brickId: brickId,
+            brickName: brickName // Gravação física da estante (Brick) correspondente à localidade
         };
 
         // 5. Verifica se o clique anterior foi para definir o Ponto de Partida
@@ -2030,7 +2415,13 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         });
 
         if (!response.ok) {
-            throw new Error("O servidor local falhou ou a Google rejeitou as credenciais de teste.");
+            // Deteta reativamente o código e erro HTTP real do Render para diagnosticar timeout ou chaves
+            let errorDetails = `Erro ${response.status} (${response.statusText})`;
+            try {
+                const errJson = await response.json();
+                if (errJson.error) errorDetails += ` - ${errJson.error}`;
+            } catch(e) {}
+            throw new Error(errorDetails);
         }
 
         const data = await response.json();
@@ -2054,7 +2445,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
                 window.rotaOtimizada.push(paragemOriginal);
             });
         } else {
-            // Se a API não devolveu uma rota nova por alguma restrição, mantém a original
+            // Se a API não deu erro mas não ordenou, mantém a original
             window.rotaOtimizada = [...window.moradasEntregas];
             window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
         }
@@ -2074,8 +2465,26 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         alternarModoRota('conducao');
 
     } catch (err) {
-        console.error("Erro na comunicação local DEV:", err);
-        alert(`Ocorreu um erro no teste: ${err.message}\n\nGaranta que iniciou o servidor no terminal escrevendo: node --env-file=.env js/dev-rotas-backend.js`);
+        // Novo: Resolvedor de Contingência Local Ativo se o Render falhar, der timeout ou estiver a dormir
+        console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
+        
+        calcularRotaVizinhoMaisProximoLocal();
+        
+        alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo para que possa trabalhar!`);
+        
+        const containerMapa = document.getElementById('container-mapa');
+        const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
+        if (containerMapa) containerMapa.classList.remove('hidden');
+        if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+
+        renderizarItinerarioOtimizado();
+        sincronizarPersistencia();
+        
+        setTimeout(() => {
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }, 300);
+
+        alternarModoRota('conducao');
     } finally {
         if (btnOtimizar) {
             btnOtimizar.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>';
@@ -2106,6 +2515,12 @@ export function renderizarItinerarioOtimizado() {
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
 
+        // Resolve e recupera reativamente o Brick (Estante) usando o novo algoritmo prioritário de duas passagens
+        const { brickId, brickName } = resolveBrickForZip(paragem.address, window.drivers);
+        const finalBrickName = paragem.brickName || brickName;
+        const finalBrickId = paragem.brickId || brickId;
+        const finalFreguesia = finalBrickId ? finalBrickId.split('|')[0] : "";
+
         if (isLastNavigated) {
             if (isPriority) {
                 item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
@@ -2135,6 +2550,9 @@ export function renderizarItinerarioOtimizado() {
                         </span>
                         ${isLastNavigated ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
+                        
+                        <!-- NOVO INDICADOR VISUAL: Etiqueta de Estante (Brick) de arrumação na lista de rotas de condução -->
+                        ${finalBrickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="${finalFreguesia} - ${finalBrickName}"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante: ${finalBrickName}</span></span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
@@ -2228,9 +2646,9 @@ export function renderEstatisticasRota() {
     if (statPendentes) statPendentes.textContent = pendentes;
 }
 
-// =========================================================================
+// ==========================================
 // AUXILIARES DO PREFIXO RÁPIDO E DA FORMATAÇÃO DO CÓDIGO POSTAL
-// =========================================================================
+// ==========================================
 function aplicarPrefixoNoCampo(prefixo) {
     const inputCP = document.getElementById('rota-codigo-postal');
     if (!inputCP) return;
@@ -2285,9 +2703,9 @@ function configurarFormatacaoCodigoPostal() {
     });
 }
 
-// =========================================================================
+// ==========================================
 // ESCUTA INTELIGENTE DE CÓDIGO POSTAL PARA REDUZIR AUTOCOMPLETE A 1KM (MIRA LASER)
-// =========================================================================
+// ==========================================
 function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -2363,6 +2781,11 @@ function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
+    // NOVO/CORRIGIDO: Evita a criação duplicada de instâncias no mesmo elemento do DOM! (Previne que o código postal anterior regresse)
+    if (inputMorada.dataset.autocompleteBound === "true") {
+        return;
+    }
+
     // Se o SDK do Google Maps ainda não terminou de carregar, tenta novamente brevemente
     if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
         setTimeout(inicializarAutocompleteMorada, 500);
@@ -2382,6 +2805,9 @@ function inicializarAutocompleteMorada() {
             bounds: limitesMafra,
             strictBounds: false // false prioriza geograficamente Mafra mas permite resultados próximos em caso de fronteira
         });
+
+        // Marca o elemento para evitar duplicações de instâncias concorrentes
+        inputMorada.dataset.autocompleteBound = "true";
 
         // Evento disparado quando o utilizador toca numa morada ou estabelecimento sugerido pela Google
         autocompleteInstancia.addListener('place_changed', () => {
@@ -2408,14 +2834,14 @@ function inicializarAutocompleteMorada() {
     }
 }
 
-// =========================================================================
+// ==========================================
 // SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL
-// =========================================================================
+// ==========================================
 
 /**
- * text para a caixa de observações com base nas tags selecionadas.
+ * text para a caixa de observações com base das tags selecionadas.
  */
-function atualizarTextoObservacoesAutomatico() {
+function textObservacoesAutomatico() {
     const textareaObs = document.getElementById('edit-morada-obs');
     if (!textareaObs) return;
 
@@ -2513,7 +2939,7 @@ function configurarBotoesRapidosModal() {
                 embalagemSelecionada = tipo;
             }
             
-            atualizarEstilosBotoesModal();
+            atualizarStylesBotoesModal();
             textObservacoesAutomatico();
         });
     });
@@ -2529,10 +2955,15 @@ function configurarBotoesRapidosModal() {
                 origemSelecionada = origem;
             }
             
-            atualizarEstilosBotoesModal();
+            atualizarStylesBotoesModal();
             textObservacoesAutomatico();
         });
     });
+}
+
+// Para manter retrocompatibilidade com nomes chamados internamente no DOM
+function atualizarStylesBotoesModal() {
+    atualizarEstilosBotoesModal();
 }
 
 // ==========================================
@@ -2820,9 +3251,9 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         editMoradaPrioridade.checked = !!paragem.priority;
     }
 
-    // Analisa as observações salvas no texto para acender os botões certos ao abrir o modal (Passo 4)
+    // Analisa as observações salvas no texto para acender os botões certos ao abrir o modal
     preencherSelecoesPorTexto(paragem.observation || "");
-    atualizarEstilosBotoesModal();
+    atualizarStylesBotoesModal();
 
     modalEditarParagem.classList.remove('hidden');
 
@@ -2832,256 +3263,478 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     }, 150);
 }
 
+
 =========================================
 ARQUIVO: js/setores.js
 =========================================
 
 /**
  * setores.js
- * Faz: Desenha e gere os setores geográficos ativos, renderiza a árvore hierárquica interativa de Mafra e garante a exclusividade de cada localidade.
- * NÃO faz: Não gere o registo de motoristas (motoristas.js) nem as coordenadas geográficas dos mapas das rotas (maps.js).
- * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js
+ * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
+ *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
+ *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
+ *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
+ *      Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 550 metros.
+ *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
+ * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
+ * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
 
 import { GEOGRAPHY } from './geografia-data.js';
 import { saveData } from './storage.js';
-import { renderDrivers, renderSectorCheckboxes } from './motoristas.js';
 
-// =========================================================================
-// FUNÇÃO INTERNA AUXILIAR DE PERSISTÊNCIA
-// =========================================================================
-function sincronizarPersistencia() {
-    saveData(
-        window.drivers, 
-        [], // intervals obsoletos
-        window.assignments,
-        window.partidaLocalizacao,
-        window.moradasEntregas,
-        window.rotaOtimizada,
-        window.dataRotaSelecionada, 
-        window.rotaIniciada,
-        window.sectors
-    );
+// Importa a instância segura do Firestore
+import { db } from './firebase-init.js';
+
+// ID do motorista que está atualmente selecionado na interface para atribuição
+let motoristaAtivoId = null;
+
+// Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
+let freguesiasExpandidas = new Set();
+
+// Instâncias internas seguras do mapa do gestor e balão de informação
+let dashboardMap = null;
+let dashboardOverlays = [];
+let dashboardInfoWindow = null; // Instância única partilhada para balão de hover
+
+// Cache local em memória RAM das coordenadas já geocodificadas para evitar chamadas redundantes ao Google
+let brickCoordsCache = {};
+
+// Carrega as coordenadas anteriormente guardadas do armazenamento persistente ao arrancar
+try {
+    const cached = localStorage.getItem('cp_brick_coords');
+    if (cached) {
+        brickCoordsCache = JSON.parse(cached);
+    }
+} catch (e) {
+    console.warn("[PWA] Erro ao carregar cache local de coordenadas de Bricks:", e);
+}
+
+function salvarCacheCoordenadas() {
+    try {
+        localStorage.setItem('cp_brick_coords', JSON.stringify(brickCoordsCache));
+    } catch (e) {
+        console.warn("[PWA] Erro ao persistir cache local de coordenadas de Bricks:", e);
+    }
+}
+
+// Coordenadas centrais aproximadas das Freguesias de Mafra (funcionam como Fallback temporário)
+const FREGUESIA_COORDS = {
+    "AZUEIRA": { lat: 38.9900, lng: -9.2500 },
+    "CARVOEIRA MFR": { lat: 38.9300, lng: -9.4100 },
+    "CHELEIROS": { lat: 38.8894, lng: -9.3283 },
+    "ENCARNAÇÃO": { lat: 39.0200, lng: -9.3800 },
+    "ENXARA DO BISPO": { lat: 38.9800, lng: -9.2300 },
+    "ERICEIRA": { lat: 38.9628, lng: -9.4156 },
+    "GRADIL": { lat: 38.9690, lng: -9.2840 },
+    "IGREJA NOVA MFR": { lat: 38.9100, lng: -9.3400 },
+    "MAFRA": { lat: 38.9376, lng: -9.3276 },
+    "MALVEIRA": { lat: 38.9321, lng: -9.2578 },
+    "MILHARADO": { lat: 38.9400, lng: -9.2000 },
+    "SANTO ESTEVÃO DAS GALÉS": { lat: 38.8950, lng: -9.2450 },
+    "SANTO ISIDORO MFR": { lat: 38.9900, lng: -9.3800 },
+    "SOBRAL DA ABELHEIRA": { lat: 39.0100, lng: -9.2900 },
+    "SÃO MIGUEL DE ALCAINÇA": { lat: 38.9400, lng: -9.2900 },
+    "VENDA DO PINHEIRO": { lat: 38.9236, lng: -9.2318 },
+    "VILA FRANCA DO ROSÁRIO": { lat: 38.9700, lng: -9.2500 }
+};
+
+// ==========================================
+// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
+// ==========================================
+function obterCoordenadaPrecisaBrick(freguesia, localidade) {
+    const brickId = `${freguesia}|${localidade}`;
+
+    // 1. Devolve instantaneamente se já estiver na cache local do dispositivo
+    if (brickCoordsCache[brickId]) {
+        return brickCoordsCache[brickId];
+    }
+
+    // 2. Fallback síncrono ultra-rápido (centroide de freguesia com desvio inteligente) para evitar lag
+    const base = FREGUESIA_COORDS[freguesia] || { lat: 38.9376, lng: -9.3276 };
+    let hash = 0;
+    for (let i = 0; i < localidade.length; i++) {
+        hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const latOffset = ((hash % 100) / 10000) - 0.005;
+    const lngOffset = (((hash >> 8) % 100) / 10000) - 0.005;
+
+    return {
+        lat: base.lat + latOffset,
+        lng: base.lng + lngOffset
+    };
+}
+
+// ==========================================
+// GEOCÓDIGO SOB PROCURA (ACIONADO EXCLUSIVAMENTE SOB PROCURA/INTERAÇÃO TÁTIL)
+// ==========================================
+function geocodificarBrickSobProcura(freguesia, localidade) {
+    const brickId = `${freguesia}|${localidade}`;
+    if (brickCoordsCache[brickId]) return; // Evita gastos se já estiver na cache
+
+    if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
+        const geocoder = new google.maps.Geocoder();
+        const cleanFregName = freguesia.replace(/\s+MFR$/i, "");
+        const queryAddress = `${localidade}, ${cleanFregName}, Mafra, Portugal`;
+
+        geocoder.geocode({ address: queryAddress }, (results, status) => {
+            if (status === "OK" && results[0]) {
+                const loc = results[0].geometry.location;
+                brickCoordsCache[brickId] = { lat: loc.lat(), lng: loc.lng() };
+                salvarCacheCoordenadas();
+
+                // Redesenha reativamente o mapa apenas após o sucesso, movendo o circulo para o local real
+                desenharBricksNoMapa();
+            }
+        });
+    }
 }
 
 // =========================================================================
-// RENDERIZAÇÃO DA LISTA DE SETORES ATIVOS
+// INICIALIZAÇÃO DO MAPA DENTAL DO GESTOR
 // =========================================================================
-export function renderSectors(sectors, listaSetores, deleteSector, editSector) {
-    if (!listaSetores) return;
-    listaSetores.innerHTML = sectors.length === 0 
-        ? '<p class="text-sm text-gray-400 italic text-center py-4">Nenhum sector registado.</p>' 
-        : '';
+function inicializarMapaBricksDashboard() {
+    const mapEl = document.getElementById('map-dashboard-bricks');
+    if (!mapEl || typeof google === 'undefined') return;
 
-    sectors.forEach(sector => {
-        const subAreasHtml = sector.areaNames
-            .map(item => {
-                if (item.includes('|')) {
-                    const [freg, loc] = item.split('|');
-                    return `<div class="bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded border border-blue-100 text-[10px] font-bold shadow-sm flex items-center space-x-1"><i class="fa-solid fa-map-pin mr-0.5 text-blue-400"></i> <span>${freg} - ${loc}</span></div>`;
-                } else {
-                    return `<div class="bg-green-50 text-green-700 px-2.5 py-0.5 rounded border border-green-100 text-[10px] font-bold shadow-sm flex items-center space-x-1"><i class="fa-solid fa-map mr-0.5 text-green-400"></i> <span>${item} (Totalidade)</span></div>`;
-                }
-            })
-            .join("");
+    if (!dashboardMap) {
+        dashboardMap = new google.maps.Map(mapEl, {
+            zoom: 11,
+            center: { lat: 38.9500, lng: -9.3000 }, // Centralizado no concelho de Mafra
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false
+        });
 
-        const div = document.createElement('div');
-        div.className = "p-3 bg-gray-50 border rounded-lg text-xs animate-fade-in space-y-2";
-        div.innerHTML = `
-            <div class="flex items-center justify-between font-bold text-gray-800 border-b pb-1.5">
-                <span class="text-sm"><i class="fa-solid fa-map-location-dot text-blue-500 mr-1"></i> ${sector.name}</span>
-                <div class="flex items-center space-x-2">
-                    <button class="btn-edit-setor text-blue-500 hover:text-blue-700 p-1"><i class="fa-solid fa-pen text-xs"></i></button>
-                    <button class="btn-del-setor text-red-500 hover:text-red-700 p-1"><i class="fa-solid fa-trash-can text-xs"></i></button>
-                </div>
-            </div>
-            <div class="flex flex-wrap gap-1 pt-1">
-                ${subAreasHtml || '<div class="italic text-gray-400">Nenhum território atribuído.</div>'}
-            </div>
-        `;
-        div.querySelector('.btn-edit-setor').onclick = () => editSector(sector);
-        div.querySelector('.btn-del-setor').onclick = () => deleteSector(sector.id);
-        listaSetores.appendChild(div);
+        // Inicializa o balão partilhado de Hover
+        dashboardInfoWindow = new google.maps.InfoWindow({
+            disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
+        });
+    } else {
+        google.maps.event.trigger(dashboardMap, 'resize');
+    }
+
+    desenharBricksNoMapa();
+}
+
+// ==========================================
+// DESENHAR NUVENS DE COR DE CADA MOTORISTA NO MAPA GERAL
+// ==========================================
+function desenharBricksNoMapa() {
+    if (!dashboardMap) return;
+
+    // Fecha o balão se estiver aberto para evitar órfãos em re-desenhos
+    if (dashboardInfoWindow) {
+        dashboardInfoWindow.close();
+    }
+
+    // Limpa desenhos e marcas antigas do mapa de forma síncrona
+    dashboardOverlays.forEach(overlay => overlay.setMap(null));
+    dashboardOverlays = [];
+
+    // Mapeamento síncrono e ultra-estável
+    window.drivers.forEach(drv => {
+        const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
+        bIds.forEach(id => {
+            if (id.includes('|')) {
+                const [freg, loc] = id.split('|');
+                const coords = obterCoordenadaPrecisaBrick(freg, loc);
+
+                // Círculo Translúcido de Atribuição (NOVO: Raio reduzido a metade, fixado em exactamente 550 metros!)
+                const circle = new google.maps.Circle({
+                    strokeColor: drv.color,
+                    strokeOpacity: 0.6,
+                    strokeWeight: 1,
+                    fillColor: drv.color,
+                    fillOpacity: 0.2, // Visual nebuloso ultra-agradável
+                    map: dashboardMap,
+                    center: coords,
+                    radius: 550 // Reduzido de 1100m para 550m
+                });
+                dashboardOverlays.push(circle);
+
+                // Ouvinte de passagem de rato (Hover) sobre o círculo para mostrar balão explicativo instantâneo
+                circle.addListener('mouseover', () => {
+                    if (dashboardInfoWindow) {
+                        dashboardInfoWindow.setContent(`
+                            <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 2px 4px; line-height: 1.4;">
+                                <div style="font-weight: bold; color: #1F2937; margin-bottom: 2px;">${freg} - ${loc}</div>
+                                <div style="display: flex; align-items: center; gap: 4px;">
+                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${drv.color};"></span>
+                                    <span style="color: ${drv.color}; font-weight: bold; font-size: 10px; text-transform: uppercase;">Estante de: ${drv.name}</span>
+                                </div>
+                            </div>
+                        `);
+                        dashboardInfoWindow.setPosition(coords);
+                        dashboardInfoWindow.open(dashboardMap);
+                    }
+                });
+
+                circle.addListener('mouseout', () => {
+                    if (dashboardInfoWindow) {
+                        dashboardInfoWindow.close();
+                    }
+                });
+
+                // Pequeno ponto de ancoragem no centro da nuvem
+                const marker = new google.maps.Marker({
+                    position: coords,
+                    map: dashboardMap,
+                    icon: {
+                        path: google.maps.SymbolPath.CIRCLE,
+                        scale: 4,
+                        fillColor: drv.color,
+                        fillOpacity: 0.9,
+                        strokeWeight: 1,
+                        strokeColor: "#FFFFFF"
+                    },
+                    title: `${freg} - ${loc} (${drv.name})`
+                });
+                dashboardOverlays.push(marker);
+            }
+        });
     });
 }
 
 // =========================================================================
-// SUBMISSÃO E EDIÇÃO DE SETOR
+// RENDERIZAÇÃO DA LISTA DE MOTORISTAS NO PAINEL DE ATRIBUIÇÃO
 // =========================================================================
-export function handleSectorSubmit(e, sectors, renderCallback) {
-    e.preventDefault();
-    const nomeInput = document.getElementById('setor-nome');
-    const checkboxesContainer = document.getElementById('checkboxes-areas');
-    const btnSubmit = document.getElementById('btn-submit-setor');
-    const btnCancelar = document.getElementById('btn-cancelar-setor');
-    
-    const name = nomeInput.value.trim();
-    if (!name) return;
+export function renderDriversForAttribution() {
+    const listContainer = document.getElementById('lista-atribuicao-motoristas');
+    if (!listContainer) return;
 
-    // Obtém todas as seleções feitas (freguesias ou localidades)
-    const checkedBoxes = checkboxesContainer.querySelectorAll('input[type="checkbox"]:checked');
-    const selectedAreas = Array.from(checkedBoxes).map(cb => cb.value);
-
-    if (selectedAreas.length === 0) {
-        alert('Por favor, selecione pelo menos uma área geográfica para compor o Setor.');
+    listContainer.innerHTML = "";
+    if (window.drivers.length === 0) {
+        listContainer.innerHTML = '<p class="text-xs text-gray-400 italic text-center py-4">Crie motoristas na aba de Motoristas para começar.</p>';
         return;
     }
 
-    const emEdicao = window.sectorSendoEditado;
-
-    // Validação de redundância para garantir que a área não pertence a outro setor
-    const areaDuplicada = selectedAreas.find(area => 
-        sectors.some(s => s.areaNames && s.areaNames.includes(area) && (!emEdicao || s.id !== emEdicao.id))
-    );
-
-    if (areaDuplicada) {
-        alert(`Erro de Segurança: A área geográfica ou sub-localidade "${areaDuplicada}" já está sob a alçada de outro setor ativo.`);
-        return;
-    }
-
-    if (emEdicao) {
-        const sectorIndex = sectors.findIndex(s => s.id === emEdicao.id);
-        if (sectorIndex !== -1) {
-            sectors[sectorIndex].name = name;
-            sectors[sectorIndex].areaNames = selectedAreas;
+    window.drivers.forEach(driver => {
+        const brickCount = Array.isArray(driver.brickIds) ? driver.brickIds.length : 0;
+        const btn = document.createElement('button');
+        btn.type = "button";
+        
+        // Estilo visual destacado se for o motorista atualmente ativo
+        if (motoristaAtivoId === driver.id) {
+            btn.className = "w-full flex items-center justify-between p-3 rounded-lg border-2 text-left bg-blue-50 border-blue-500 shadow-xs transition duration-150";
+        } else {
+            btn.className = "w-full flex items-center justify-between p-3 rounded-lg border border-gray-200 text-left bg-gray-50/50 hover:bg-gray-50 active:bg-gray-100 transition duration-150";
         }
-        window.sectorSendoEditado = null;
-    } else {
-        sectors.push({
-            id: 's_' + Date.now(),
-            name: name,
-            areaNames: selectedAreas
+
+        btn.innerHTML = `
+            <div class="flex items-center space-x-2 truncate">
+                <span class="w-3 h-3 rounded-full border shadow-sm flex-shrink-0" style="background-color: ${driver.color}"></span>
+                <span class="font-bold text-gray-700 text-xs truncate">${driver.name}</span>
+            </div>
+            <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-blue-100/50 text-blue-700 border border-blue-200 flex-shrink-0">
+                ${brickCount} Bricks
+            </span>
+        `;
+
+        btn.addEventListener('click', () => {
+            motoristaAtivoId = driver.id;
+            renderDriversForAttribution(); // Atualiza destaque
+            window.renderizarSetoresUI(); // Atualiza a árvore para as caixas deste motorista
         });
-    }
 
-    sincronizarPersistencia();
-
-    nomeInput.value = "";
-    if (btnSubmit) btnSubmit.textContent = "Criar Setor";
-    if (btnCancelar) btnCancelar.classList.add('hidden');
-
-    renderCallback();
-    alert(emEdicao ? 'Setor atualizado com sucesso!' : 'Setor criado com sucesso!');
+        listContainer.appendChild(btn);
+    });
 }
 
 // =========================================================================
-// DESENHO DA ÁRVORE HIERÁRQUICA DE MAFRA (CONCELHO -> FREGUESIA -> LOCALIDADE)
+// DESENHO DA ÁRVORE HIERÁRQUICA E CONTROLO REATIVO DE ATRIBUIÇÃO DE BRICKS
 // =========================================================================
-export function renderAreaCheckboxes(sectors, container, editingId = null) {
-    if (!container) return;
-    container.innerHTML = "";
+export function renderGeographicTree() {
+    const treeContainer = document.getElementById('arvore-bricks-localidades');
+    const labelSelected = document.getElementById('label-motorista-selecionado');
+    if (!treeContainer) return;
+
+    treeContainer.innerHTML = "";
+
+    const activeDriver = window.drivers.find(d => d.id === motoristaAtivoId);
+
+    // Se nenhum motorista estiver selecionado na lista esquerda, bloqueia a árvore com aviso amigável
+    if (!activeDriver) {
+        labelSelected.className = "text-[10px] font-black uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded border border-red-200";
+        labelSelected.textContent = "Nenhum Selecionado";
+        treeContainer.innerHTML = `
+            <div class="text-center py-10 space-y-2">
+                <i class="fa-solid fa-hand-pointer text-gray-300 text-3xl"></i>
+                <p class="text-xs text-gray-400 font-bold italic">Selecione um motorista à esquerda para começar a associar Bricks.</p>
+            </div>
+        `;
+        return;
+    }
+
+    // Identifica o motorista ativo e mostra-o no topo do painel
+    labelSelected.className = "text-[10px] font-black uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200";
+    labelSelected.textContent = activeDriver.name;
 
     const concelho = "MAFRA";
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    const freguesiasOcupadasTotalidade = new Set();
-    const localidadesOcupadas = new Map();
-
-    sectors.forEach(s => {
-        if (editingId && s.id === editingId) return;
-        
-        const areaNames = Array.isArray(s.areaNames) ? s.areaNames : [];
-        areaNames.forEach(item => {
-            if (item.includes('|')) {
-                const [freg, loc] = item.split('|');
-                localidadesOcupadas.set(item, s.name);
-            } else {
-                freguesiasOcupadasTotalidade.add(item);
-                const subLocalidades = Object.keys(GEOGRAPHY[concelho][item] || {});
-                subLocalidades.forEach(loc => {
-                    localidadesOcupadas.set(`${item}|${loc}`, s.name);
-                });
-            }
+    // Mapeia onde está cada localidade para mostrar avisos de exclusividade tátil
+    const localidadeParaMotorista = new Map();
+    window.drivers.forEach(drv => {
+        const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
+        bIds.forEach(id => {
+            localidadeParaMotorista.set(id, drv);
         });
     });
 
-    const concelhoTitle = document.createElement('div');
-    concelhoTitle.className = "text-xs font-black uppercase tracking-wider text-blue-800 bg-blue-50 p-2 rounded mb-2 flex items-center space-x-1.5";
-    concelhoTitle.innerHTML = `<i class="fa-solid fa-city"></i> <span>CONCELHO: ${concelho}</span>`;
-    container.appendChild(concelhoTitle);
-
-    const treeContainer = document.createElement('div');
-    treeContainer.className = "space-y-3 pl-1";
-
     freguesiasList.forEach(freguesiaName => {
-        const localidades = GEOGRAPHY[concelho][freguesiaName];
-        const subLocalidadesKeys = Object.keys(localidades).sort();
+        const localidadesMap = GEOGRAPHY[concelho][freguesiaName];
+        const localidadesKeys = Object.keys(localidadesMap).sort();
 
-        const freguesiaBloqueadaTotalmente = freguesiasOcupadasTotalidade.has(freguesiaName);
-        const temSubLocalidadeOcupada = subLocalidadesKeys.some(loc => localidadesOcupadas.has(`${freguesiaName}|${loc}`));
-        const impedeMarcarTotalidade = freguesiaBloqueadaTotalmente || temSubLocalidadeOcupada;
+        // Verifica se todas as localidades desta freguesia pertencem a este motorista
+        const allLocs = Object.keys(localidadesMap);
+        const ownedLocs = allLocs.filter(locName => {
+            const brickId = `${freguesiaName}|${locName}`;
+            return Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
+        });
+        const isAllOwned = allLocs.length > 0 && ownedLocs.length === allLocs.length;
 
-        const belongsToEditingSectorTotal = !!(editingId && sectors.some(s => s.id === editingId && s.areaNames && s.areaNames.includes(freguesiaName)));
+        // Recupera o estado de expansão desta freguesia
+        const isExpanded = freguesiasExpandidas.has(freguesiaName);
 
         const fregDiv = document.createElement('div');
         fregDiv.className = "border rounded-lg bg-white overflow-hidden shadow-xs border-gray-200";
 
         const header = document.createElement('div');
         header.className = "flex items-center justify-between p-2.5 bg-gray-50 border-b select-none";
-        
-        let checkboxHtml = "";
-        if (impedeMarcarTotalidade) {
-            checkboxHtml = `
-                <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-4 h-4 cursor-not-allowed">
-                <span class="font-bold text-gray-400 line-through text-xs">${freguesiaName}</span>
-                <span class="text-[9px] bg-red-50 text-red-600 px-1 py-0.5 rounded border border-red-100 font-bold ml-1.5">Território Parcial</span>
-            `;
-        } else {
-            checkboxHtml = `
-                <input type="checkbox" name="freguesia-check" value="${freguesiaName}" ${belongsToEditingSectorTotal ? 'checked' : ''} class="freg-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
-                <span class="font-bold text-gray-700 text-xs">${freguesiaName}</span>
-                <span class="text-[9px] bg-green-50 text-green-700 px-1 py-0.5 rounded border border-green-200 font-bold ml-1.5">Livre</span>
-            `;
-        }
 
         header.innerHTML = `
             <div class="flex items-center space-x-2">
-                <button type="button" class="btn-expand-tree text-gray-500 hover:text-blue-600 font-mono text-sm px-1.5 py-0.5 rounded border bg-white focus:outline-none shadow-sm transition">
-                    +
+                <button type="button" class="btn-expand-tree text-gray-500 hover:text-blue-600 font-mono text-[10px] px-2 py-0.5 rounded border bg-white focus:outline-none shadow-sm transition flex items-center space-x-1">
+                    ${isExpanded 
+                        ? "<span><i class='fa-solid fa-minus mr-0.5'></i> Recolher</span>" 
+                        : "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir Freguesia</span>"
+                    }
                 </button>
-                <div class="flex items-center space-x-1">
-                    ${checkboxHtml}
+                <div class="flex items-center space-x-1.5">
+                    <!-- Checkbox de seleção rápida de Freguesia inteira -->
+                    <input type="checkbox" ${isAllOwned ? 'checked' : ''} class="freg-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
+                    <span class="font-bold text-gray-700 text-xs">${freguesiaName}</span>
                 </div>
             </div>
-            <span class="text-[9px] text-gray-400 italic font-semibold">${subLocalidadesKeys.length} áreas</span>
+            <span class="text-[9px] text-gray-400 font-semibold">${localidadesKeys.length} Bricks</span>
         `;
 
         const subContainer = document.createElement('div');
-        subContainer.className = "hidden p-2 bg-gray-50/50 border-t border-dashed space-y-2.5 pl-7 animate-fade-in";
+        // Mantém a visibilidade da pasta de acordo com a memória de expansão
+        subContainer.className = `${isExpanded ? '' : 'hidden'} p-2 bg-gray-50/50 border-t border-dashed space-y-2.5 pl-6 animate-fade-in`;
 
-        subLocalidadesKeys.forEach(locName => {
-            const locKey = `${freguesiaName}|${locName}`;
-            const donoSetor = localidadesOcupadas.get(locKey);
-            
-            const belongsToEditingSectorLoc = !!(editingId && sectors.some(s => s.id === editingId && s.areaNames && s.areaNames.includes(locKey)));
+        localidadesKeys.forEach(locName => {
+            const brickId = `${freguesiaName}|${locName}`;
+            const motoristaDono = localidadeParaMotorista.get(brickId);
 
-            const locLabel = document.createElement('label');
+            const isAssignedToActive = Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
 
-            if (donoSetor) {
-                locLabel.className = "flex items-center justify-between p-1.5 rounded bg-gray-100/30 text-gray-400 cursor-not-allowed select-none text-[11px]";
-                locLabel.innerHTML = `
+            const label = document.createElement('label');
+
+            if (motoristaDono && motoristaDono.id !== activeDriver.id) {
+                // Se a localidade já estiver sob a responsabilidade de outro motorista (Adicionado Cadeado Vermelho, Opacidade de bloqueio e fundo tátil de aviso)
+                label.className = "flex items-center justify-between p-2 rounded bg-red-50/20 text-gray-400 cursor-not-allowed select-none text-[11px] border border-red-100/10 opacity-70";
+                label.innerHTML = `
                     <div class="flex items-center space-x-2">
+                        <i class="fa-solid fa-lock text-red-400 text-[10px] animate-none"></i>
                         <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-3.5 h-3.5 cursor-not-allowed">
                         <span class="font-bold text-gray-400 line-through">${locName}</span>
                     </div>
-                    <span class="text-[8px] bg-gray-100 text-gray-500 font-extrabold px-1 rounded border">
-                        Com: ${donoSetor}
+                    <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded border flex items-center space-x-1" style="background-color: ${motoristaDono.color}15; color: ${motoristaDono.color}; border-color: ${motoristaDono.color}30">
+                        <i class="fa-solid fa-user text-[7px]"></i> <span>Com: ${motoristaDono.name}</span>
                     </span>
                 `;
             } else {
-                locLabel.className = "flex items-center justify-between p-1.5 rounded hover:bg-white border border-transparent hover:border-gray-100 cursor-pointer text-[11px] text-gray-700 transition";
-                locLabel.innerHTML = `
+                // Se estiver livre ou já for deste motorista selecionado
+                label.className = "flex items-center justify-between p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 cursor-pointer text-[11px] text-gray-700 transition duration-100";
+                label.innerHTML = `
                     <div class="flex items-center space-x-2">
-                        <input type="checkbox" name="localidade-check" value="${locKey}" ${belongsToEditingSectorLoc || belongsToEditingSectorTotal ? 'checked' : ''} class="loc-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-3.5 h-3.5 cursor-pointer">
-                        <span class="font-bold">${locName}</span>
+                        <input type="checkbox" value="${brickId}" ${isAssignedToActive ? 'checked' : ''} class="brick-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-3.5 h-3.5 cursor-pointer">
+                        <span class="font-bold text-gray-600">${locName}</span>
                     </div>
-                    <span class="text-[8px] bg-green-50 text-green-700 font-extrabold px-1 rounded border border-green-200">
-                        Livre
-                    </span>
+                    ${isAssignedToActive 
+                        ? `<span class="text-[8px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded border border-blue-200">Associado</span>`
+                        : `<span class="text-[8px] bg-green-50 text-green-700 font-extrabold px-1.5 py-0.5 rounded border border-green-200">Livre</span>`
+                    }
                 `;
+
+                // Guarda reativamente a alteração com um simples clique (GRAVAÇÃO DIRETA NO FIRESTORE!)
+                const cb = label.querySelector('.brick-checkbox');
+                cb.addEventListener('change', (e) => {
+                    if (!Array.isArray(activeDriver.brickIds)) {
+                        activeDriver.brickIds = [];
+                    }
+
+                    let updatedBrickIds = [...activeDriver.brickIds];
+                    if (e.target.checked) {
+                        updatedBrickIds.push(brickId);
+                        
+                        // Geocodifica sob procura apenas a localidade interada, evitando sobrecarga
+                        geocodificarBrickSobProcura(freguesiaName, locName);
+                    } else {
+                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
+                    }
+
+                    // Grava diretamente no Firestore no documento do motorista correspondente
+                    db.collection('drivers').doc(activeDriver.id).update({
+                        brickIds: updatedBrickIds
+                    }).then(() => {
+                        console.log("[FIREBASE] Bricks do motorista sincronizados no Firestore.");
+                    }).catch((err) => {
+                        console.error("[FIREBASE] Erro ao sincronizar Bricks:", err);
+                        alert("Erro de ligação: Não foi possível guardar as alterações.");
+                    });
+                });
             }
-            subContainer.appendChild(locLabel);
+
+            subContainer.appendChild(label);
         });
+
+        // Evento de alteração em lote de toda a Freguesia (GRAVAÇÃO DIRETA NO FIRESTORE!)
+        const fregCb = header.querySelector('.freg-checkbox');
+        if (fregCb) {
+            fregCb.addEventListener('change', (e) => {
+                if (!Array.isArray(activeDriver.brickIds)) {
+                    activeDriver.brickIds = [];
+                }
+
+                let updatedBrickIds = [...activeDriver.brickIds];
+                let delayPacing = 0; // Atraso progressivo para evitar over limit
+
+                allLocs.forEach(locName => {
+                    const brickId = `${freguesiaName}|${locName}`;
+                    const motoristaDono = localidadeParaMotorista.get(brickId);
+                    const isOwnedByOther = motoristaDono && motoristaDono.id !== activeDriver.id;
+
+                    if (e.target.checked) {
+                        // Associa em lote apenas as localidades que estão realmente livres
+                        if (!isOwnedByOther && !updatedBrickIds.includes(brickId)) {
+                            updatedBrickIds.push(brickId);
+
+                            // Geocodifica com compassamento de 300ms entre localidades para respeitar o Google
+                            setTimeout(() => {
+                                geocodificarBrickSobProcura(freguesiaName, locName);
+                            }, delayPacing);
+                            delayPacing += 300;
+                        }
+                    } else {
+                        // Remove todas as localidades desta freguesia que pertenciam a este motorista
+                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
+                    }
+                });
+
+                // Envia a lista atualizada de uma só vez para o Firestore
+                db.collection('drivers').doc(activeDriver.id).update({
+                    brickIds: updatedBrickIds
+                }).then(() => {
+                    console.log("[FIREBASE] Alterações de Bricks em lote sincronizadas no Firestore.");
+                }).catch((err) => {
+                    console.error("[FIREBASE] Erro ao sincronizar Bricks em lote:", err);
+                    alert("Erro de ligação: Não foi possível guardar as alterações.");
+                });
+            });
+        }
 
         fregDiv.appendChild(header);
         fregDiv.appendChild(subContainer);
@@ -3092,110 +3745,29 @@ export function renderAreaCheckboxes(sectors, container, editingId = null) {
             e.stopPropagation();
             if (subContainer.classList.contains('hidden')) {
                 subContainer.classList.remove('hidden');
-                btnExpand.textContent = "−";
+                freguesiasExpandidas.add(freguesiaName);
+                btnExpand.innerHTML = "<span><i class='fa-solid fa-minus mr-0.5'></i> Recolher</span>";
             } else {
                 subContainer.classList.add('hidden');
-                btnExpand.textContent = "+";
+                freguesiasExpandidas.delete(freguesiaName);
+                btnExpand.innerHTML = "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir Freguesia</span>";
             }
-        });
-
-        const parentCheckbox = header.querySelector('.freg-checkbox');
-        if (parentCheckbox) {
-            parentCheckbox.addEventListener('change', (e) => {
-                const isChecked = e.target.checked;
-                subContainer.querySelectorAll('.loc-checkbox:not(:disabled)').forEach(childCb => {
-                    childCb.checked = isChecked;
-                });
-            });
-        }
-
-        subContainer.querySelectorAll('.loc-checkbox').forEach(cb => {
-            cb.addEventListener('change', (e) => {
-                if (!e.target.checked && parentCheckbox) {
-                    parentCheckbox.checked = false;
-                }
-            });
         });
     });
-
-    container.appendChild(treeContainer);
 }
 
-// Manter alias de compatibilidade com versões antigas
-export const renderIntervalCheckboxes = renderAreaCheckboxes;
-
 // =========================================================================
-// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES
+// CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES E BRICKS (WINDOW)
 // =========================================================================
 window.renderizarSetoresUI = () => {
-    const listaSetores = document.getElementById('lista-setores');
-    if (listaSetores) {
-        renderSectors(window.sectors, listaSetores, window.deleteSector, window.editSector);
-    }
+    // Sincroniza a listagem de motoristas no painel de atribuição
+    renderDriversForAttribution();
 
-    const checkboxesAreas = document.getElementById('checkboxes-areas');
-    if (checkboxesAreas) {
-        const editingId = window.sectorSendoEditado ? window.sectorSendoEditado.id : null;
-        renderAreaCheckboxes(window.sectors, checkboxesAreas, editingId);
-    }
+    // Renderiza a árvore de Mafra reativa
+    renderGeographicTree();
 
-    const checkboxesSetoresMotorista = document.getElementById('checkboxes-setores-motorista');
-    if (checkboxesSetoresMotorista) {
-        const editingDriverId = window.driverSendoEditado ? window.driverSendoEditado.id : null;
-        renderSectorCheckboxes(window.sectors, checkboxesSetoresMotorista, window.drivers, editingDriverId);
-    }
-};
-
-// =========================================================================
-// ASSINATURAS GLOBAIS (WINDOW) PARA COMPATIBILIDADE INTEGRAL COM EVENTOS
-// =========================================================================
-window.editSector = (sector) => {
-    window.sectorSendoEditado = sector;
-
-    const nomeInput = document.getElementById('setor-nome');
-    const btnSubmit = document.getElementById('btn-submit-setor');
-    const btnCancelar = document.getElementById('btn-cancelar-setor');
-
-    if (nomeInput) nomeInput.value = sector.name;
-    if (btnSubmit) btnSubmit.textContent = "Guardar Alterações";
-    if (btnCancelar) btnCancelar.classList.remove('hidden');
-
-    window.renderizarSetoresUI();
-};
-
-window.cancelarEdicaoSector = () => {
-    window.sectorSendoEditado = null;
-
-    const nomeInput = document.getElementById('setor-nome');
-    const btnSubmit = document.getElementById('btn-submit-setor');
-    const btnCancelar = document.getElementById('btn-cancelar-setor');
-
-    if (nomeInput) nomeInput.value = "";
-    if (btnSubmit) btnSubmit.textContent = "Criar Setor";
-    if (btnCancelar) btnCancelar.classList.add('hidden');
-
-    window.renderizarSetoresUI();
-};
-
-window.deleteSector = (id) => {
-    if (confirm("Deseja apagar este Setor? As localidades associadas ficarão novamente livres e os motoristas associados a ele perderão essa atribuição.")) {
-        window.sectors = window.sectors.filter(s => s.id !== id);
-        
-        // Remove o setor apagado da lista de setores de cada motorista afetado
-        window.drivers.forEach(drv => {
-            if (Array.isArray(drv.sectorIds)) {
-                drv.sectorIds = drv.sectorIds.filter(sid => sid !== id);
-            }
-        });
-
-        sincronizarPersistencia();
-        window.renderizarSetoresUI();
-        
-        const listaMotoristas = document.getElementById('lista-motoristas');
-        if (listaMotoristas) {
-            renderDrivers(window.drivers, window.sectors, listaMotoristas, window.deleteDriver, window.editDriver);
-        }
-    }
+    // Inicializa e redesenha o mapa de forma síncrona estável
+    setTimeout(inicializarMapaBricksDashboard, 150);
 };
 
 =========================================
@@ -3204,8 +3776,9 @@ ARQUIVO: js/state.js
 
 /**
  * state.js
- * Faz: Inicializa e gere o estado global da aplicação em memória (propriedades anexadas ao objeto global 'window') e executa a migração de dados de motoristas antigos.
- * NÃO faz: Não grava diretamente no LocalStorage do telemóvel (esta persistência física é delegada para o módulo storage.js).
+ * Faz: Inicializa e gere o estado global da aplicação em memória (propriedades anexadas ao objeto global 'window').
+ *      Removido o conceito de setores; agora os motoristas contêm diretamente a lista de Bricks (Localidades) atribuídos.
+ * NÃO faz: Não grava diretamente no LocalStorage do telemóvel/PC (esta persistência física é delegada para o módulo storage.js).
  * Depende de: ./storage.js (para ler os valores guardados de forma segura)
  */
 
@@ -3216,18 +3789,21 @@ import { safeJSONParse } from './storage.js';
 // ==========================================
 window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
-window.sectors = safeJSONParse('cp_zones', []); // Setores carregados em memória
+
+// NOVO: Guarda o ID exclusivo do utilizador com sessão iniciada na nuvem
+window.currentUserUid = null;
 
 // ==========================================
 // MIGRAÇÃO DE DADOS AUTOMÁTICA
-// Converte motoristas antigos (com 'sectorId' único) para o novo
-// modelo (com 'sectorIds' em lista/array), permitindo múltiplos setores.
+// Garante que cada motorista possui o array 'brickIds' para guardar as localidades atribuídas
 // ==========================================
 window.drivers.forEach(driver => {
-    if (!Array.isArray(driver.sectorIds)) {
-        driver.sectorIds = driver.sectorId ? [driver.sectorId] : [];
+    if (!Array.isArray(driver.brickIds)) {
+        driver.brickIds = [];
     }
+    // Removemos propriedades legadas de setores para limpar a estrutura
     delete driver.sectorId;
+    delete driver.sectorIds;
 });
 
 // ==========================================
@@ -3243,7 +3819,6 @@ window.lastAnalysisResult = null;
 // ESTADOS DE CONTROLO DE EDIÇÃO EM CURSO
 // ==========================================
 window.driverSendoEditado = null;
-window.sectorSendoEditado = null;
 
 // ==========================================
 // ESTADOS DAS ROTAS E ITINERÁRIOS DO TURNO
@@ -3261,16 +3836,16 @@ ARQUIVO: js/storage.js
 
 /**
  * storage.js
- * Faz: Gere a persistência de dados física (leitura e escrita defensiva no LocalStorage do telemóvel), garantindo que as informações de motoristas, turnos e rotas persistam.
+ * Faz: Gere a persistência de dados física (leitura e escrita defensiva no LocalStorage), garantindo que as informações de motoristas e rotas persistam de forma estável.
  * NÃO faz: Não gere o estado ativo em memória (tarefa do state.js) nem valida regras geográficas de Mafra.
  * Depende de: Nenhuns módulos externos (módulo independente utilitário).
  */
 
 /**
- * Lê os dados guardados no telemóvel de forma segura.
- * Se o telemóvel nunca tiver corrido a aplicação antes, devolve uma lista vazia ou valor padrão.
+ * Lê os dados guardados de forma segura.
+ * Se o navegador/telemóvel nunca tiver corrido a aplicação antes, devolve uma lista vazia ou valor padrão.
  * 
- * @param {string} key - A chave física guardada no telemóvel (ex: 'cp_drivers')
+ * @param {string} key - A chave física guardada (ex: 'cp_drivers')
  * @param {any} fallback - O valor padrão a devolver caso não exista nada guardado
  */
 export function safeJSONParse(key, fallback) {
@@ -3287,11 +3862,10 @@ export function safeJSONParse(key, fallback) {
 }
 
 /**
- * Grava fisicamente no telemóvel todos os dados importantes da aplicação num único ciclo.
+ * Grava fisicamente no navegador/telemóvel todos os dados importantes da aplicação num único ciclo.
  */
-export function saveData(drivers, intervals, assignments, partida, entregas, rota, dataRota, iniciada, zones = []) {
+export function saveData(drivers, intervals, assignments, partida, entregas, rota, dataRota, iniciada) {
     localStorage.setItem('cp_drivers', JSON.stringify(drivers));
-    localStorage.setItem('cp_intervals', JSON.stringify(intervals));
     localStorage.setItem('cp_assignments', JSON.stringify(assignments));
     
     // Gravação física do itinerário e planeamento das rotas
@@ -3300,9 +3874,6 @@ export function saveData(drivers, intervals, assignments, partida, entregas, rot
     localStorage.setItem('cp_rota_otimizada', JSON.stringify(rota));
     localStorage.setItem('cp_data_rota', JSON.stringify(dataRota));
     localStorage.setItem('cp_rota_iniciada', JSON.stringify(iniciada));
-
-    // Gravação física das Zonas/Setores territoriais criados
-    localStorage.setItem('cp_zones', JSON.stringify(zones));
 }
 
 =========================================
@@ -3311,15 +3882,20 @@ ARQUIVO: js/triagem.js
 
 /**
  * triagem.js
- * Faz: Controla toda a lógica de triagem, cálculo de motorista designado para código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
+ * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick (Localidade) designados para o código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
+ *      Implementa algoritmo de dupla passagem para priorizar localidades específicas sobre as capitais genéricas homónimas.
+ *      NOVO: Grava as confirmações de triagem diretamente na coleção 'assignments' do Firestore para sincronização em nuvem de imediato.
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
- * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js
+ * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js, ./firebase-init.js (para aceder ao db)
  */
 
 import { GEOGRAPHY } from './geografia-data.js';
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
 import { updateVisor } from './ui.js';
+
+// Importa a instância ativa do Firestore
+import { db } from './firebase-init.js';
 
 // =========================================================================
 // FUNÇÕES AUXILIARES DE LIMPEZA E PERSISTÊNCIA
@@ -3337,25 +3913,39 @@ function sincronizarPersistencia() {
         window.moradasEntregas,
         window.rotaOtimizada,
         window.dataRotaSelecionada, 
-        window.rotaIniciada,
-        window.sectors
+        window.rotaIniciada
     );
 }
 
+// Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
+function isCatchAllLocality(freguesia, localidade) {
+    const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
+    const cleanLoc = localidade.toLowerCase();
+    if (cleanLoc === cleanFreg) return true;
+    // Exceção de normalização: Alcainça é a catch-all de São Miguel de Alcainça
+    if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
+    return false;
+}
+
 // =========================================================================
-// ALGORITMO DE TRIAGEM HIERÁRQUICA E DETEÇÃO DE MOTORISTA
+// ALGORITMO DE RESOLUÇÃO GEOGRÁFICA DE BRICK E MOTORISTA (COM PRIORIZAÇÃO)
 // =========================================================================
-export function findDriverForZip(zip, sectors, drivers) {
-    if (!zip) return null;
-    const normalizedZip = zip.trim(); // Formato esperado: "2665-018"
+export function findBrickAndDriverForZip(zip, drivers) {
+    if (!zip || !drivers) return { brickId: null, brickName: null, driver: null };
+    const normalizedZip = zip.trim(); // Esperado: "2640-401"
+    const concelho = "MAFRA";
 
     let matchedFreguesia = null;
     let matchedLocalidade = null;
-    const concelho = "MAFRA";
 
-    // 1. Cruza o código postal de 7 dígitos com a lista estática de Mafra
+    // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas (ignorando as catch-all genéricas)
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
+            // Se for localidade catch-all (ex: Mafra dentro da freguesia MAFRA), ignora nesta primeira passagem
+            if (isCatchAllLocality(freguesia, localidade)) {
+                continue;
+            }
+
             if (cpList.includes(normalizedZip)) {
                 matchedFreguesia = freguesia;
                 matchedLocalidade = localidade;
@@ -3365,19 +3955,41 @@ export function findDriverForZip(zip, sectors, drivers) {
         if (matchedFreguesia) break;
     }
 
-    if (!matchedFreguesia) return null;
+    // PASSAGEM 2: Fallback - Se não encontrou em nenhuma específica, procura nas genéricas (catch-all)
+    if (!matchedFreguesia) {
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+            for (const [localidade, cpList] of Object.entries(localidades)) {
+                if (isCatchAllLocality(freguesia, localidade)) {
+                    if (cpList.includes(normalizedZip)) {
+                        matchedFreguesia = freguesia;
+                        matchedLocalidade = localidade;
+                        break;
+                    }
+                }
+            }
+            if (matchedFreguesia) break;
+        }
+    }
 
-    // 2. Procura o Setor ativo encarregue deste território
-    const matchedSector = sectors.find(s => {
-        const areaNames = Array.isArray(s.areaNames) ? s.areaNames : [];
-        return areaNames.includes(matchedFreguesia) || areaNames.includes(`${matchedFreguesia}|${matchedLocalidade}`);
-    });
+    if (!matchedFreguesia) {
+        return { brickId: null, brickName: null, driver: null };
+    }
 
-    if (!matchedSector) return null;
+    const brickId = `${matchedFreguesia}|${matchedLocalidade}`;
+    const brickName = matchedLocalidade;
 
-    // 3. Devolve o motorista ativo que tem este Setor sob a sua responsabilidade
-    const matchedDriver = drivers.find(d => Array.isArray(d.sectorIds) && d.sectorIds.includes(matchedSector.id));
-    return matchedDriver || null; 
+    // Encontra o motorista ativo que tem esta localidade (Brick) assinalada na sua lista
+    const driver = drivers.find(d => Array.isArray(d.brickIds) && d.brickIds.includes(brickId));
+
+    return { brickId, brickName, driver };
+}
+
+// ==========================================
+// MANTIDO POR EXIGÊNCIAS DE EVENTOS AUXILIARES
+// ==========================================
+export function findDriverForZip(zip, sectors, drivers) {
+    const res = findBrickAndDriverForZip(zip, drivers);
+    return res.driver;
 }
 
 // =========================================================================
@@ -3457,17 +4069,23 @@ window.atualizarSummaryUI = () => {
 };
 
 // =========================================================================
-// LÓGICA DE DETEÇÃO DE CÓDIGOS E MODAL DE LEITURAS (TRIAGEM)
+// LÓGICA DE DETEÇÃO DE CÓDIGOS E MODAL DE LEITURAS (TRIAGEM - GRAVAÇÃO EM CLOUD!)
 // =========================================================================
 export function setupTriagemLogic() {
     const btnAnalisar = document.getElementById('btn-analisar');
     const btnConfirmarAtribuir = document.getElementById('btn-confirmar-atribuir');
-    const btnCancelarAtribuir = document.getElementById('btn-cancelar-atribuir');
     const modalResultado = document.getElementById('modal-resultado');
 
     function cancelarAtribuicao() {
         if (modalResultado) modalResultado.classList.add('hidden');
         window.lastAnalysisResult = null;
+        
+        // Limpa visor ao fechar (cancelamento no clique fora do modal)
+        window.currentInput = "";
+        const visorCodigo = document.getElementById('visor-codigo');
+        if (visorCodigo) {
+            updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+        }
     }
 
     if (btnAnalisar) {
@@ -3486,23 +4104,75 @@ export function setupTriagemLogic() {
             }
 
             const formattedZip = `${cleanDigits.substring(0, 4)}-${cleanDigits.substring(4, 7)}`;
-            const driver = findDriverForZip(formattedZip, window.sectors, window.drivers);
+            
+            // Resolução dinâmica priorizada de Brick (Localidade) e Motorista
+            const { brickId, brickName, driver } = findBrickAndDriverForZip(formattedZip, window.drivers);
             
             const resultadoCodigo = document.getElementById('resultado-codigo');
             const resultadoMotorista = document.getElementById('resultado-motorista');
             const resultadoCorBg = document.getElementById('resultado-cor-bg');
             const chkPrioridade = document.getElementById('chk-prioridade');
+            
+            const resultadoBrickLabel = document.getElementById('resultado-brick-label');
+            const modalBrickOverride = document.getElementById('modal-brick-override');
 
             if (resultadoCodigo) resultadoCodigo.textContent = formattedZip;
             
-            if (driver) {
-                if (resultadoMotorista) resultadoMotorista.textContent = driver.name;
-                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = driver.color;
-                window.lastAnalysisResult = { zip: formattedZip, driverId: driver.id };
+            // Popula o override dropdown com as localidades ativas
+            if (modalBrickOverride) {
+                modalBrickOverride.innerHTML = '<option value="">Sem Alteração (Auto)</option>';
+                window.drivers.forEach(drv => {
+                    if (Array.isArray(drv.brickIds)) {
+                        drv.brickIds.forEach(id => {
+                            const opt = document.createElement('option');
+                            opt.value = id; 
+                            opt.textContent = `${id.split('|')[0]} - ${id.split('|')[1]} (${drv.name})`;
+                            modalBrickOverride.appendChild(opt);
+                        });
+                    }
+                });
+            }
+
+            if (!brickId) {
+                // Código Postal NÃO encontrado na base de dados de Mafra (Aviso de Alerta)
+                if (resultadoMotorista) resultadoMotorista.textContent = "CP Não Encontrado";
+                if (resultadoBrickLabel) resultadoBrickLabel.textContent = "Confirmar Código Postal";
+                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#EA580C"; // Cor Laranja de Alerta
+                
+                window.lastAnalysisResult = { 
+                    zip: formattedZip, 
+                    driverId: null,
+                    brickId: null,
+                    brickName: "Não Encontrado",
+                    isInvalid: true
+                };
             } else {
-                if (resultadoMotorista) resultadoMotorista.textContent = "Sem Motorista";
-                if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#9CA3AF"; 
-                window.lastAnalysisResult = { zip: formattedZip, driverId: null };
+                // CASO: Código Postal VÁLIDO em Mafra
+                if (resultadoBrickLabel) {
+                    resultadoBrickLabel.textContent = `${brickId.split('|')[0]} - ${brickName}`;
+                }
+
+                if (driver) {
+                    if (resultadoMotorista) resultadoMotorista.textContent = driver.name;
+                    if (resultadoCorBg) resultadoCorBg.style.backgroundColor = driver.color;
+                    window.lastAnalysisResult = { 
+                        zip: formattedZip, 
+                        driverId: driver.id,
+                        brickId: brickId,
+                        brickName: brickName,
+                        isInvalid: false
+                    };
+                } else {
+                    if (resultadoMotorista) resultadoMotorista.textContent = "Sem Motorista";
+                    if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#9CA3AF"; 
+                    window.lastAnalysisResult = { 
+                        zip: formattedZip, 
+                        driverId: null,
+                        brickId: brickId,
+                        brickName: brickName,
+                        isInvalid: false
+                    };
+                }
             }
 
             if (chkPrioridade) chkPrioridade.checked = false;
@@ -3517,18 +4187,40 @@ export function setupTriagemLogic() {
             const chkPrioridade = document.getElementById('chk-prioridade');
             const isPriority = chkPrioridade ? chkPrioridade.checked : false;
 
-            window.assignments.push({
+            const modalBrickOverride = document.getElementById('modal-brick-override');
+            let finalDriverId = window.lastAnalysisResult.driverId;
+            let finalBrickId = window.lastAnalysisResult.brickId;
+            let finalBrickName = window.lastAnalysisResult.brickName;
+
+            if (modalBrickOverride && modalBrickOverride.value) {
+                const selectedBrickId = modalBrickOverride.value;
+                const ownerDriver = window.drivers.find(d => Array.isArray(d.brickIds) && d.brickIds.includes(selectedBrickId));
+                
+                finalDriverId = ownerDriver ? ownerDriver.id : null;
+                finalBrickId = selectedBrickId;
+                finalBrickName = selectedBrickId.split('|')[1];
+            }
+
+            // NOVO: Grava a leitura de triagem diretamente na coleção global 'assignments' no Firestore!
+            db.collection('assignments').add({
                 id: 'a_' + Date.now(),
                 zip: window.lastAnalysisResult.zip,
-                driverId: window.lastAnalysisResult.driverId,
+                driverId: finalDriverId,
+                brickId: finalBrickId,
+                brickName: finalBrickName,
                 priority: isPriority,
-                date: new Date().toISOString().split('T')[0]
+                date: new Date().toISOString().split('T')[0],
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                console.log("[FIREBASE] Triagem guardada com sucesso no Firestore.");
+            }).catch((err) => {
+                console.error("[FIREBASE] Erro ao gravar triagem:", err);
+                alert("Erro de ligação: Não foi possível sincronizar a triagem na nuvem.");
             });
 
-            sincronizarPersistencia();
-            window.atualizarSummaryUI();
-
             modalResultado.classList.add('hidden');
+            
+            // Limpa imediatamente o visor do teclado virtual ao confirmar
             window.currentInput = "";
             const visorCodigo = document.getElementById('visor-codigo');
             if (visorCodigo) {
@@ -3536,10 +4228,6 @@ export function setupTriagemLogic() {
             }
             window.lastAnalysisResult = null;
         });
-    }
-
-    if (btnCancelarAtribuir) {
-        btnCancelarAtribuir.addEventListener('click', cancelarAtribuicao);
     }
 
     if (modalResultado) {
@@ -3575,67 +4263,7 @@ export function setupCancelButtons() {
 // RECONHECIMENTO DE VOZ DA TRIAGEM (MÉTODO UNIFICADO VIA VOZ.JS)
 // =========================================================================
 export function setupVozTriagemLogic() {
-    const btnVoz = document.getElementById('btn-voz-triagem');
-    const buscaMoradaInput = document.getElementById('busca-morada-triagem');
-    const micAtivo = document.getElementById('mic-ativo-triagem');
-    const micInativo = document.getElementById('mic-inativo-triagem');
-
-    if (!btnVoz || !buscaMoradaInput) return;
-
-    criarReconhecimentoVoz({
-        btnElement: btnVoz,
-        micAtivoElement: micAtivo,
-        micInativoElement: micInativo,
-        activeClasses: ['bg-red-500', 'text-white', 'border-red-600'],
-        inactiveClasses: ['bg-blue-50', 'text-blue-700', 'border-blue-200'],
-        onResult: (transcript) => {
-            buscaMoradaInput.value = transcript;
-            console.log("Voz captada na Triagem:", transcript);
-
-            if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
-                const geocoder = new google.maps.Geocoder();
-                geocoder.geocode({ address: transcript + ", Mafra, Portugal", componentRestrictions: { country: 'PT' } }, (results, status) => {
-                    if (status === "OK" && results[0]) {
-                        const matchedPlace = results[0];
-                        let postalCode = "";
-
-                        for (const component of matchedPlace.address_components) {
-                            if (component.types.includes('postal_code')) {
-                                postalCode = component.long_name;
-                                break;
-                            }
-                        }
-
-                        if (postalCode) {
-                            const cleanCode = postalCode.replace(/\D/g, '');
-                            if (cleanCode.length === 7) {
-                                window.currentInput = cleanCode;
-                                const visorCodigo = document.getElementById('visor-codigo');
-                                if (visorCodigo) {
-                                    updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
-                                }
-                                
-                                console.log(`Morada ditada detetada com sucesso! Código: ${postalCode}`);
-                                
-                                const btnAnalisar = document.getElementById('btn-analisar');
-                                if (btnAnalisar) btnAnalisar.click();
-                            } else {
-                                alert(`Morada detetada por voz: "${matchedPlace.formatted_address}".\nContudo, o Código Postal está incompleto (${postalCode}). Insira manualmente.`);
-                            }
-                        } else {
-                            alert(`Encontrámos a morada ditada: "${matchedPlace.formatted_address}".\nMas não conseguimos extrair o Código Postal de 7 dígitos.`);
-                        }
-                    } else {
-                        buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
-                        buscaMoradaInput.focus();
-                    }
-                });
-            } else {
-                buscaMoradaInput.dispatchEvent(new Event('input', { bubbles: true }));
-                buscaMoradaInput.focus();
-            }
-        }
-    });
+    // Desativado reativamente para manter a triagem pura no Código Postal
 }
 
 // =========================================================================
@@ -3798,6 +4426,8 @@ ARQUIVO: js/ui.js
 /**
  * ui.js
  * Faz: Controla a navegação entre abas, atualização do visor principal e os eventos do teclado numérico virtual.
+ *      Despoleta automaticamente a triagem no instante em que o último dígito do código postal é inserido.
+ *      NOVO: Oculta reativamente os menus de Motoristas e Bricks se o utilizador autenticado for da Role 'Motorista'.
  * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
  * Depende de: Nenhuns módulos.
  */
@@ -3843,6 +4473,14 @@ export function showTab(tabName) {
         activeNav.classList.remove('text-gray-400', 'font-semibold');
     }
 
+    // Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba!
+    if (tabName === 'intervalos' && typeof window.renderizarSetoresUI === 'function') {
+        window.renderizarSetoresUI();
+    }
+    if (tabName === 'motoristas' && typeof window.renderizarMotoristasUI === 'function') {
+        window.renderizarMotoristasUI();
+    }
+
     // Corrige renderização do mapa Google se entrar na aba Rotas
     if (tabName === 'rotas' && window.googleMapInstance) {
         setTimeout(() => {
@@ -3851,6 +4489,30 @@ export function showTab(tabName) {
                 window.ajustarLimitesMapaGoogle();
             }
         }, 200);
+    }
+}
+
+/**
+ * NOVO: Bloqueia e oculta os menus de administração para motoristas comuns
+ */
+export function aplicarPermissoesPorRole(role) {
+    const navMotoristas = document.getElementById('nav-motoristas');
+    const navIntervalos = document.getElementById('nav-intervalos');
+    
+    if (role === 'Motorista') {
+        console.log("[AUTH] A aplicar restrições de nível: Motorista.");
+        if (navMotoristas) navMotoristas.classList.add('hidden');
+        if (navIntervalos) navIntervalos.classList.add('hidden');
+        
+        // Se estiver num ecrã restrito, redireciona o utilizador para a triagem de segurança
+        const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
+        if (activeTab === 'motoristas' || activeTab === 'intervalos') {
+            showTab('triagem');
+        }
+    } else {
+        console.log("[AUTH] A aplicar acessos de nível: Gestor.");
+        if (navMotoristas) navMotoristas.classList.remove('hidden');
+        if (navIntervalos) navIntervalos.classList.remove('hidden');
     }
 }
 
@@ -3883,6 +4545,14 @@ export function setupKeypad() {
             if (window.currentInput.length < maxDigits) {
                 window.currentInput += val;
                 if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
+                
+                // Quando atinge o número total de dígitos, despoleta de imediato a triagem de forma automática!
+                if (window.currentInput.length === maxDigits) {
+                    const btnAnalisar = document.getElementById('btn-analisar');
+                    if (btnAnalisar) {
+                        btnAnalisar.click();
+                    }
+                }
             }
         });
     });
@@ -3923,9 +4593,10 @@ export function setupPrefixLock() {
             inputPrefixo.focus();
             
             window.lockedPrefixValue = sanitizeDigits(inputPrefixo.value).substring(0, 4);
+            // Prefixo inicial adaptado para Mafra (2640) de forma centralizada
             if (!window.lockedPrefixValue) {
-                window.lockedPrefixValue = "2700";
-                inputPrefixo.value = "2700";
+                window.lockedPrefixValue = "2640";
+                inputPrefixo.value = "2640";
             }
         } else {
             inputPrefixo.disabled = true;
@@ -4076,16 +4747,6 @@ ARQUIVO: partials/motoristas.html
                    class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
         </div>
         <div>
-            <div class="flex justify-between items-center mb-1">
-                <label class="block text-xs font-bold uppercase text-gray-600">Associar Setor(es)</label>
-                <span class="text-[9px] text-gray-400 font-semibold italic">*Um setor só pode ter 1 motorista</span>
-            </div>
-            <!-- Lista dinâmica de checkboxes de setores preenchida pelo motoristas.js -->
-            <div id="checkboxes-setores-motorista" class="border rounded p-2 max-h-56 overflow-y-auto space-y-2 bg-gray-50">
-                <p class="text-xs text-gray-400 italic text-center py-2">A carregar setores do sistema...</p>
-            </div>
-        </div>
-        <div>
             <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
             <!-- Palete dinâmica de cores criada no main.js -->
             <div class="grid grid-cols-6 gap-2" id="color-picker-container"></div>
@@ -4119,7 +4780,7 @@ ARQUIVO: partials/rotas.html
   NÃO faz: Não processa chamadas de rede ou lógicas de rotas (delegado para js/rotas.js).
   Depende de: Tailwind CSS, FontAwesome e Google Maps API carregada globalmente.
 -->
-<div class="flex-1 p-4 pb-24 overflow-y-auto space-y-4">
+<main id="view-rotas" class="hidden flex-1 p-4 pb-24 overflow-y-auto space-y-4">
 
     <!-- 1. CONTAINER DE SETUP/CONFIGURAÇÃO INICIAL (Mostrado quando a rota NÃO está iniciada) -->
     <div id="container-setup-rota" class="space-y-4">
@@ -4306,7 +4967,7 @@ ARQUIVO: partials/rotas.html
         </div>
 
     </div>
-</div>
+</main>
 
 =========================================
 ARQUIVO: partials/setores.html
@@ -4314,49 +4975,69 @@ ARQUIVO: partials/setores.html
 
 <!--
   setores.html
-  Faz: Contém a estrutura visual integral do ecrã de Gestão de Setores de Entrega, incluindo o formulário de atribuição de freguesias/localidades de Mafra e a lista de setores ativos.
+  Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks (Localidades) aos Motoristas.
+       Suporta mapa interativo de distribuição de nuvens de calor e layout em duas colunas paralelas (split-pane) em ecrãs grandes de PC ou Tablet.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
 
 <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
     
-    <!-- Formulário de Criação e Edição de Setores Geográficos -->
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-        <h2 class="text-xl font-bold text-gray-800">Criar Setor de Entrega</h2>
-        <form id="form-setor" class="space-y-3">
-            <div>
-                <label class="block text-xs font-bold uppercase text-gray-600">Nome do Setor</label>
-                <input type="text" id="setor-nome" required placeholder="Ex: Setor Norte, Setor Oeste"
-                       class="w-full mt-1 p-2 border rounded outline-none focus:ring-2 focus:ring-blue-500">
-            </div>
-            <div>
-                <div class="flex justify-between items-center mb-1">
-                    <label class="block text-xs font-bold uppercase text-gray-600">Selecionar Áreas (Localidades)</label>
-                    <span class="text-[9px] text-gray-400 font-semibold italic">*Área única por setor</span>
-                </div>
-                <!-- Árvore geográfica de 3 níveis preenchida dinamicamente pelo setores.js -->
-                <div id="checkboxes-areas" class="border rounded p-2 max-h-56 overflow-y-auto space-y-2 bg-gray-50">
-                    <p class="text-xs text-gray-400 italic text-center py-2">A carregar áreas do sistema...</p>
-                </div>
-            </div>
-            <div class="flex space-x-2">
-                <button type="button" id="btn-cancelar-setor" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2.5 rounded-lg shadow">
-                    Cancelar
-                </button>
-                <button type="submit" id="btn-submit-setor" class="flex-1 bg-blue-600 text-white font-bold py-2.5 rounded-lg shadow hover:bg-blue-700 transition">
-                    Criar Setor
-                </button>
-            </div>
-        </form>
+    <!-- NOVO ELEMENTO VISUAL: MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
+        <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
+            <i class="fa-solid fa-map-location-dot text-blue-600"></i>
+            <span>Visão do Gestor: Distribuição Geográfica de Bricks (Estantes)</span>
+        </h3>
+        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+            <div id="map-dashboard-bricks" class="w-full h-80 bg-gray-50"></div>
+        </div>
     </div>
 
-    <!-- Lista de Setores Ativos e seus respetivos territórios -->
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-        <h3 class="text-sm font-bold uppercase text-gray-500 mb-1">Setores Ativos</h3>
-        <div id="lista-setores" class="space-y-2 max-h-64 overflow-y-auto pr-1">
-            <p class="text-sm text-gray-400 italic text-center py-4">Nenhum sector registado.</p>
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
+        <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
+            <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
+            <span>Painel de Atribuição Direta</span>
+        </h2>
+        <p class="text-xs text-gray-500 leading-relaxed">
+            Selecione um motorista na lista à esquerda (ou topo) e assinale na árvore à direita as localidades que pretende entregar a essa estante de arrumação.
+        </p>
+    </div>
+
+    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet, coluna em Telemóvel) -->
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+        
+        <!-- COLUNA ESQUERDA: LISTAGEM E SELEÇÃO DE MOTORISTAS ATIVOS -->
+        <div class="md:col-span-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+            <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
+                <i class="fa-solid fa-users text-blue-500"></i>
+                <span>Passo 1: Escolher Motorista</span>
+            </h3>
+            
+            <div id="lista-atribuicao-motoristas" class="space-y-2 max-h-96 overflow-y-auto pr-1">
+                <!-- Preenchido dinamicamente por setores.js -->
+                <p class="text-xs text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
+            </div>
         </div>
+
+        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS DE MAFRA -->
+        <div class="md:col-span-8 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+            <div class="flex justify-between items-center">
+                <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
+                    <i class="fa-solid fa-city text-blue-500"></i>
+                    <span>Passo 2: Assinalar Localidades</span>
+                </h3>
+                <span id="label-motorista-selecionado" class="text-[10px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-dashed">
+                    Nenhum Selecionado
+                </span>
+            </div>
+
+            <!-- Contentor dinâmico da árvore preenchido pelo setores.js -->
+            <div id="arvore-bricks-localidades" class="border rounded-lg p-2 max-h-[500px] overflow-y-auto space-y-2 bg-gray-50/50">
+                <p class="text-xs text-gray-400 italic text-center py-8">Por favor, escolha um motorista na lista para carregar os Bricks.</p>
+            </div>
+        </div>
+
     </div>
 
 </main>
@@ -4367,7 +5048,7 @@ ARQUIVO: partials/triagem.html
 
 <!--
   triagem.html
-  Faz: Contém a estrutura visual integral da Seção de Triagem, incluindo o banner inteligente do PWA, o visor principal, o leitor de voz e o teclado numérico gigante.
+  Faz: Contém a estrutura visual simplificada da Seção de Triagem, focada exclusivamente na análise ultra-rápida de Código Postal de 7 dígitos pelo teclado virtual.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -4408,23 +5089,6 @@ ARQUIVO: partials/triagem.html
         </div>
     </div>
 
-    <!-- Procurar Código por Morada (Com reconhecimento de voz) -->
-    <div class="bg-blue-50 p-3 rounded-lg border border-blue-200 space-y-2">
-        <label class="block text-xs font-bold uppercase text-blue-800">
-            <i class="fa-solid fa-microphone mr-1"></i> Procurar Código por Voz:
-        </label>
-        <div class="flex space-x-2">
-            <input type="text" id="busca-morada-triagem" placeholder="Fale ou digite a morada..." 
-                   class="flex-1 p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-            <button type="button" id="btn-voz-triagem" class="bg-blue-50 active:bg-blue-200 text-blue-700 border border-blue-200 rounded-lg px-4 flex items-center justify-center shadow-sm transition animate-none" title="Ditar morada">
-                <i class="fa-solid fa-microphone text-lg" id="mic-inativo-triagem"></i>
-                <i class="fa-solid fa-microphone text-lg animate-pulse text-red-500 hidden" id="mic-ativo-triagem"></i>
-            </button>
-        </div>
-        <!-- Input de captura da câmara mantido oculto para reativação nativa (Tesseract) -->
-        <input type="file" id="input-camera-captura" accept="image/*" capture="environment" class="hidden">
-    </div>
-
     <!-- Teclado Numérico Gigante para Operação Rápida -->
     <div class="grid grid-cols-3 gap-3 flex-1">
         <button type="button" class="btn-key bg-gray-200 active:bg-gray-300 text-2xl font-bold py-4 rounded-xl shadow-sm focus:outline-none" data-val="1">1</button>
@@ -4446,7 +5110,7 @@ ARQUIVO: partials/triagem.html
         </button>
     </div>
 
-    <!-- Botão de Ação de Triagem -->
+    <!-- Botão de Ação de Triagem manual mantido apenas como backup alternativo -->
     <button id="btn-analisar" class="w-full bg-green-600 active:bg-green-700 text-white font-bold text-xl py-4 rounded-xl shadow-md transition duration-150">
         Analisar Código
     </button>

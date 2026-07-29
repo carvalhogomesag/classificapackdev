@@ -594,15 +594,6 @@ export function renderizarItinerarioOtimizado() {
     });
 
     renderEstatisticasRota();
-
-    if (lastNavigatedId) {
-        setTimeout(() => {
-            const elementoAlvo = document.getElementById(`paragem-${lastNavigatedId}`);
-            if (elementoAlvo) {
-                elementoAlvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }, 150);
-    }
 }
 
 // ==========================================
