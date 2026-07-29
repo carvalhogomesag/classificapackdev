@@ -679,7 +679,7 @@ function configurarFormatacaoCodigoPostal() {
 }
 
 // ==========================================
-// ESCUTA INTELIGENTE DE CÓDIGO POSTAL PARA REDUZIR AUTOCOMPLETE A 1KM (MIRA LASER)
+// ESCUTA INTELIGENTE DE CÓDIGO POSTAL - AUTO-COMPLEMENTO DE LOCALIDADE E MAFRA (SEM RESTRIÇÃO DE KM)
 // ==========================================
 function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -703,47 +703,32 @@ function configurarEscutaCodigoPostalParaLimites() {
 
         // Se detetar que o utilizador digitou um Código Postal de 7 dígitos completo (ex: 2640-601)
         if (padraoCP.test(valor)) {
-            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A pré-geolocalizar para mira laser...`);
+            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A determinar localidade...`);
 
-            // NOVO: Copia automaticamente o Código Postal para o campo de morada/pesquisa
-            // seguido de um espaço e coloca o cursor no fim, agilizando imenso a digitação no telemóvel!
+            // Procura a localidade (brick) associada localmente sem precisar de fazer pedidos ao servidor
+            const { brickName } = resolveBrickForZip(valor, window.drivers);
+            
             if (inputMorada) {
-                inputMorada.value = `${valor} `;
+                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra
+                const textoPreenchido = brickName 
+                    ? `${valor} ${brickName}, Mafra, `
+                    : `${valor} Mafra, `;
+
+                inputMorada.value = textoPreenchido;
                 inputMorada.focus();
                 
-                // Coloca o cursor de escrita exatamente a seguir ao espaço, pronto a escrever a rua
+                // Coloca o cursor de escrita exatamente no fim, pronto a receber a rua, travessa, beco ou POI
                 const comprimento = inputMorada.value.length;
                 inputMorada.setSelectionRange(comprimento, comprimento);
             }
 
-            try {
-                // Pergunta de forma silenciosa ao Render quais as coordenadas desse CP
-                const response = await fetch(`${API_BASE_URL}/api/geocode`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ postalCode: valor })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.lat && data.lng && autocompleteInstancia) {
-                        const centroCP = { lat: data.lat, lng: data.lng };
-                        
-                        // Define um círculo ultra-fechado de apenas 1000 metros (1 km)
-                        const circuloCP = new google.maps.Circle({ center: centroCP, radius: 1000 });
-                        
-                        // Aplica as novas fronteiras ao autocomplete
-                        autocompleteInstancia.setBounds(circuloCP.getBounds());
-                        
-                        // MELHORADO V26: Ativamos strictBounds como 'true' para criar uma PAREDE ESTRITA!
-                        // A Google fica estritamente impedida de sugerir qualquer resultado fora deste raio de 1 km.
-                        autocompleteInstancia.setOptions({ strictBounds: true });
-                        
-                        console.log(`[PWA] Autocomplete focado com raio laser de 1km (Parede Estrita) em redor de: ${data.address}`);
-                    }
-                }
-            } catch (erro) {
-                console.warn("[PWA] Erro na pré-geolocalização para limites de 1km:", erro);
+            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho de Mafra
+            if (autocompleteInstancia) {
+                const centroMafra = { lat: 38.9369, lng: -9.3282 };
+                const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
+                autocompleteInstancia.setBounds(circuloMafra.getBounds());
+                autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa restrição e prioriza por texto
+                console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por texto livre.");
             }
         }
     });
