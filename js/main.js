@@ -23,13 +23,22 @@ import { inicializarGoogleAutocompleteTriagem } from './maps.js';
 // Importa instâncias seguras do Firebase para o arranque de sessão
 import { auth, db } from './firebase-init.js';
 
-// ==========================================
-// PALETE DE CORES DOS MOTORISTAS
-// ==========================================
+// =========================================================================
+// PALETE DE CORES DOS MOTORISTAS (ATUALIZADA: ALTO CONTRASTE)
+// =========================================================================
 const colorPalette = [
-    "#2563EB", "#DC2626", "#059669", "#EA580C", 
-    "#7C3AED", "#DB2777", "#0891B2", "#D97706", 
-    "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
+    "#E31A1C", // Vermelho Vivo
+    "#1F78B4", // Azul Real
+    "#33A02C", // Verde Kelly
+    "#FF7F00", // Laranja Puro
+    "#6A3D9A", // Roxo Intenso
+    "#FFD700", // Amarelo Ouro
+    "#F012BE", // Rosa Magenta
+    "#00A3E0", // Azul Ciano/Capri
+    "#8B4513", // Castanho Terra
+    "#85E000", // Verde Lima
+    "#001F3F", // Azul Marinho Escuro
+    "#008080"  // Verde Teal
 ];
 
 // Variáveis para guardar o cancelamento seguro de conexões ativas do Firestore
@@ -180,10 +189,6 @@ async function carregarPartials() {
 // ==========================================
 // INICIALIZAÇÃO DO AUTOCOMPLETE DE MORADAS
 // ==========================================
-// NOTA: o autocomplete de morada das ROTAS foi removido daqui de propósito.
-// A criação de rotas passou a exigir o Código Postal como campo obrigatório
-// (verdade absoluta), com morada apenas como complemento opcional — fluxo
-// tratado por processarAdicaoPorPostal() dentro de rotas.js, não por aqui.
 function inicializarTodosAutocompletes() {
     const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
     if (buscaMoradaTriagemInput) {
