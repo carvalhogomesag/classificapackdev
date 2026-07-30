@@ -1,4 +1,3 @@
-javascript
 /**
  * js/rotas.js
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
@@ -597,7 +596,7 @@ export function renderizarItinerarioOtimizado() {
 
         // INTERCEÇÃO TÁTIL DA PRIMEIRA MORADA DE NAVEGAÇÃO PARA REGISTO DO ODÓMETRO
         item.querySelector('.btn-navegar').onclick = () => {
-            if (index === 0 && !window.tripStarted) {
+            if (index === 0 && (!window.tripStarted || !window.odometerStart || window.odometerStart === 0)) {
                 abrirModalOdometroSaida(() => {
                     localStorage.setItem('cp_last_navigated_id', paragem.id);
                     renderizarItinerarioOtimizado(); 
@@ -1209,6 +1208,16 @@ export function setupRotasLogic() {
             }
             const d = new Date(dataSelecionada);
             const dataFormatada = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            
+            // RESET DO DIÁRIO DE BORDO COMPLETO PARA O NOVO TURNO INICIADO
+            window.tripStarted = false;
+            window.tripCompleted = false;
+            window.odometerStart = 0;
+            window.odometerStartHour = "";
+            window.odometerEnd = 0;
+            window.odometerEndHour = "";
+            // NOTA: mantemos window.lastOdometer como benchmark absoluto para validações futuras
+
             window.dataRotaSelecionada = dataFormatada;
             window.rotaIniciada = true;
             sincronizarPersistencia();
