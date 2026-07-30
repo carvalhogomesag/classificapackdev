@@ -137,7 +137,7 @@ export const GEOGRAPHY = {
             "Vilãs": ["2640-580", "2640-824"],
             "Casal Mangancha": ["2640-586"],
             "Picanceira de Cima": ["2640-585"],
-            "Sobreiro": ["2640-412", "2640-578"],
+            "Sobreiro": ["2640-412", "2640-578", "2640-587"],
             "Casas Novas": ["2640-427"],
             "Casal da Ervideira": ["2640-448"],
             "Zambujal": ["2640-413"],
