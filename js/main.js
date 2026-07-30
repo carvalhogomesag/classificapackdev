@@ -1,4 +1,3 @@
-javascript
 /**
  * main.js
  * Faz: Atua como ponto de entrada (bootstrapper) principal da app. Carrega de forma assíncrona os partials HTML, importa e ativa o estado global, e inicializa as escutas de eventos e renderizações de todos os sub-módulos.
