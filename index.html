@@ -1,9 +1,10 @@
+html
 <!DOCTYPE html>
 <html lang="pt">
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v48, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v49, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -90,14 +91,14 @@
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v48 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v49 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <!-- Botão de Sair de Sessão / Logout para motoristas -->
             <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
                 <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
             </button>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v48</span>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v49</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -265,6 +266,70 @@
             </button>
         </nav>
 
+    </div>
+
+    <!-- MODAL DE SAÍDA / REGISTO DE QUILOMETRAGEM INICIAL -->
+    <div id="modal-odometro-saida" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[9999] backdrop-blur-xs">
+        <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] mx-auto">
+            <div class="flex-shrink-0 bg-blue-600 text-white p-4 font-bold text-base flex items-center space-x-2">
+                <i class="fa-solid fa-gauge-high"></i>
+                <span>Registo de Saída (Início de Rota)</span>
+            </div>
+            <div class="flex-1 p-5 space-y-4 overflow-y-auto">
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    Antes de navegar para o primeiro destino, registe o horário e a quilometragem atual do veículo para controle de viagem.
+                </p>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Hora de Saída</label>
+                    <input type="time" id="odometro-saida-hora" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Quilometragem (KM) de Partida</label>
+                    <input type="number" id="odometro-saida-km" placeholder="Ex: 124500" required class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    <span id="odometro-saida-minimo" class="block text-[10px] text-gray-400 mt-1 font-semibold">Mínimo exigido: -- KM</span>
+                </div>
+            </div>
+            <div class="flex-shrink-0 p-4 bg-gray-50 border-t flex space-x-3">
+                <button id="btn-cancelar-saida-km" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Cancelar
+                </button>
+                <button id="btn-confirmar-saida-km" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Confirmar Saída
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CHEGADA / REGISTO DE QUILOMETRAGEM FINAL -->
+    <div id="modal-odometro-chegada" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[9999] backdrop-blur-xs">
+        <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] mx-auto">
+            <div class="flex-shrink-0 bg-red-600 text-white p-4 font-bold text-base flex items-center space-x-2">
+                <i class="fa-solid fa-flag-checkered"></i>
+                <span>Registo de Chegada / Fim de Rota</span>
+            </div>
+            <div class="flex-1 p-5 space-y-4 overflow-y-auto">
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    Registe a quilometragem atual do veículo no regresso ao armazém para encerrar o seu turno diário de trabalho.
+                </p>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Hora de Chegada</label>
+                    <input type="time" id="odometro-chegada-hora" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-red-500 bg-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Quilometragem (KM) de Chegada</label>
+                    <input type="number" id="odometro-chegada-km" placeholder="Ex: 124620" required class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-red-500">
+                    <span id="odometro-chegada-minimo" class="block text-[10px] text-gray-400 mt-1 font-semibold">Mínimo exigido: -- KM</span>
+                </div>
+            </div>
+            <div class="flex-shrink-0 p-4 bg-gray-50 border-t flex space-x-3">
+                <button id="btn-cancelar-chegada-km" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Cancelar
+                </button>
+                <button id="btn-confirmar-chegada-km" class="flex-1 bg-red-600 active:bg-red-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Confirmar Chegada
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Scripts de Configuração e Arranque -->

@@ -1,3 +1,4 @@
+javascript
 /**
  * state.js
  * Faz: Inicializa e gere o estado global da aplicação em memória (propriedades anexadas ao objeto global 'window').
@@ -56,3 +57,14 @@ window.definindoPartidaPorMorada = false;
 
 // Guarda reativamente o tipo de cálculo utilizado no percurso
 window.routingMethodUsed = localStorage.getItem('cp_routing_method') || 'Cloud';
+
+// ==========================================
+// ESTADO GERAL DE ODÓMETRO / DIÁRIO DE BORDO
+// ==========================================
+window.tripStarted = safeJSONParse('cp_trip_started', false);
+window.tripCompleted = safeJSONParse('cp_trip_completed', false);
+window.odometerStart = safeJSONParse('cp_odometer_start', 0);
+window.odometerStartHour = safeJSONParse('cp_odometer_start_hour', "");
+window.odometerEnd = safeJSONParse('cp_odometer_end', 0);
+window.odometerEndHour = safeJSONParse('cp_odometer_end_hour', "");
+window.lastOdometer = safeJSONParse('cp_last_odometer', 0);

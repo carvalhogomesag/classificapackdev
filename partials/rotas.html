@@ -1,3 +1,4 @@
+html
 <!-- 
   partials/rotas.html
   Faz: Interface estável original de rolagem fluida para gestão de turnos, inserção de paragens e ecrã de navegação.
@@ -218,8 +219,36 @@
                     <span>Cálculo pendente...</span>
                 </span>
             </div>
-
         </div>
+
+        <!-- NOVO: Painel Informativo de Odómetro (Diário de Bordo) -->
+        <div id="painel-odometro-resumo" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm space-y-2.5 font-sans animate-fade-in">
+            <span class="block text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center space-x-1.5">
+                <i class="fa-solid fa-gauge-high"></i>
+                <span>Diário de Bordo do Turno</span>
+            </span>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="bg-white p-2.5 rounded-xl border border-blue-100 flex flex-col space-y-1">
+                    <span class="font-bold text-gray-400 uppercase text-[9px]">Partida (Saída)</span>
+                    <span id="odometro-resumo-saida-km" class="font-black text-gray-800 text-sm">-- KM</span>
+                    <span id="odometro-resumo-saida-hora" class="text-[10px] font-semibold text-gray-500">Hora: --:--</span>
+                </div>
+                <div class="bg-white p-2.5 rounded-xl border border-blue-100 flex flex-col space-y-1">
+                    <span class="font-bold text-gray-400 uppercase text-[9px]">Chegada (Fim)</span>
+                    <span id="odometro-resumo-chegada-km" class="font-black text-gray-800 text-sm">-- KM</span>
+                    <span id="odometro-resumo-chegada-hora" class="text-[10px] font-semibold text-gray-500">Hora: Em trânsito</span>
+                </div>
+            </div>
+            <div id="odometro-resumo-total-viagem" class="text-center pt-1 text-[11px] font-black text-blue-700">
+                Total percorrido na rota: Em trânsito...
+            </div>
+        </div>
+
+        <!-- NOVO: Botão de Finalizar Turno -->
+        <button id="btn-finalizar-turno" class="hidden w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
+            <i class="fa-solid fa-flag-checkered"></i>
+            <span>Finalizar Turno (Registar Chegada)</span>
+        </button>
 
     </div>
 </main>

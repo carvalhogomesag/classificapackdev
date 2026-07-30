@@ -1,3 +1,4 @@
+javascript
 /**
  * js/rotas.js
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
@@ -54,6 +55,13 @@ function sincronizarPersistencia() {
     );
 
     localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
+    localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
+    localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted));
+    localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart));
+    localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour));
+    localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd));
+    localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
+    localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
 
     // NOVO: Se houver um utilizador autenticado, sincroniza reativamente com o seu documento correspondente em 'routes'!
     if (window.currentUserUid) {
@@ -64,6 +72,16 @@ function sincronizarPersistencia() {
             dataRotaSelecionada: window.dataRotaSelecionada || "",
             rotaIniciada: window.rotaIniciada || false,
             routingMethodUsed: window.routingMethodUsed || 'Cloud',
+
+            // Sincroniza dados do Odómetro para a nuvem
+            tripStarted: window.tripStarted || false,
+            tripCompleted: window.tripCompleted || false,
+            odometerStart: window.odometerStart || 0,
+            odometerStartHour: window.odometerStartHour || "",
+            odometerEnd: window.odometerEnd || 0,
+            odometerEndHour: window.odometerEndHour || "",
+            lastOdometer: window.lastOdometer || 0,
+
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         }).then(() => {
             console.log("[FIREBASE] Rota do utilizador sincronizada no Firestore.");
@@ -577,13 +595,22 @@ export function renderizarItinerarioOtimizado() {
             </div>
         `;
 
-        item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
-
+        // INTERCEÇÃO TÁTIL DA PRIMEIRA MORADA DE NAVEGAÇÃO PARA REGISTO DO ODÓMETRO
         item.querySelector('.btn-navegar').onclick = () => {
-            localStorage.setItem('cp_last_navigated_id', paragem.id);
-            renderizarItinerarioOtimizado(); 
-            window.open(linkGoogleMaps, '_blank');
+            if (index === 0 && !window.tripStarted) {
+                abrirModalOdometroSaida(() => {
+                    localStorage.setItem('cp_last_navigated_id', paragem.id);
+                    renderizarItinerarioOtimizado(); 
+                    window.open(linkGoogleMaps, '_blank');
+                });
+            } else {
+                localStorage.setItem('cp_last_navigated_id', paragem.id);
+                renderizarItinerarioOtimizado(); 
+                window.open(linkGoogleMaps, '_blank');
+            }
         };
+
+        item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
@@ -621,6 +648,10 @@ export function renderEstatisticasRota() {
     const statDistancia = document.getElementById('stat-distancia');
     const statTempo = document.getElementById('stat-tempo');
     const statSistema = document.getElementById('stat-sistema');
+
+    // Elementos dinâmicos do Diário de Bordo e do Fecho de Turno
+    const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
+    const painelOdometroResumo = document.getElementById('painel-odometro-resumo');
 
     if (!htmlEl) return;
 
@@ -673,6 +704,149 @@ export function renderEstatisticasRota() {
             statSistema.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Contingência Local (Linha Reta)</span>`;
         }
     }
+
+    // GESTÃO REATIVA DE VISIBILIDADE DO BOTÃO "FINALIZAR TURNO"
+    if (btnFinalizarTurno) {
+        if (window.tripStarted && !window.tripCompleted) {
+            btnFinalizarTurno.classList.remove('hidden');
+        } else {
+            btnFinalizarTurno.classList.add('hidden');
+        }
+    }
+
+    // GESTÃO REATIVA E COMPLEMENTO VISUAL DO DIÁRIO DE BORDO
+    if (painelOdometroResumo) {
+        if (window.tripStarted) {
+            painelOdometroResumo.classList.remove('hidden');
+            
+            const startKmEl = document.getElementById('odometro-resumo-saida-km');
+            const startHourEl = document.getElementById('odometro-resumo-saida-hora');
+            const endKmEl = document.getElementById('odometro-resumo-chegada-km');
+            const endHourEl = document.getElementById('odometro-resumo-chegada-hora');
+            const totalKmEl = document.getElementById('odometro-resumo-total-viagem');
+
+            if (startKmEl) startKmEl.textContent = `${window.odometerStart} KM`;
+            if (startHourEl) startHourEl.textContent = `Hora: ${window.odometerStartHour}`;
+
+            if (window.tripCompleted) {
+                if (endKmEl) endKmEl.textContent = `${window.odometerEnd} KM`;
+                if (endHourEl) endHourEl.textContent = `Hora: ${window.odometerEndHour}`;
+                if (totalKmEl) {
+                    const diff = window.odometerEnd - window.odometerStart;
+                    totalKmEl.textContent = `Total percorrido na rota: ${diff.toFixed(1)} km`;
+                }
+            } else {
+                if (endKmEl) endKmEl.textContent = `-- KM`;
+                if (endHourEl) endHourEl.textContent = `Hora: Em trânsito`;
+                if (totalKmEl) totalKmEl.textContent = `Total percorrido na rota: Em trânsito...`;
+            }
+        } else {
+            painelOdometroResumo.classList.add('hidden');
+        }
+    }
+}
+
+// ==========================================
+// FUNÇÕES DE ABERTURA E VALIDAÇÃO DOS MODAIS DO ODÓMETRO
+// ==========================================
+function abrirModalOdometroSaida(callback) {
+    const modal = document.getElementById('modal-odometro-saida');
+    if (!modal) return;
+
+    // Obtém o horário do dispositivo em formato síncrono para preenchimento
+    const agora = new Date();
+    const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    
+    const inputHora = document.getElementById('odometro-saida-hora');
+    const inputKm = document.getElementById('odometro-saida-km');
+    const txtMinimo = document.getElementById('odometro-saida-minimo');
+
+    if (inputHora) inputHora.value = horaStr;
+    if (inputKm) inputKm.value = window.lastOdometer || "";
+    if (txtMinimo) txtMinimo.textContent = `Mínimo exigido: ${window.lastOdometer || 0} KM`;
+
+    modal.classList.remove('hidden');
+
+    const btnConfirmar = document.getElementById('btn-confirmar-saida-km');
+    const btnCancelar = document.getElementById('btn-cancelar-saida-km');
+
+    btnConfirmar.onclick = () => {
+        const kmVal = parseFloat(inputKm.value);
+        const horaVal = inputHora.value.trim();
+
+        // Validação defensiva absoluta contra quilometragens inferiores de início
+        if (isNaN(kmVal) || kmVal < (window.lastOdometer || 0)) {
+            alert(`Erro de validação: O valor de quilometragem de partida não pode ser menor do que o último registo final (${window.lastOdometer || 0} KM).`);
+            return;
+        }
+        if (!horaVal) {
+            alert("Por favor, introduza um horário de partida válido.");
+            return;
+        }
+
+        window.tripStarted = true;
+        window.tripCompleted = false;
+        window.odometerStart = kmVal;
+        window.odometerStartHour = horaVal;
+        window.lastOdometer = kmVal; // Define o novo limiar benchmark mínimo
+
+        sincronizarPersistencia();
+        modal.classList.add('hidden');
+        callback();
+    };
+
+    btnCancelar.onclick = () => {
+        modal.classList.add('hidden');
+    };
+}
+
+function abrirModalOdometroChegada() {
+    const modal = document.getElementById('modal-odometro-chegada');
+    if (!modal) return;
+
+    const agora = new Date();
+    const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    
+    const inputHora = document.getElementById('odometro-chegada-hora');
+    const inputKm = document.getElementById('odometro-chegada-km');
+    const txtMinimo = document.getElementById('odometro-chegada-minimo');
+
+    if (inputHora) inputHora.value = horaStr;
+    if (inputKm) inputKm.value = ""; // Fica em branco para introdução tátil do condutor
+    if (txtMinimo) txtMinimo.textContent = `Mínimo de partida: ${window.odometerStart || 0} KM`;
+
+    modal.classList.remove('hidden');
+
+    const btnConfirmar = document.getElementById('btn-confirmar-chegada-km');
+    const btnCancelar = document.getElementById('btn-cancelar-chegada-km');
+
+    btnConfirmar.onclick = () => {
+        const kmVal = parseFloat(inputKm.value);
+        const horaVal = inputHora.value.trim();
+
+        // Validação defensiva absoluta contra quilometragens inferiores ao ponto de partida
+        if (isNaN(kmVal) || kmVal < window.odometerStart) {
+            alert(`Erro de validação: O valor de quilometragem final de regresso não pode ser inferior ao valor de saída (${window.odometerStart} KM).`);
+            return;
+        }
+        if (!horaVal) {
+            alert("Por favor, introduza um horário de regresso válido.");
+            return;
+        }
+
+        window.tripCompleted = true;
+        window.odometerEnd = kmVal;
+        window.odometerEndHour = horaVal;
+        window.lastOdometer = kmVal; // Define o novo mínimo incontornável para inícios futuros
+
+        sincronizarPersistencia();
+        modal.classList.add('hidden');
+        renderizarItinerarioOtimizado();
+    };
+
+    btnCancelar.onclick = () => {
+        modal.classList.add('hidden');
+    };
 }
 
 // ==========================================
@@ -999,6 +1173,9 @@ export function setupRotasLogic() {
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
+    // Novo botão para finalização do turno
+    const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
+
     // Inicialização da nova lógica de assistência ao teclado para o Código Postal
     configurarEventosPrefixoRapido();
     configurarFormatacaoCodigoPostal();
@@ -1047,6 +1224,15 @@ export function setupRotasLogic() {
                 window.rotaOtimizada = [];
                 window.dataRotaSelecionada = "";
                 window.rotaIniciada = false;
+
+                // Reset do estado do odómetro ao encerrar a rota, mantendo lastOdometer para a viagem seguinte
+                window.tripStarted = false;
+                window.tripCompleted = false;
+                window.odometerStart = 0;
+                window.odometerStartHour = "";
+                window.odometerEnd = 0;
+                window.odometerEndHour = "";
+
                 localStorage.removeItem('cp_last_navigated_id');
                 limparMapaVisual();
                 sincronizarPersistencia();
@@ -1119,6 +1305,13 @@ export function setupRotasLogic() {
             if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
             if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
             otimizarItinerarioComVizinhoMaisProximo();
+        });
+    }
+
+    // Escuta ativa do botão tátil de encerramento do Diário de Bordo
+    if (btnFinalizarTurno) {
+        btnFinalizarTurno.addEventListener('click', () => {
+            abrirModalOdometroChegada();
         });
     }
 }

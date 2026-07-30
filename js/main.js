@@ -1,3 +1,4 @@
+javascript
 /**
  * main.js
  * Faz: Atua como ponto de entrada (bootstrapper) principal da app. Carrega de forma assíncrona os partials HTML, importa e ativa o estado global, e inicializa as escutas de eventos e renderizações de todos os sub-módulos.
@@ -133,7 +134,17 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = data.rotaOtimizada || [];
             window.dataRotaSelecionada = data.dataRotaSelecionada || "";
             window.rotaIniciada = data.rotaIniciada || false;
-            window.routingMethodUsed = data.routingMethodUsed || 'Cloud'; // Recupera o método de cálculo do Firestore
+            window.routingMethodUsed = data.routingMethodUsed || 'Cloud';
+            
+            // Sincroniza dados de Odómetro do Firestore para memória
+            window.tripStarted = data.tripStarted || false;
+            window.tripCompleted = data.tripCompleted || false;
+            window.odometerStart = data.odometerStart || 0;
+            window.odometerStartHour = data.odometerStartHour || "";
+            window.odometerEnd = data.odometerEnd || 0;
+            window.odometerEndHour = data.odometerEndHour || "";
+            window.lastOdometer = data.lastOdometer || 0;
+
             console.log("[FIREBASE] Rota do condutor carregada com sucesso do Firestore.");
         } else {
             console.log("[FIREBASE] Nenhuma rota activa encontrada na nuvem. A iniciar limpo.");
@@ -143,6 +154,14 @@ function escutarRotaEmTempoReal(uid) {
             window.dataRotaSelecionada = "";
             window.rotaIniciada = false;
             window.routingMethodUsed = 'Cloud';
+
+            window.tripStarted = false;
+            window.tripCompleted = false;
+            window.odometerStart = 0;
+            window.odometerStartHour = "";
+            window.odometerEnd = 0;
+            window.odometerEndHour = "";
+            window.lastOdometer = 0;
         }
 
         // Atualiza a cache física local offline do telemóvel
@@ -152,6 +171,14 @@ function escutarRotaEmTempoReal(uid) {
         localStorage.setItem('cp_data_rota', JSON.stringify(window.dataRotaSelecionada));
         localStorage.setItem('cp_rota_iniciada', JSON.stringify(window.rotaIniciada));
         localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
+
+        localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
+        localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted));
+        localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart));
+        localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour));
+        localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd));
+        localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
+        localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
 
         // Redesenha e atualiza reativamente o ecrã e o mapa do condutor
         sincronizarInterfaceRota();
