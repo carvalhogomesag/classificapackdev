@@ -1,4 +1,3 @@
-javascript
 /**
  * state.js
  * Faz: Inicializa e gere o estado global da aplicação em memória (propriedades anexadas ao objeto global 'window').
