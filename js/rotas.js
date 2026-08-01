@@ -833,14 +833,38 @@ function abrirModalOdometroChegada() {
             return;
         }
 
+        // Exibe resumo final de viagem antes de arquivar o dia
+        alert(`Turno Encerrado com Sucesso!\n\nPartida: ${window.odometerStart} KM às ${window.odometerStartHour}\nChegada: ${kmVal} KM às ${horaVal}\nTotal Percorrido: ${(kmVal - window.odometerStart).toFixed(1)} km`);
+
+        // GRAVAÇÃO E ARQUIVO COMPLETO DO TURNO (Finalizar Turno é o único encerramento possível de rota)
         window.tripCompleted = true;
         window.odometerEnd = kmVal;
         window.odometerEndHour = horaVal;
         window.lastOdometer = kmVal; // Define o novo mínimo incontornável para inícios futuros
 
+        // Limpa a rota e paragens ativas do ecrã de entregas, preparando para o turno seguinte
+        window.partidaLocalizacao = null;
+        window.moradasEntregas = [];
+        window.rotaOtimizada = [];
+        window.dataRotaSelecionada = "";
+        window.rotaIniciada = false;
+
+        // Reseta estados temporários de viagem
+        window.tripStarted = false;
+        window.tripCompleted = false;
+        window.odometerStart = 0;
+        window.odometerStartHour = "";
+        window.odometerEnd = 0;
+        window.odometerEndHour = "";
+
+        localStorage.removeItem('cp_last_navigated_id');
+        limparMapaVisual();
+
         sincronizarPersistencia();
         modal.classList.add('hidden');
-        renderizarItinerarioOtimizado();
+        
+        // Recarrega a interface para o ecrã de setup inicial de data
+        sincronizarInterfaceRota();
     };
 
     btnCancelar.onclick = () => {
@@ -1106,7 +1130,7 @@ function textObservacoesAutomatico() {
 }
 
 /**
- * Altera visualmente a col dos botões (de cinzento para azul) consoante a seleção activa.
+ * Altera visualmente a cor dos botões (de cinzento para azul) consoante a seleção activa.
  */
 function atualizarEstilosBotoesModal() {
     const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
@@ -1224,7 +1248,6 @@ function atualizarStylesBotoesModal() {
 export function setupRotasLogic() {
     const btnIniciarRota = document.getElementById('btn-iniciar-rota');
     const dataRotaInput = document.getElementById('data-rota');
-    const btnEncerrarRota = document.getElementById('btn-encerrar-rota');
     const btnGpsPartida = document.getElementById('btn-gps-partida');
     const btnBuscarPartida = document.getElementById('btn-buscar-partida');
     const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
@@ -1287,31 +1310,6 @@ export function setupRotasLogic() {
             window.rotaIniciada = true;
             sincronizarPersistencia();
             sincronizarInterfaceRota();
-        });
-    }
-
-    if (btnEncerrarRota) {
-        btnEncerrarRota.addEventListener('click', () => {
-            if (confirm("Tem a certeza de que deseja encerrar a rota atual? Isto limpará o itinerário planeado.")) {
-                window.partidaLocalizacao = null;
-                window.moradasEntregas = [];
-                window.rotaOtimizada = [];
-                window.dataRotaSelecionada = "";
-                window.rotaIniciada = false;
-
-                // Reset do estado do odómetro ao encerrar a rota, mantendo lastOdometer para a viagem seguinte
-                window.tripStarted = false;
-                window.tripCompleted = false;
-                window.odometerStart = 0;
-                window.odometerStartHour = "";
-                window.odometerEnd = 0;
-                window.odometerEndHour = "";
-
-                localStorage.removeItem('cp_last_navigated_id');
-                limparMapaVisual();
-                sincronizarPersistencia();
-                sincronizarInterfaceRota();
-            }
         });
     }
 
@@ -1543,3 +1541,68 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         editMoradaObs.select();
     }, 150);
 }
+
+// ==========================================
+// FUNÇÃO GLOBAL DE RE-SEQUENCIAÇÃO DE ENTREGA (ACIONADA PELO CLIQUE NO MAPA)
+// ==========================================
+window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
+    const modal = document.getElementById('modal-alterar-sequencia');
+    if (!modal) return;
+
+    const txtMorada = document.getElementById('txt-seq-morada');
+    const txtPosAtual = document.getElementById('txt-seq-pos-atual');
+    const inputNovaPos = document.getElementById('input-seq-nova-pos');
+
+    if (txtMorada) txtMorada.textContent = paragem.address;
+    if (txtPosAtual) txtPosAtual.textContent = indexAtual + 1;
+    if (inputNovaPos) {
+        inputNovaPos.value = indexAtual + 1;
+        inputNovaPos.max = window.rotaOtimizada.length;
+    }
+
+    modal.classList.remove('hidden');
+
+    const btnConfirmar = document.getElementById('btn-confirmar-sequencia');
+    const btnCancelar = document.getElementById('btn-cancelar-sequencia');
+
+    btnConfirmar.onclick = () => {
+        const novaPos = parseInt(inputNovaPos.value);
+        if (isNaN(novaPos) || novaPos < 1 || novaPos > window.rotaOtimizada.length) {
+            alert(`Erro: Introduza uma posição válida entre 1 e ${window.rotaOtimizada.length}.`);
+            return;
+        }
+
+        const novoIndex = novaPos - 1;
+
+        if (indexAtual !== novoIndex) {
+            // Re-ordena o array de entregas de forma reativa e sequencial
+            const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
+            window.rotaOtimizada.splice(novoIndex, 0, item);
+
+            // Recalcula as distâncias acumuladas entre as paragens sucessivas
+            window.rotaOtimizada.forEach((p, idx) => {
+                p.distanciaDoAnterior = calcularDistanciaHaversine(
+                    idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
+                    idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
+                    p.lat,
+                    p.lng
+                );
+            });
+
+            // Sincroniza a ordenação manual com a lista base de planeamento
+            window.moradasEntregas = [...window.rotaOtimizada];
+
+            sincronizarPersistencia();
+            renderizarItinerarioOtimizado();
+            
+            // Redesenha o mapa do Google para atualizar a numeração visual das bolinhas
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }
+
+        modal.classList.add('hidden');
+    };
+
+    btnCancelar.onclick = () => {
+        modal.classList.add('hidden');
+    };
+};

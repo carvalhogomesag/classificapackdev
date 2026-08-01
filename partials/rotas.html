@@ -34,25 +34,24 @@
     <!-- 2. CONTAINER DO PLANEADOR ATIVO (Mostrado quando a rota JÁ está iniciada) -->
     <div id="container-planeador-rota" class="hidden space-y-4">
         
-        <!-- Cabeçalho do Planeador -->
-        <div class="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-sm">
-            <div class="space-y-0.5">
-                <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Turno Ativo</span>
-                <h3 id="display-data-rota" class="font-bold text-sm text-blue-400">--/--/----</h3>
+        <!-- Indicador de Data Ativa e Seletor de Modo -->
+        <div class="space-y-2">
+            <div class="flex items-center justify-between px-1">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center space-x-1">
+                    <i class="fa-solid fa-circle-play text-emerald-500 text-[8px] animate-pulse"></i>
+                    <span>Turno em Execução</span>
+                </span>
+                <span id="display-data-rota" class="text-xs font-black text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">--/--/----</span>
             </div>
-            <button id="btn-encerrar-rota" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 font-bold text-xs px-3 py-2 rounded-xl border border-red-500/20 transition-all">
-                <i class="fa-solid fa-power-off mr-1"></i> Encerrar Rota
-            </button>
-        </div>
-
-        <!-- Seletor de Modo: Planeamento vs Condução -->
-        <div class="bg-gray-100 p-1 rounded-xl flex space-x-1">
-            <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
-                Planeamento
-            </button>
-            <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
-                Condução
-            </button>
+            
+            <div class="bg-gray-100 p-1 rounded-xl flex space-x-1 shadow-sm">
+                <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
+                    Planeamento
+                </button>
+                <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
+                    Condução
+                </button>
+            </div>
         </div>
 
         <!-- CONTROLOS DE PLANEAMENTO (Ocultados no modo condução) -->
