@@ -1597,3 +1597,4 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         editMoradaObs.select();
     }, 150);
 }
+
