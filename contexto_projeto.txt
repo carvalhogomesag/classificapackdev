@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 29/07/2026, 21:33:48
+Gerado em: 01/08/2026, 10:48:06
 
 =========================================
 ARQUIVO: index.html
@@ -10,7 +10,7 @@ ARQUIVO: index.html
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v46, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v52, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -97,14 +97,14 @@ ARQUIVO: index.html
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v46 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v52 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <!-- Botão de Sair de Sessão / Logout para motoristas -->
             <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
                 <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
             </button>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v46</span>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v52</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -115,7 +115,7 @@ ARQUIVO: index.html
         <div id="container-view-rotas"></div>
 
         <!-- OVERLAY DO RESULTADO DA TRIAGEM (Global/Partilhado) -->
-        <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+        <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-3 border-b text-center font-bold text-gray-700 z-50">
             <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] mx-auto">
                 <div class="flex-shrink-0 bg-gray-100 p-3 border-b text-center font-bold text-gray-700">Resultado da Triagem</div>
                 <div id="resultado-cor-bg" class="flex-1 flex flex-col items-center justify-center p-5 text-center space-y-2 overflow-y-auto transition-colors duration-300">
@@ -124,7 +124,7 @@ ARQUIVO: index.html
                     <p class="text-white text-sm font-semibold tracking-wider uppercase opacity-85 mt-2">Motorista Designado</p>
                     <h2 id="resultado-motorista" class="text-white text-2xl font-bold tracking-wide drop-shadow-md">---</h2>
                     
-                    <!-- Estante (Brick) Selecionada para organizar o Pacote -->
+                    <!-- Estante (Brick) Selecionada para organize o Pacote -->
                     <p class="text-white text-xs font-semibold tracking-wider uppercase opacity-85 mt-2">Arrumar na Estante (Brick)</p>
                     <div class="flex items-center space-x-2 bg-black/25 px-3 py-1 rounded-lg">
                         <i class="fa-solid fa-boxes-stacked text-yellow-300 text-xs"></i>
@@ -274,6 +274,107 @@ ARQUIVO: index.html
 
     </div>
 
+    <!-- MODAL DE SAÍDA / REGISTO DE QUILOMETRAGEM INICIAL -->
+    <div id="modal-odometro-saida" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[9999] backdrop-blur-xs">
+        <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] mx-auto">
+            <div class="flex-shrink-0 bg-blue-600 text-white p-4 font-bold text-base flex items-center space-x-2">
+                <i class="fa-solid fa-gauge-high"></i>
+                <span>Registo de Saída (Início de Rota)</span>
+            </div>
+            <div class="flex-1 p-5 space-y-4 overflow-y-auto">
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    Antes de navegar para o primeiro destino, registe o horário e a quilometragem atual do veículo para controle de viagem.
+                </p>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Hora de Saída</label>
+                    <input type="time" id="odometro-saida-hora" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Quilometragem (KM) de Partida</label>
+                    <input type="number" id="odometro-saida-km" placeholder="Ex: 124500" required class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                    <span id="odometro-saida-minimo" class="block text-[10px] text-gray-400 mt-1 font-semibold">Mínimo exigido: -- KM</span>
+                </div>
+            </div>
+            <div class="flex-shrink-0 p-4 bg-gray-50 border-t flex space-x-3">
+                <button id="btn-cancelar-saida-km" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Cancelar
+                </button>
+                <button id="btn-confirmar-saida-km" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Confirmar Saída
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CHEGADA / REGISTO DE QUILOMETRAGEM FINAL -->
+    <div id="modal-odometro-chegada" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[9999] backdrop-blur-xs">
+        <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] mx-auto">
+            <div class="flex-shrink-0 bg-red-600 text-white p-4 font-bold text-base flex items-center space-x-2">
+                <i class="fa-solid fa-flag-checkered"></i>
+                <span>Registo de Chegada / Fim de Rota</span>
+            </div>
+            <div class="flex-1 p-5 space-y-4 overflow-y-auto">
+                <p class="text-xs text-gray-400 leading-relaxed">
+                    Registe a quilometragem atual do veículo no regresso ao armazém para encerrar o seu turno diário de trabalho.
+                </p>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Hora de Chegada</label>
+                    <input type="time" id="odometro-chegada-hora" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-red-500 bg-white">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase text-gray-500">Quilometragem (KM) de Chegada</label>
+                    <input type="number" id="odometro-chegada-km" placeholder="Ex: 124620" required class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-red-500">
+                    <span id="odometro-chegada-minimo" class="block text-[10px] text-gray-400 mt-1 font-semibold">Mínimo exigido: -- KM</span>
+                </div>
+            </div>
+            <div class="flex-shrink-0 p-4 bg-gray-50 border-t flex space-x-3">
+                <button id="btn-cancelar-chegada-km" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Cancelar
+                </button>
+                <button id="btn-confirmar-chegada-km" class="flex-1 bg-red-600 active:bg-red-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm">
+                    Confirmar Chegada
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE ALTERAÇÃO MANUAL DE SEQUÊNCIA DE ROTA -->
+    <div id="modal-alterar-sequencia" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999] backdrop-blur-xs">
+        <div class="bg-white w-full max-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col mx-auto">
+            <div class="flex-shrink-0 bg-blue-600 text-white p-4 font-bold text-base flex items-center space-x-2">
+                <i class="fa-solid fa-arrow-down-up-across-line"></i>
+                <span>Alterar Ordem da Entrega</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="text-xs text-gray-500 leading-relaxed">
+                    Defina a nova posição desta entrega no percurso. O sistema ajustará as restantes automaticamente de forma sequencial.
+                </div>
+                <div class="bg-gray-50 p-3 rounded-xl border">
+                    <span class="block text-[10px] font-bold text-gray-400 uppercase">Entrega Selecionada</span>
+                    <span id="txt-seq-morada" class="text-xs font-semibold text-gray-700 truncate block mt-0.5">--</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-gray-100 p-2 rounded-xl text-center">
+                        <span class="block text-[9px] font-bold text-gray-400 uppercase">Posição Atual</span>
+                        <span id="txt-seq-pos-atual" class="text-lg font-black text-gray-700">--</span>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nova Posição</label>
+                        <input type="number" id="input-seq-nova-pos" min="1" required class="w-full p-2.5 border rounded-xl font-bold text-center text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-50 border-t flex space-x-3">
+                <button id="btn-cancelar-sequencia" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-2.5 rounded-xl text-xs shadow-sm">
+                    Cancelar
+                </button>
+                <button id="btn-confirmar-sequencia" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts de Configuração e Arranque -->
     <script src="config.js"></script>
     <script type="module" src="js/main.js"></script>
@@ -321,8 +422,8 @@ ARQUIVO: manifest.json
 ARQUIVO: sw.js
 =========================================
 
-// sw.js (Versão v46)
-const CACHE_NAME = 'classificapack-v46';
+// sw.js (Versão v52)
+const CACHE_NAME = 'classificapack-v52';
 
 const ASSETS = [
   './',
@@ -893,7 +994,7 @@ export const GEOGRAPHY = {
             "Vilãs": ["2640-580", "2640-824"],
             "Casal Mangancha": ["2640-586"],
             "Picanceira de Cima": ["2640-585"],
-            "Sobreiro": ["2640-412", "2640-578"],
+            "Sobreiro": ["2640-412", "2640-578", "2640-587"],
             "Casas Novas": ["2640-427"],
             "Casal da Ervideira": ["2640-448"],
             "Zambujal": ["2640-413"],
@@ -995,7 +1096,7 @@ export const GEOGRAPHY = {
             "Picanceira": ["2640-071"],
             "Picanceira de Cima": ["2640-072"],
             "Pucariça": ["2640-073"],
-            "Ribamar": ["2640-046", "2640-068", "2640-015", "2640-043", "2640-019", "2640-078", "2640-001", "2640-002", "2640-003", "2640-004", "2640-005", "2640-006", "2640-007", "2640-008", "2640-010", "2640-011", "2640-012", "2640-013", "2640-014", "2640-016", "2640-017", "2640-018", "2640-020", "2640-021", "2640-022", "2640-023", "2640-025", "2640-026", "2640-028", "2640-029", "2640-030", "2640-031", "2640-032", "2640-033", "2640-034", "2640-035", "2640-036", "2640-038", "2640-075", "2640-076", "2640-074", "2640-009", "2640-045", "2640-027", "2640-049", "2640-052", "2640-048", "2643-302", "2644-042"],
+            "Ribamar": ["2640-046", "2640-068", "2640-015", "2640-043", "2640-019", "2640-078", "2640-001", "2640-002", "2640-003", "2640-004", "2640-005", "2640-006", "2640-007", "2640-008", "2640-010", "2640-011", "2640-012", "2640-013", "2640-014", "2640-016", "2640-017", "2640-018", "2640-020", "2640-021", "2640-022", "2640-023", "2640-024", "2640-025", "2640-028", "2640-029", "2640-030", "2640-031", "2640-032", "2640-033", "2640-034", "2640-035", "2640-036", "2640-038", "2640-075", "2640-076", "2640-074", "2640-009", "2640-045", "2640-027", "2640-049", "2640-052", "2640-048", "2643-302", "2644-042"],
             "Safarujo": ["2640-052"],
             "Santo Isidoro": ["2640-100", "2640-058", "2640-090", "2640-051", "2640-081", "2640-082", "2640-083", "2640-084", "2640-085", "2640-086", "2640-087", "2640-088", "2640-089", "2640-091", "2640-092", "2640-093", "2640-094", "2640-095", "2640-039", "2640-040", "2640-041", "2640-099", "2640-097", "2640-079", "2640-053"],
             "Achada": ["2640-097"],
@@ -1032,7 +1133,6 @@ export const GEOGRAPHY = {
     }
 };
 
-
 =========================================
 ARQUIVO: js/main.js
 =========================================
@@ -1062,13 +1162,22 @@ import { inicializarGoogleAutocompleteTriagem } from './maps.js';
 // Importa instâncias seguras do Firebase para o arranque de sessão
 import { auth, db } from './firebase-init.js';
 
-// ==========================================
-// PALETE DE CORES DOS MOTORISTAS
-// ==========================================
+// =========================================================================
+// PALETE DE CORES DOS MOTORISTAS (ATUALIZADA: ALTO CONTRASTE)
+// =========================================================================
 const colorPalette = [
-    "#2563EB", "#DC2626", "#059669", "#EA580C", 
-    "#7C3AED", "#DB2777", "#0891B2", "#D97706", 
-    "#0D9488", "#4F46E5", "#E11D48", "#4B5563"
+    "#E31A1C", // Vermelho Vivo
+    "#1F78B4", // Azul Real
+    "#33A02C", // Verde Kelly
+    "#FF7F00", // Laranja Puro
+    "#6A3D9A", // Roxo Intenso
+    "#FFD700", // Amarelo Ouro
+    "#F012BE", // Rosa Magenta
+    "#00A3E0", // Azul Ciano/Capri
+    "#8B4513", // Castanho Terra
+    "#85E000", // Verde Lima
+    "#001F3F", // Azul Marinho Escuro
+    "#008080"  // Verde Teal
 ];
 
 // Variáveis para guardar o cancelamento seguro de conexões ativas do Firestore
@@ -1163,6 +1272,17 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = data.rotaOtimizada || [];
             window.dataRotaSelecionada = data.dataRotaSelecionada || "";
             window.rotaIniciada = data.rotaIniciada || false;
+            window.routingMethodUsed = data.routingMethodUsed || 'Cloud';
+            
+            // Sincroniza dados de Odómetro do Firestore para memória
+            window.tripStarted = data.tripStarted || false;
+            window.tripCompleted = data.tripCompleted || false;
+            window.odometerStart = data.odometerStart || 0;
+            window.odometerStartHour = data.odometerStartHour || "";
+            window.odometerEnd = data.odometerEnd || 0;
+            window.odometerEndHour = data.odometerEndHour || "";
+            window.lastOdometer = data.lastOdometer || 0;
+
             console.log("[FIREBASE] Rota do condutor carregada com sucesso do Firestore.");
         } else {
             console.log("[FIREBASE] Nenhuma rota activa encontrada na nuvem. A iniciar limpo.");
@@ -1171,6 +1291,15 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = [];
             window.dataRotaSelecionada = "";
             window.rotaIniciada = false;
+            window.routingMethodUsed = 'Cloud';
+
+            window.tripStarted = false;
+            window.tripCompleted = false;
+            window.odometerStart = 0;
+            window.odometerStartHour = "";
+            window.odometerEnd = 0;
+            window.odometerEndHour = "";
+            window.lastOdometer = 0;
         }
 
         // Atualiza a cache física local offline do telemóvel
@@ -1179,6 +1308,15 @@ function escutarRotaEmTempoReal(uid) {
         localStorage.setItem('cp_rota_otimizada', JSON.stringify(window.rotaOtimizada));
         localStorage.setItem('cp_data_rota', JSON.stringify(window.dataRotaSelecionada));
         localStorage.setItem('cp_rota_iniciada', JSON.stringify(window.rotaIniciada));
+        localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
+
+        localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
+        localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted));
+        localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart));
+        localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour));
+        localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd));
+        localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
+        localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
 
         // Redesenha e atualiza reativamente o ecrã e o mapa do condutor
         sincronizarInterfaceRota();
@@ -1219,10 +1357,6 @@ async function carregarPartials() {
 // ==========================================
 // INICIALIZAÇÃO DO AUTOCOMPLETE DE MORADAS
 // ==========================================
-// NOTA: o autocomplete de morada das ROTAS foi removido daqui de propósito.
-// A criação de rotas passou a exigir o Código Postal como campo obrigatório
-// (verdade absoluta), com morada apenas como complemento opcional — fluxo
-// tratado por processarAdicaoPorPostal() dentro de rotas.js, não por aqui.
 function inicializarTodosAutocompletes() {
     const buscaMoradaTriagemInput = document.getElementById('busca-morada-triagem');
     if (buscaMoradaTriagemInput) {
@@ -1564,7 +1698,7 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     autocompleteWidget.addListener('place_changed', () => {
         const place = autocompleteWidget.getPlace();
         if (!place.geometry || !place.geometry.location) {
-            alert("Morada não encontrada. Selecione uma opção válida da lista da Google.");
+            alert("Morada não encontrada. Selecione uma option válida da lista da Google.");
             return;
         }
 
@@ -1631,7 +1765,7 @@ export function obterEnderecoPorGPSGoogle(lat, lng, callback) {
 }
 
 /**
- * Calcula a distância em linha reta entre duas coordenadas geográficas (em km) usando Haversine
+ * Calculates a distância em linha reta entre duas coordenadas geográficas (em km) usando Haversine
  */
 export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371; 
@@ -1732,6 +1866,14 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                 strokeColor: "#FFFFFF"
             }
         });
+
+        // INTERCEÇÃO DE CLIQUE NO MARCADOR PARA ALTERAÇÃO MANUAL DE SEQUÊNCIA
+        m.addListener('click', () => {
+            if (typeof window.abrirModalAlterarSequencia === 'function') {
+                window.abrirModalAlterarSequencia(i, p);
+            }
+        });
+
         googleMarkers.push(m);
     });
 
@@ -2069,6 +2211,15 @@ function sincronizarPersistencia() {
         window.rotaIniciada
     );
 
+    localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
+    localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
+    localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted));
+    localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart));
+    localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour));
+    localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd));
+    localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
+    localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
+
     // NOVO: Se houver um utilizador autenticado, sincroniza reativamente com o seu documento correspondente em 'routes'!
     if (window.currentUserUid) {
         db.collection('routes').doc(window.currentUserUid).set({
@@ -2077,6 +2228,17 @@ function sincronizarPersistencia() {
             rotaOtimizada: window.rotaOtimizada || [],
             dataRotaSelecionada: window.dataRotaSelecionada || "",
             rotaIniciada: window.rotaIniciada || false,
+            routingMethodUsed: window.routingMethodUsed || 'Cloud',
+
+            // Sincroniza dados do Odómetro para a nuvem
+            tripStarted: window.tripStarted || false,
+            tripCompleted: window.tripCompleted || false,
+            odometerStart: window.odometerStart || 0,
+            odometerStartHour: window.odometerStartHour || "",
+            odometerEnd: window.odometerEnd || 0,
+            odometerEndHour: window.odometerEndHour || "",
+            lastOdometer: window.lastOdometer || 0,
+
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         }).then(() => {
             console.log("[FIREBASE] Rota do utilizador sincronizada no Firestore.");
@@ -2444,10 +2606,15 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
                 
                 window.rotaOtimizada.push(paragemOriginal);
             });
+
+            window.routingMethodUsed = 'Cloud';
+            localStorage.setItem('cp_routing_method', 'Cloud');
         } else {
             // Se a API não deu erro mas não ordenou, mantém a original
             window.rotaOtimizada = [...window.moradasEntregas];
             window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
+            window.routingMethodUsed = 'Local';
+            localStorage.setItem('cp_routing_method', 'Local');
         }
 
         const containerMapa = document.getElementById('container-mapa');
@@ -2469,6 +2636,9 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
         
         calcularRotaVizinhoMaisProximoLocal();
+        
+        window.routingMethodUsed = 'Local';
+        localStorage.setItem('cp_routing_method', 'Local');
         
         alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo para que possa trabalhar!`);
         
@@ -2582,13 +2752,22 @@ export function renderizarItinerarioOtimizado() {
             </div>
         `;
 
-        item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
-
+        // INTERCEÇÃO TÁTIL DA PRIMEIRA MORADA DE NAVEGAÇÃO PARA REGISTO DO ODÓMETRO
         item.querySelector('.btn-navegar').onclick = () => {
-            localStorage.setItem('cp_last_navigated_id', paragem.id);
-            renderizarItinerarioOtimizado(); 
-            window.open(linkGoogleMaps, '_blank');
+            if (index === 0 && (!window.tripStarted || !window.odometerStart || window.odometerStart === 0)) {
+                abrirModalOdometroSaida(() => {
+                    localStorage.setItem('cp_last_navigated_id', paragem.id);
+                    renderizarItinerarioOtimizado(); 
+                    window.open(linkGoogleMaps, '_blank');
+                });
+            } else {
+                localStorage.setItem('cp_last_navigated_id', paragem.id);
+                renderizarItinerarioOtimizado(); 
+                window.open(linkGoogleMaps, '_blank');
+            }
         };
+
+        item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
@@ -2610,19 +2789,10 @@ export function renderizarItinerarioOtimizado() {
     });
 
     renderEstatisticasRota();
-
-    if (lastNavigatedId) {
-        setTimeout(() => {
-            const elementoAlvo = document.getElementById(`paragem-${lastNavigatedId}`);
-            if (elementoAlvo) {
-                elementoAlvo.scrollIntoView({ behavior: 'smooth', block: 'center' });
-            }
-        }, 150);
-    }
 }
 
 // ==========================================
-// PAINEL DE ESTATÍSTICAS DA ROTA ATIVA
+// PAINEL DE ESTATÍSTICAS DA ROTA ATIVA (ATUALIZADO: ESTIMATIVAS E SISTEMA EM USO)
 // ==========================================
 export function renderEstatisticasRota() {
     const htmlEl = document.getElementById('estatisticas-rota');
@@ -2630,6 +2800,15 @@ export function renderEstatisticasRota() {
     const statEntregues = document.getElementById('stat-entregues');
     const statFalhas = document.getElementById('stat-falhas'); 
     const statPendentes = document.getElementById('stat-pendentes');
+
+    // Novos elementos visuais para distância, tempo e motor de roteamento
+    const statDistancia = document.getElementById('stat-distancia');
+    const statTempo = document.getElementById('stat-tempo');
+    const statSistema = document.getElementById('stat-sistema');
+
+    // Elementos dinâmicos do Diário de Bordo e do Fecho de Turno
+    const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
+    const painelOdometroResumo = document.getElementById('painel-odometro-resumo');
 
     if (!htmlEl) return;
 
@@ -2644,7 +2823,277 @@ export function renderEstatisticasRota() {
     if (statEntregues) statEntregues.textContent = entregues;
     if (statFalhas) statFalhas.textContent = falhadas;
     if (statPendentes) statPendentes.textContent = pendentes;
+
+    // Calcular distância total acumulada (km)
+    let totalDist = 0;
+    window.rotaOtimizada.forEach(p => {
+        totalDist += p.distanciaDoAnterior || 0;
+    });
+
+    if (statDistancia) {
+        statDistancia.textContent = `${totalDist.toFixed(2)} km`;
+    }
+
+    // Estimar tempo com velocidade média de condução de 40 km/h (urban/rural mix em Mafra)
+    if (statTempo) {
+        if (totalDist === 0) {
+            statTempo.textContent = "0 min";
+        } else {
+            const tempoTotalMinutos = Math.round((totalDist / 40) * 60);
+            if (tempoTotalMinutos < 60) {
+                statTempo.textContent = `${tempoTotalMinutos} min`;
+            } else {
+                const horas = Math.floor(tempoTotalMinutos / 60);
+                const mins = tempoTotalMinutos % 60;
+                statTempo.textContent = `${horas}h ${mins}min`;
+            }
+        }
+    }
+
+    // Mostrar qual o motor de roteamento utilizado de forma visual e reativa
+    if (statSistema) {
+        const metodo = window.routingMethodUsed || localStorage.getItem('cp_routing_method') || 'Cloud';
+        if (metodo === 'Cloud') {
+            statSistema.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border bg-emerald-50 text-emerald-700 border-emerald-200 animate-none";
+            statSistema.innerHTML = `<i class="fa-solid fa-cloud"></i> <span>Google Cloud API (Real por Estrada)</span>`;
+        } else {
+            statSistema.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
+            statSistema.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Contingência Local (Linha Reta)</span>`;
+        }
+    }
+
+    // GESTÃO REATIVA DE VISIBILIDADE DO BOTÃO "FINALIZAR TURNO"
+    if (btnFinalizarTurno) {
+        if (window.tripStarted && !window.tripCompleted) {
+            btnFinalizarTurno.classList.remove('hidden');
+        } else {
+            btnFinalizarTurno.classList.add('hidden');
+        }
+    }
+
+    // GESTÃO REATIVA E COMPLEMENTO VISUAL DO DIÁRIO DE BORDO
+    if (painelOdometroResumo) {
+        if (window.tripStarted) {
+            painelOdometroResumo.classList.remove('hidden');
+            
+            const startKmEl = document.getElementById('odometro-resumo-saida-km');
+            const startHourEl = document.getElementById('odometro-resumo-saida-hora');
+            const endKmEl = document.getElementById('odometro-resumo-chegada-km');
+            const endHourEl = document.getElementById('odometro-resumo-chegada-hora');
+            const totalKmEl = document.getElementById('odometro-resumo-total-viagem');
+
+            if (startKmEl) startKmEl.textContent = `${window.odometerStart} KM`;
+            if (startHourEl) startHourEl.textContent = `Hora: ${window.odometerStartHour}`;
+
+            if (window.tripCompleted) {
+                if (endKmEl) endKmEl.textContent = `${window.odometerEnd} KM`;
+                if (endHourEl) endHourEl.textContent = `Hora: ${window.odometerEndHour}`;
+                if (totalKmEl) {
+                    const diff = window.odometerEnd - window.odometerStart;
+                    totalKmEl.textContent = `Total percorrido na rota: ${diff.toFixed(1)} km`;
+                }
+            } else {
+                if (endKmEl) endKmEl.textContent = `-- KM`;
+                if (endHourEl) endHourEl.textContent = `Hora: Em trânsito`;
+                if (totalKmEl) totalKmEl.textContent = `Total percorrido na rota: Em trânsito...`;
+            }
+        } else {
+            painelOdometroResumo.classList.add('hidden');
+        }
+    }
 }
+
+// ==========================================
+// FUNÇÕES DE ABERTURA E VALIDAÇÃO DOS MODAIS DO ODÓMETRO
+// ==========================================
+function abrirModalOdometroSaida(callback) {
+    const modal = document.getElementById('modal-odometro-saida');
+    if (!modal) return;
+
+    // Obtém o horário do dispositivo em formato síncrono para preenchimento
+    const agora = new Date();
+    const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    
+    const inputHora = document.getElementById('odometro-saida-hora');
+    const inputKm = document.getElementById('odometro-saida-km');
+    const txtMinimo = document.getElementById('odometro-saida-minimo');
+
+    if (inputHora) inputHora.value = horaStr;
+    if (inputKm) inputKm.value = window.lastOdometer || "";
+    if (txtMinimo) txtMinimo.textContent = `Mínimo exigido: ${window.lastOdometer || 0} KM`;
+
+    modal.classList.remove('hidden');
+
+    const btnConfirmar = document.getElementById('btn-confirmar-saida-km');
+    const btnCancelar = document.getElementById('btn-cancelar-saida-km');
+
+    btnConfirmar.onclick = () => {
+        const kmVal = parseFloat(inputKm.value);
+        const horaVal = inputHora.value.trim();
+
+        // Validação defensiva absoluta contra quilometragens inferiores de início
+        if (isNaN(kmVal) || kmVal < (window.lastOdometer || 0)) {
+            alert(`Erro de validação: O valor de quilometragem de partida não pode ser menor do que o último registo final (${window.lastOdometer || 0} KM).`);
+            return;
+        }
+        if (!horaVal) {
+            alert("Por favor, introduza um horário de partida válido.");
+            return;
+        }
+
+        window.tripStarted = true;
+        window.tripCompleted = false;
+        window.odometerStart = kmVal;
+        window.odometerStartHour = horaVal;
+        window.lastOdometer = kmVal; // Define o novo limiar benchmark mínimo
+
+        sincronizarPersistencia();
+        modal.classList.add('hidden');
+        callback();
+    };
+
+    btnCancelar.onclick = () => {
+        modal.classList.add('hidden');
+    };
+}
+
+function abrirModalOdometroChegada() {
+    const modal = document.getElementById('modal-odometro-chegada');
+    if (!modal) return;
+
+    const agora = new Date();
+    const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
+    
+    const inputHora = document.getElementById('odometro-chegada-hora');
+    const inputKm = document.getElementById('odometro-chegada-km');
+    const txtMinimo = document.getElementById('odometro-chegada-minimo');
+
+    if (inputHora) inputHora.value = horaStr;
+    if (inputKm) inputKm.value = ""; // Fica em branco para introdução tátil do condutor
+    if (txtMinimo) txtMinimo.textContent = `Mínimo de partida: ${window.odometerStart || 0} KM`;
+
+    modal.classList.remove('hidden');
+
+    const btnConfirmar = document.getElementById('btn-confirmar-chegada-km');
+    const btnCancelar = document.getElementById('btn-cancelar-chegada-km');
+
+    btnConfirmar.onclick = () => {
+        const kmVal = parseFloat(inputKm.value);
+        const horaVal = inputHora.value.trim();
+
+        // Validação defensiva absoluta contra quilometragens inferiores ao ponto de partida
+        if (isNaN(kmVal) || kmVal < window.odometerStart) {
+            alert(`Erro de validação: O valor de quilometragem final de regresso não pode ser inferior ao valor de saída (${window.odometerStart} KM).`);
+            return;
+        }
+        if (!horaVal) {
+            alert("Por favor, introduza um horário de regresso válido.");
+            return;
+        }
+
+        // Exibe resumo final de viagem antes de arquivar o dia
+        alert(`Turno Encerrado com Sucesso!\n\nPartida: ${window.odometerStart} KM às ${window.odometerStartHour}\nChegada: ${kmVal} KM às ${horaVal}\nTotal Percorrido: ${(kmVal - window.odometerStart).toFixed(1)} km`);
+
+        // GRAVAÇÃO E ARQUIVO COMPLETO DO TURNO (Finalizar Turno é o único encerramento possível de rota)
+        window.tripCompleted = true;
+        window.odometerEnd = kmVal;
+        window.odometerEndHour = horaVal;
+        window.lastOdometer = kmVal; // Define o novo mínimo incontornável para inícios futuros
+
+        // Limpa a rota e paragens ativas do ecrã de entregas, preparando para o turno seguinte
+        window.partidaLocalizacao = null;
+        window.moradasEntregas = [];
+        window.rotaOtimizada = [];
+        window.dataRotaSelecionada = "";
+        window.rotaIniciada = false;
+
+        // Reseta estados temporários de viagem
+        window.tripStarted = false;
+        window.tripCompleted = false;
+        window.odometerStart = 0;
+        window.odometerStartHour = "";
+        window.odometerEnd = 0;
+        window.odometerEndHour = "";
+
+        localStorage.removeItem('cp_last_navigated_id');
+        limparMapaVisual();
+
+        sincronizarPersistencia();
+        modal.classList.add('hidden');
+        
+        // Recarrega a interface para o ecrã de setup inicial de data
+        sincronizarInterfaceRota();
+    };
+
+    btnCancelar.onclick = () => {
+        modal.classList.add('hidden');
+    };
+}
+
+// ==========================================
+// FUNÇÃO GLOBAL DE RE-SEQUENCIAÇÃO DE ENTREGA (ACIONADA PELO CLIQUE NO MAPA)
+// ==========================================
+window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
+    const modal = document.getElementById('modal-alterar-sequencia');
+    if (!modal) return;
+
+    const txtMorada = document.getElementById('txt-seq-morada');
+    const txtPosAtual = document.getElementById('txt-seq-pos-atual');
+    const inputNovaPos = document.getElementById('input-seq-nova-pos');
+
+    if (txtMorada) txtMorada.textContent = paragem.address;
+    if (txtPosAtual) txtPosAtual.textContent = indexAtual + 1;
+    if (inputNovaPos) {
+        inputNovaPos.value = indexAtual + 1;
+        inputNovaPos.max = window.rotaOtimizada.length;
+    }
+
+    modal.classList.remove('hidden');
+
+    const btnConfirmar = document.getElementById('btn-confirmar-sequencia');
+    const btnCancelar = document.getElementById('btn-cancelar-sequencia');
+
+    btnConfirmar.onclick = () => {
+        const novaPos = parseInt(inputNovaPos.value);
+        if (isNaN(novaPos) || novaPos < 1 || novaPos > window.rotaOtimizada.length) {
+            alert(`Erro: Introduza uma posição válida entre 1 e ${window.rotaOtimizada.length}.`);
+            return;
+        }
+
+        const novoIndex = novaPos - 1;
+
+        if (indexAtual !== novoIndex) {
+            // Re-ordena o array de entregas de forma reativa e sequencial
+            const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
+            window.rotaOtimizada.splice(novoIndex, 0, item);
+
+            // Recalcula as distâncias acumuladas entre as paragens sucessivas
+            window.rotaOtimizada.forEach((p, idx) => {
+                p.distanciaDoAnterior = calcularDistanciaHaversine(
+                    idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
+                    idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
+                    p.lat,
+                    p.lng
+                );
+            });
+
+            // Sincroniza a ordenação manual com a lista base de planeamento
+            window.moradasEntregas = [...window.rotaOtimizada];
+
+            sincronizarPersistencia();
+            renderizarItinerarioOtimizado();
+            
+            // Redesenha o mapa do Google para atualizar a numeração visual das bolinhas
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }
+
+        modal.classList.add('hidden');
+    };
+
+    btnCancelar.onclick = () => {
+        modal.classList.add('hidden');
+    };
+};
 
 // ==========================================
 // AUXILIARES DO PREFIXO RÁPIDO E DA FORMATAÇÃO DO CÓDIGO POSTAL
@@ -2704,7 +3153,7 @@ function configurarFormatacaoCodigoPostal() {
 }
 
 // ==========================================
-// ESCUTA INTELIGENTE DE CÓDIGO POSTAL PARA REDUZIR AUTOCOMPLETE A 1KM (MIRA LASER)
+// ESCUTA INTELIGENTE DE CÓDIGO POSTAL - AUTO-COMPLEMENTO DE LOCALIDADE E MAFRA (SEM RESTRIÇÃO DE KM)
 // ==========================================
 function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -2728,47 +3177,32 @@ function configurarEscutaCodigoPostalParaLimites() {
 
         // Se detetar que o utilizador digitou um Código Postal de 7 dígitos completo (ex: 2640-601)
         if (padraoCP.test(valor)) {
-            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A pré-geolocalizar para mira laser...`);
+            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A determinar localidade...`);
 
-            // NOVO: Copia automaticamente o Código Postal para o campo de morada/pesquisa
-            // seguido de um espaço e coloca o cursor no fim, agilizando imenso a digitação no telemóvel!
+            // Procura a localidade (brick) associada localmente sem precisar de fazer pedidos ao servidor
+            const { brickName } = resolveBrickForZip(valor, window.drivers);
+            
             if (inputMorada) {
-                inputMorada.value = `${valor} `;
+                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra
+                const textoPreenchido = brickName 
+                    ? `${valor} ${brickName}, Mafra, `
+                    : `${valor} Mafra, `;
+
+                inputMorada.value = textoPreenchido;
                 inputMorada.focus();
                 
-                // Coloca o cursor de escrita exatamente a seguir ao espaço, pronto a escrever a rua
+                // Coloca o cursor de escrita exatamente no fim, pronto a receber a rua, travessa, beco ou POI
                 const comprimento = inputMorada.value.length;
                 inputMorada.setSelectionRange(comprimento, comprimento);
             }
 
-            try {
-                // Pergunta de forma silenciosa ao Render quais as coordenadas desse CP
-                const response = await fetch(`${API_BASE_URL}/api/geocode`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ postalCode: valor })
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.lat && data.lng && autocompleteInstancia) {
-                        const centroCP = { lat: data.lat, lng: data.lng };
-                        
-                        // Define um círculo ultra-fechado de apenas 1000 metros (1 km)
-                        const circuloCP = new google.maps.Circle({ center: centroCP, radius: 1000 });
-                        
-                        // Aplica as novas fronteiras ao autocomplete
-                        autocompleteInstancia.setBounds(circuloCP.getBounds());
-                        
-                        // MELHORADO V26: Ativamos strictBounds como 'true' para criar uma PAREDE ESTRITA!
-                        // A Google fica estritamente impedida de sugerir qualquer resultado fora deste raio de 1 km.
-                        autocompleteInstancia.setOptions({ strictBounds: true });
-                        
-                        console.log(`[PWA] Autocomplete focado com raio laser de 1km (Parede Estrita) em redor de: ${data.address}`);
-                    }
-                }
-            } catch (erro) {
-                console.warn("[PWA] Erro na pré-geolocalização para limites de 1km:", erro);
+            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho de Mafra
+            if (autocompleteInstancia) {
+                const centroMafra = { lat: 38.9369, lng: -9.3282 };
+                const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
+                autocompleteInstancia.setBounds(circuloMafra.getBounds());
+                autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa restrição e prioriza por texto
+                console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por texto livre.");
             }
         }
     });
@@ -2972,7 +3406,6 @@ function atualizarStylesBotoesModal() {
 export function setupRotasLogic() {
     const btnIniciarRota = document.getElementById('btn-iniciar-rota');
     const dataRotaInput = document.getElementById('data-rota');
-    const btnEncerrarRota = document.getElementById('btn-encerrar-rota');
     const btnGpsPartida = document.getElementById('btn-gps-partida');
     const btnBuscarPartida = document.getElementById('btn-buscar-partida');
     const btnLimparEnderecos = document.getElementById('btn-limpar-enderecos');
@@ -2984,6 +3417,9 @@ export function setupRotasLogic() {
 
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
+
+    // Novo botão para finalização do turno
+    const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
 
     // Inicialização da nova lógica de assistência ao teclado para o Código Postal
     configurarEventosPrefixoRapido();
@@ -3018,26 +3454,20 @@ export function setupRotasLogic() {
             }
             const d = new Date(dataSelecionada);
             const dataFormatada = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+            
+            // RESET DO DIÁRIO DE BORDO COMPLETO PARA O NOVO TURNO INICIADO
+            window.tripStarted = false;
+            window.tripCompleted = false;
+            window.odometerStart = 0;
+            window.odometerStartHour = "";
+            window.odometerEnd = 0;
+            window.odometerEndHour = "";
+            // NOTA: mantemos window.lastOdometer como benchmark absoluto para validações futuras
+
             window.dataRotaSelecionada = dataFormatada;
             window.rotaIniciada = true;
             sincronizarPersistencia();
             sincronizarInterfaceRota();
-        });
-    }
-
-    if (btnEncerrarRota) {
-        btnEncerrarRota.addEventListener('click', () => {
-            if (confirm("Tem a certeza de que deseja encerrar a rota atual? Isto limpará o itinerário planeado.")) {
-                window.partidaLocalizacao = null;
-                window.moradasEntregas = [];
-                window.rotaOtimizada = [];
-                window.dataRotaSelecionada = "";
-                window.rotaIniciada = false;
-                localStorage.removeItem('cp_last_navigated_id');
-                limparMapaVisual();
-                sincronizarPersistencia();
-                sincronizarInterfaceRota();
-            }
         });
     }
 
@@ -3105,6 +3535,13 @@ export function setupRotasLogic() {
             if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
             if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
             otimizarItinerarioComVizinhoMaisProximo();
+        });
+    }
+
+    // Escuta ativa do botão tátil de encerramento do Diário de Bordo
+    if (btnFinalizarTurno) {
+        btnFinalizarTurno.addEventListener('click', () => {
+            abrirModalOdometroChegada();
         });
     }
 }
@@ -3263,6 +3700,70 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     }, 150);
 }
 
+// ==========================================
+// FUNÇÃO GLOBAL DE RE-SEQUENCIAÇÃO DE ENTREGA (ACIONADA PELO CLIQUE NO MAPA)
+// ==========================================
+window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
+    const modal = document.getElementById('modal-alterar-sequencia');
+    if (!modal) return;
+
+    const txtMorada = document.getElementById('txt-seq-morada');
+    const txtPosAtual = document.getElementById('txt-seq-pos-atual');
+    const inputNovaPos = document.getElementById('input-seq-nova-pos');
+
+    if (txtMorada) txtMorada.textContent = paragem.address;
+    if (txtPosAtual) txtPosAtual.textContent = indexAtual + 1;
+    if (inputNovaPos) {
+        inputNovaPos.value = indexAtual + 1;
+        inputNovaPos.max = window.rotaOtimizada.length;
+    }
+
+    modal.classList.remove('hidden');
+
+    const btnConfirmar = document.getElementById('btn-confirmar-sequencia');
+    const btnCancelar = document.getElementById('btn-cancelar-sequencia');
+
+    btnConfirmar.onclick = () => {
+        const novaPos = parseInt(inputNovaPos.value);
+        if (isNaN(novaPos) || novaPos < 1 || novaPos > window.rotaOtimizada.length) {
+            alert(`Erro: Introduza uma posição válida entre 1 e ${window.rotaOtimizada.length}.`);
+            return;
+        }
+
+        const novoIndex = novaPos - 1;
+
+        if (indexAtual !== novoIndex) {
+            // Re-ordena o array de entregas de forma reativa e sequencial
+            const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
+            window.rotaOtimizada.splice(novoIndex, 0, item);
+
+            // Recalcula as distâncias acumuladas entre as paragens sucessivas
+            window.rotaOtimizada.forEach((p, idx) => {
+                p.distanciaDoAnterior = calcularDistanciaHaversine(
+                    idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
+                    idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
+                    p.lat,
+                    p.lng
+                );
+            });
+
+            // Sincroniza a ordenação manual com a lista base de planeamento
+            window.moradasEntregas = [...window.rotaOtimizada];
+
+            sincronizarPersistencia();
+            renderizarItinerarioOtimizado();
+            
+            // Redesenha o mapa do Google para atualizar a numeração visual das bolinhas
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }
+
+        modal.classList.add('hidden');
+    };
+
+    btnCancelar.onclick = () => {
+        modal.classList.add('hidden');
+    };
+};
 
 =========================================
 ARQUIVO: js/setores.js
@@ -3829,6 +4330,20 @@ window.rotaOtimizada = safeJSONParse('cp_rota_otimizada', []);
 window.dataRotaSelecionada = safeJSONParse('cp_data_rota', "");
 window.rotaIniciada = safeJSONParse('cp_rota_iniciada', false);
 window.definindoPartidaPorMorada = false;
+
+// Guarda reativamente o tipo de cálculo utilizado no percurso
+window.routingMethodUsed = localStorage.getItem('cp_routing_method') || 'Cloud';
+
+// ==========================================
+// ESTADO GERAL DE ODÓMETRO / DIÁRIO DE BORDO
+// ==========================================
+window.tripStarted = safeJSONParse('cp_trip_started', false);
+window.tripCompleted = safeJSONParse('cp_trip_completed', false);
+window.odometerStart = safeJSONParse('cp_odometer_start', 0);
+window.odometerStartHour = safeJSONParse('cp_odometer_start_hour', "");
+window.odometerEnd = safeJSONParse('cp_odometer_end', 0);
+window.odometerEndHour = safeJSONParse('cp_odometer_end_hour', "");
+window.lastOdometer = safeJSONParse('cp_last_odometer', 0);
 
 =========================================
 ARQUIVO: js/storage.js
@@ -4810,25 +5325,24 @@ ARQUIVO: partials/rotas.html
     <!-- 2. CONTAINER DO PLANEADOR ATIVO (Mostrado quando a rota JÁ está iniciada) -->
     <div id="container-planeador-rota" class="hidden space-y-4">
         
-        <!-- Cabeçalho do Planeador -->
-        <div class="bg-gray-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-sm">
-            <div class="space-y-0.5">
-                <span class="text-[10px] text-gray-400 uppercase font-bold tracking-wider">Turno Ativo</span>
-                <h3 id="display-data-rota" class="font-bold text-sm text-blue-400">--/--/----</h3>
+        <!-- Indicador de Data Ativa e Seletor de Modo -->
+        <div class="space-y-2">
+            <div class="flex items-center justify-between px-1">
+                <span class="text-xs font-bold text-gray-400 uppercase tracking-wider flex items-center space-x-1">
+                    <i class="fa-solid fa-circle-play text-emerald-500 text-[8px] animate-pulse"></i>
+                    <span>Turno em Execução</span>
+                </span>
+                <span id="display-data-rota" class="text-xs font-black text-blue-600 bg-blue-50 border border-blue-100 px-2.5 py-1 rounded-lg">--/--/----</span>
             </div>
-            <button id="btn-encerrar-rota" class="bg-red-600/20 hover:bg-red-600/30 text-red-400 font-bold text-xs px-3 py-2 rounded-xl border border-red-500/20 transition-all">
-                <i class="fa-solid fa-power-off mr-1"></i> Encerrar Rota
-            </button>
-        </div>
-
-        <!-- Seletor de Modo: Planeamento vs Condução -->
-        <div class="bg-gray-100 p-1 rounded-xl flex space-x-1">
-            <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
-                Planeamento
-            </button>
-            <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
-                Condução
-            </button>
+            
+            <div class="bg-gray-100 p-1 rounded-xl flex space-x-1 shadow-sm">
+                <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
+                    Planeamento
+                </button>
+                <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
+                    Condução
+                </button>
+            </div>
         </div>
 
         <!-- CONTROLOS DE PLANEAMENTO (Ocultados no modo condução) -->
@@ -4964,7 +5478,66 @@ ARQUIVO: partials/rotas.html
                     <span class="text-[9px] font-bold text-gray-500 uppercase">Pendente</span>
                 </div>
             </div>
+
+            <!-- NOVOS DADOS DE PERCURSO: DISTÂNCIA, TEMPO E MOTOR DE CÁLCULO -->
+            <div class="mt-4 pt-3 border-t border-gray-200 grid grid-cols-2 gap-3 text-left font-sans">
+                <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50 flex items-center space-x-2.5">
+                    <div class="text-blue-600 text-lg flex-shrink-0">
+                        <i class="fa-solid fa-road"></i>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-gray-400 uppercase leading-none">Distância Est.</span>
+                        <span id="stat-distancia" class="text-sm font-black text-blue-700">0.00 km</span>
+                    </div>
+                </div>
+                <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50 flex items-center space-x-2.5">
+                    <div class="text-blue-600 text-lg flex-shrink-0">
+                        <i class="fa-solid fa-clock"></i>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] font-bold text-gray-400 uppercase leading-none">Tempo Est. Condução</span>
+                        <span id="stat-tempo" class="text-sm font-black text-blue-700">0 min</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IDENTIFICADOR DO SISTEMA DE ROTEAMENTO -->
+            <div class="mt-3 text-center">
+                <span id="stat-sistema" class="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border bg-gray-100 text-gray-600 border-gray-200">
+                    <i class="fa-solid fa-network-wired"></i>
+                    <span>Cálculo pendente...</span>
+                </span>
+            </div>
         </div>
+
+        <!-- NOVO: Painel Informativo de Odómetro (Diário de Bordo) -->
+        <div id="painel-odometro-resumo" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm space-y-2.5 font-sans animate-fade-in">
+            <span class="block text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center space-x-1.5">
+                <i class="fa-solid fa-gauge-high"></i>
+                <span>Diário de Bordo do Turno</span>
+            </span>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div class="bg-white p-2.5 rounded-xl border border-blue-100 flex flex-col space-y-1">
+                    <span class="font-bold text-gray-400 uppercase text-[9px]">Partida (Saída)</span>
+                    <span id="odometro-resumo-saida-km" class="font-black text-gray-800 text-sm">-- KM</span>
+                    <span id="odometro-resumo-saida-hora" class="text-[10px] font-semibold text-gray-500">Hora: --:--</span>
+                </div>
+                <div class="bg-white p-2.5 rounded-xl border border-blue-100 flex flex-col space-y-1">
+                    <span class="font-bold text-gray-400 uppercase text-[9px]">Chegada (Fim)</span>
+                    <span id="odometro-resumo-chegada-km" class="font-black text-gray-800 text-sm">-- KM</span>
+                    <span id="odometro-resumo-chegada-hora" class="text-[10px] font-semibold text-gray-500">Hora: Em trânsito</span>
+                </div>
+            </div>
+            <div id="odometro-resumo-total-viagem" class="text-center pt-1 text-[11px] font-black text-blue-700">
+                Total percorrido na rota: Em trânsito...
+            </div>
+        </div>
+
+        <!-- NOVO: Botão de Finalizar Turno -->
+        <button id="btn-finalizar-turno" class="hidden w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
+            <i class="fa-solid fa-flag-checkered"></i>
+            <span>Finalizar Turno (Registar Chegada)</span>
+        </button>
 
     </div>
 </main>
