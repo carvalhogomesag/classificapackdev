@@ -608,7 +608,7 @@ export function renderizarItinerarioOtimizado() {
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                         
                         <!-- INDICADOR VISUAL: Etiqueta de Estante (Brick) de arrumação na lista de rotas de condução -->
-                        ${finalBrickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="${finalFreguesia} - ${finalBrickName}"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante: ${finalBrickName}</span></span>` : ''}
+                        ${paragem.brickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="${paragem.brickId ? paragem.brickId.split('|')[0] : ''} - ${paragem.brickName}"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante: ${paragem.brickName}</span></span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
