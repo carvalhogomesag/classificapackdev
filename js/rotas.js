@@ -6,7 +6,7 @@
  *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
  *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
  *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
- *      NOVO: Implementa alerta de re-otimização e inserção inteligente direta de pacotes em rotas ativas sem perder a ordenação manual.
+ *      NOVO: Implementa alerta de re-otimização e inserção inteligente direta de pacotes em rotas ativas com indicação visual pulsante (por confirmar).
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
  */
@@ -153,7 +153,7 @@ function isCatchAllLocality(freguesia, localidade) {
 }
 
 // ==========================================
-// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS WITH DUPLA PASSAGEM)
+// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS COM DUPLA PASSAGEM)
 // ==========================================
 function resolveBrickForZip(zip, drivers) {
     if (!zip || !drivers) return { brickId: null, brickName: null };
@@ -325,6 +325,9 @@ export async function processarAdicaoPorPostal() {
                     novaMorada.lat,
                     novaMorada.lng
                 );
+
+                // NOVO: Define esta paragem como um Pacote Novo por Confirmar
+                novaMorada.isNewUnconfirmed = true;
 
                 // Anexa o novo pacote diretamente ao final da rota otimizada atual
                 window.rotaOtimizada.push(novaMorada);
@@ -568,14 +571,12 @@ export function renderizarItinerarioOtimizado() {
 
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
+        const isNewUnconfirmed = !!paragem.isNewUnconfirmed; // NOVO: Estado de pendência do novo pacote
 
-        // Resolve e recupera reativamente o Brick (Estante) usando o algoritmo prioritário de duas passagens
-        const { brickId, brickName } = resolveBrickForZip(paragem.address, window.drivers);
-        const finalBrickName = paragem.brickName || brickName;
-        const finalBrickId = paragem.brickId || brickId;
-        const finalFreguesia = finalBrickId ? finalBrickId.split('|')[0] : "";
-
-        if (isLastNavigated) {
+        if (isNewUnconfirmed) {
+            // NOVO: Card Amarelo Vivo Pulsante para Chamar a Atenção Visual do Motorista
+            item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-yellow-500 bg-yellow-50/70 shadow-md animate-pulse ring-4 ring-yellow-200";
+        } else if (isLastNavigated) {
             if (isPriority) {
                 item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
             } else {
@@ -596,13 +597,14 @@ export function renderizarItinerarioOtimizado() {
             <div class="flex items-center justify-between space-x-2">
                 <div class="flex-1 truncate">
                     <div class="flex items-center space-x-2 flex-wrap gap-1">
-                        <span class="w-5 h-5 rounded-full ${statusColor} text-white font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
+                        <span class="w-5 h-5 rounded-full ${isNewUnconfirmed ? 'bg-yellow-500 text-black' : statusColor + ' text-white'} font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
                             ${index + 1}
                         </span>
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
-                        ${isLastNavigated ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
+                        ${isNewUnconfirmed ? `<span class="bg-yellow-500 text-black text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
+                        ${isLastNavigated && !isNewUnconfirmed ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                         
                         <!-- INDICADOR VISUAL: Etiqueta de Estante (Brick) de arrumação na lista de rotas de condução -->
@@ -946,6 +948,15 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         const novoIndex = novaPos - 1;
 
+        // NOVO: Remove o estado pendente "não confirmado", visto que o motorista confirmou a posição
+        paragem.isNewUnconfirmed = false;
+
+        // Garante a limpeza do estado correspondente na lista de moradas de planeamento
+        const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
+        if (originalPre) {
+            originalPre.isNewUnconfirmed = false;
+        }
+
         if (indexAtual !== novoIndex) {
             // Re-ordena o array de entregas de forma reativa e sequencial
             const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
@@ -963,13 +974,12 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
             // Sincroniza a ordenação manual com a lista base de planeamento
             window.moradasEntregas = [...window.rotaOtimizada];
-
-            sincronizarPersistencia();
-            renderizarItinerarioOtimizado();
-            
-            // Redesenha o mapa do Google para atualizar a numeração visual das bolinhas
-            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
         }
+
+        // Grava, redesenha as contagens no ecrã e desativa o bounce do mapa Google de imediato
+        sincronizarPersistencia();
+        renderizarItinerarioOtimizado();
+        desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 
         modal.classList.add('hidden');
     };
@@ -1026,7 +1036,7 @@ function configurarFormatacaoCodigoPostal() {
         const numerosApenas = valor.replace(/\D/g, '');
 
         if (numerosApenas.length <= 4) {
-            valor = numerosApenas;
+            offset = numerosApenas;
         } else {
             // Insere o hífen automaticamente a seguir ao quarto dígito
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;

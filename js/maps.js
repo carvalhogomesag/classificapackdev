@@ -1,6 +1,8 @@
 /**
  * maps.js
  * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos dinamicamente por status, autocompletar e geocodificação).
+ *      NOVO: Implementa dispersão geométrica em espiral para múltiplos pacotes no mesmo endereço.
+ *      NOVO: Suporta pinos saltitantes (Bounce) de cor âmbar e borda preta para pacotes novos por confirmar.
  * NÃO faz: Não executa a otimização algorítmica de sequência ou turnos (tarefa do rotas.js).
  * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps carregado globalmente).
  */
@@ -103,7 +105,7 @@ export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Desenha a rota otimizada no Mapa da Google com algoritmo de Jitter e coloração dinâmica por status
+ * Desenha a rota otimizada no Mapa da Google com algoritmo de espiral de dispersão e destaque visual
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -125,19 +127,24 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     const bounds = new google.maps.LatLngBounds();
     const posicoesOcupadas = [];
 
-    // Função interna para afastar ligeiramente os marcadores sobrepostos na mesma coordenada
+    // NOVO ALGORITMO: Espiral de dispersão geométrica para evitar sobreposição no mesmíssimo endereço
     function evitarSobreposicao(lat, lng) {
         let finalLat = lat;
         let finalLng = lng;
-        const margemDiferenca = 0.00003; // Tolerância de proximidade física
-        const deslocamento = 0.00008; // Afastamento de segurança (~10 metros)
+        const margemDiferenca = 0.0001; // Sensibilidade de proximidade física
+        const deslocamento = 0.0002;   // Distância aproximada de afastamento (~20 metros)
 
+        let count = 0;
         while (posicoesOcupadas.some(pos => 
             Math.abs(pos.lat - finalLat) < margemDiferenca && 
             Math.abs(pos.lng - finalLng) < margemDiferenca
         )) {
-            finalLat += (Math.random() - 0.5) * deslocamento;
-            finalLng += (Math.random() - 0.5) * deslocamento;
+            count++;
+            // Afasta os marcadores em espiral harmoniosa para que fiquem todos visíveis
+            const angle = count * 1.2; 
+            const radius = deslocamento * (1 + count * 0.1);
+            finalLat = lat + Math.sin(angle) * radius;
+            finalLng = lng + Math.cos(angle) * radius;
         }
 
         posicoesOcupadas.push({ lat: finalLat, lng: finalLng });
@@ -165,15 +172,20 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     });
     googleMarkers.push(partidaMarker);
 
-    // Desenhar Entregas (Marcadores Coloridos Dinamicamente por Status)
+    // Desenhar Entregas (Marcadores Coloridos Dinamicamente por Status ou Confirmação)
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
         bounds.extend(pos);
 
-        // Define a cor do marcador com base no status em tempo real da paragem
+        // Define a cor e animação do marcador com base no status e pendência de confirmação
         let pinoColor = "#2563EB"; // Azul por defeito (Pendente)
-        if (p.status === "Entregue") {
+        let bounceAnimation = null;
+
+        if (p.isNewUnconfirmed) {
+            pinoColor = "#F59E0B"; // Laranja/Amarelo brilhante para destacar novos pacotes por ordenar
+            bounceAnimation = google.maps.Animation.BOUNCE; // Pino fica a dar pequenos saltos no mapa
+        } else if (p.status === "Entregue") {
             pinoColor = "#10B981"; // Verde (Sucesso)
         } else if (p.status === "Falhou" || p.status === "Failed") {
             pinoColor = "#EF4444"; // Vermelho (Falha)
@@ -182,15 +194,20 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
         const m = new google.maps.Marker({
             position: pos,
             map: googleMap,
-            label: { text: (i + 1).toString(), color: "#FFFFFF", fontWeight: "bold" },
+            label: { 
+                text: (i + 1).toString(), 
+                color: p.isNewUnconfirmed ? "#000000" : "#FFFFFF", // Borda preta se for novo
+                fontWeight: "bold" 
+            },
             title: p.address,
+            animation: bounceAnimation,
             icon: {
                 path: google.maps.SymbolPath.CIRCLE,
                 scale: 14,
-                fillColor: pinoColor, // Aplicação da cor dinâmica
+                fillColor: pinoColor,
                 fillOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: "#FFFFFF"
+                strokeWeight: p.isNewUnconfirmed ? 3 : 2,
+                strokeColor: p.isNewUnconfirmed ? "#000000" : "#FFFFFF" // Borda de destaque preta nos novos
             }
         });
 
