@@ -25,7 +25,7 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     autocompleteWidget.addListener('place_changed', () => {
         const place = autocompleteWidget.getPlace();
         if (!place.geometry || !place.geometry.location) {
-            alert("Morada não encontrada. Selecione uma opção válida da lista da Google.");
+            alert("Morada não encontrada. Selecione uma option válida da lista da Google.");
             return;
         }
 
@@ -92,7 +92,7 @@ export function obterEnderecoPorGPSGoogle(lat, lng, callback) {
 }
 
 /**
- * Calcula a distância em linha reta entre duas coordenadas geográficas (em km) usando Haversine
+ * Calculates a distância em linha reta entre duas coordenadas geográficas (em km) usando Haversine
  */
 export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371; 
@@ -193,6 +193,14 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                 strokeColor: "#FFFFFF"
             }
         });
+
+        // INTERCEÇÃO DE CLIQUE NO MARCADOR PARA ALTERAÇÃO MANUAL DE SEQUÊNCIA
+        m.addListener('click', () => {
+            if (typeof window.abrirModalAlterarSequencia === 'function') {
+                window.abrirModalAlterarSequencia(i, p);
+            }
+        });
+
         googleMarkers.push(m);
     });
 

@@ -3,7 +3,7 @@
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v50, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v51, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -90,14 +90,14 @@
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v50 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v51 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <!-- Botão de Sair de Sessão / Logout para motoristas -->
             <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
                 <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
             </button>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v50</span>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v51</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -108,7 +108,7 @@
         <div id="container-view-rotas"></div>
 
         <!-- OVERLAY DO RESULTADO DA TRIAGEM (Global/Partilhado) -->
-        <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+        <div id="modal-resultado" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-3 border-b text-center font-bold text-gray-700 z-50">
             <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[95vh] mx-auto">
                 <div class="flex-shrink-0 bg-gray-100 p-3 border-b text-center font-bold text-gray-700">Resultado da Triagem</div>
                 <div id="resultado-cor-bg" class="flex-1 flex flex-col items-center justify-center p-5 text-center space-y-2 overflow-y-auto transition-colors duration-300">
@@ -326,6 +326,43 @@
                 </button>
                 <button id="btn-confirmar-chegada-km" class="flex-1 bg-red-600 active:bg-red-700 text-white font-bold py-3 rounded-xl text-sm shadow-sm">
                     Confirmar Chegada
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE ALTERAÇÃO MANUAL DE SEQUÊNCIA DE ROTA -->
+    <div id="modal-alterar-sequencia" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999] backdrop-blur-xs">
+        <div class="bg-white w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl flex flex-col mx-auto">
+            <div class="flex-shrink-0 bg-blue-600 text-white p-4 font-bold text-base flex items-center space-x-2">
+                <i class="fa-solid fa-arrow-down-up-across-line"></i>
+                <span>Alterar Ordem da Entrega</span>
+            </div>
+            <div class="p-5 space-y-4">
+                <div class="text-xs text-gray-500 leading-relaxed">
+                    Defina a nova posição desta entrega no percurso. O sistema ajustará as restantes automaticamente de forma sequencial.
+                </div>
+                <div class="bg-gray-50 p-3 rounded-xl border">
+                    <span class="block text-[10px] font-bold text-gray-400 uppercase">Entrega Selecionada</span>
+                    <span id="txt-seq-morada" class="text-xs font-semibold text-gray-700 truncate block mt-0.5">--</span>
+                </div>
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="bg-gray-100 p-2 rounded-xl text-center">
+                        <span class="block text-[9px] font-bold text-gray-400 uppercase">Posição Atual</span>
+                        <span id="txt-seq-pos-atual" class="text-lg font-black text-gray-700">--</span>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-gray-400 uppercase mb-1">Nova Posição</label>
+                        <input type="number" id="input-seq-nova-pos" min="1" required class="w-full p-2.5 border rounded-xl font-bold text-center text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    </div>
+                </div>
+            </div>
+            <div class="p-4 bg-gray-50 border-t flex space-x-3">
+                <button id="btn-cancelar-sequencia" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-2.5 rounded-xl text-xs shadow-sm">
+                    Cancelar
+                </button>
+                <button id="btn-confirmar-sequencia" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs shadow-sm">
+                    Confirmar
                 </button>
             </div>
         </div>
