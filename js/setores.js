@@ -7,10 +7,11 @@
  *      NOVO: Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 500 metros de raio.
  *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
  *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
- *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
+ *      NOVO: Envia as updates dos Bricks em tempo real diretamente para o Firestore.
  *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
  *      MELHORADO: Implementa motor de auditoria para aferição de Bricks órfãos e garantia de Saldo Zero de Cobertura.
  *      CORRIGIDO: Elimina círculos obsoletos (espirais/molas) no mapa e corrige travamento do auditor ("A CALCULAR...") em telemóveis.
+ *      CORRIGIDO: Remove loop recursivo de geocodificação em massa que causava crash de memória no browser.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
@@ -58,12 +59,6 @@ function salvarCacheCoordenadas() {
 
 // ==========================================
 // SINCRONIZAÇÃO DA CACHE PARTILHADA DE COORDENADAS (FIRESTORE)
-// CORRIGIDO: a cache de coordenadas geocodificadas era só local (localStorage),
-// por isso um dispositivo novo (ex: telemóvel) começava sempre "vazio" e mostrava
-// os Bricks agrupados no fallback aproximado do centro da freguesia, até alguém
-// tocar manualmente em cada um. Agora sincronizamos com o Firestore, partilhado
-// entre todos os dispositivos: assim que UM aparelho resolve a posição real de um
-// Brick, todos os outros passam a beneficiar dela sem precisar de geocodificar de novo.
 // ==========================================
 let cacheFirestoreSincronizada = false;
 
@@ -151,7 +146,11 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
         const geocoder = new google.maps.Geocoder();
         const cleanFregName = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "");
         const concelhoName = concelhoAtivo === "SINTRA" ? "Sintra" : "Mafra";
-        const queryAddress = `${localidade}, ${cleanFregName}, ${concelhoName}, Portugal`;
+        
+        // CORRIGIDO: Limpa os parênteses (ex: "Algueirão (000-099)" passa a "Algueirão") 
+        // antes de enviar para o Google, para que a pesquisa não falhe.
+        const cleanLocalidade = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "");
+        const queryAddress = `${cleanLocalidade}, ${cleanFregName}, ${concelhoName}, Portugal`;
 
         geocoder.geocode({ address: queryAddress }, (results, status) => {
             if (status === "OK" && results[0]) {
@@ -160,14 +159,20 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
                 brickCoordsCache[brickId] = coordsResolvidas;
                 salvarCacheCoordenadas();
 
-                // Partilha a coordenada resolvida com todos os outros dispositivos via
-                // Firestore, para que este Brick nunca mais precise de ser geocodificado.
+                // Partilha a coordenada resolvida com todos os outros dispositivos via Firestore
                 db.collection('brickCoordinates').doc(brickId).set(coordsResolvidas).catch((err) => {
                     console.warn("[PWA] Falha ao partilhar coordenada de Brick via Firestore:", err);
                 });
 
-                // Redesenha reativamente o mapa apenas após o sucesso, movendo o circulo para o local real
+                // Redesenha o mapa de forma segura
                 desenharBricksNoMapa();
+            } else {
+                // EVITA LOOP INFINITO: Se falhar ou não encontrar resultados, guarda temporariamente
+                // o fallback padrão para que o sistema saiba que "já tentou" este Brick e não repita o pedido.
+                console.warn(`[PWA] Não foi possível geocodificar "${queryAddress}". Caching fallback.`);
+                const fallbackCoords = obterCoordenadaPrecisaBrick(freguesia, localidade);
+                brickCoordsCache[brickId] = fallbackCoords;
+                salvarCacheCoordenadas();
             }
         });
     }
@@ -196,9 +201,7 @@ function inicializarMapaBricksDashboard() {
             disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
         });
 
-        // Sincroniza a cache partilhada de coordenadas (Firestore) uma única vez por
-        // sessão, para já aproveitar Bricks geocodificados anteriormente por OUTROS
-        // dispositivos, e redesenha assim que a sincronização terminar.
+        // Sincroniza a cache partilhada de coordenadas (Firestore) uma única vez por sessão
         carregarCacheCoordenadasFirestore().then(() => desenharBricksNoMapa());
     } else {
         dashboardMap.setCenter(centerCoords);
@@ -225,20 +228,8 @@ function desenharBricksNoMapa() {
 
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
 
-    // CORRIGIDO: em vez de confiar apenas no zoom fixo definido na inicialização do
-    // mapa (que faz os círculos parecerem muito mais próximos/"embolados" em ecrãs
-    // estreitos como o telemóvel, já que a mesma escala mostra menos área total),
-    // acumulamos os limites geográficos reais de todos os bricks desenhados e, no
-    // final, ajustamos o mapa a esses limites (fitBounds). Isto garante que o nível
-    // de zoom se adapta ao tamanho real do ecrã, mantendo a mesma legibilidade
-    // visual tanto no PC como no telemóvel.
     const bounds = new google.maps.LatLngBounds();
     let totalPontosDesenhados = 0;
-
-    // Acumula aqui os Bricks que ainda não têm coordenada real (estão a usar o
-    // fallback), para pedirmos a geocodificação automaticamente, de forma
-    // escalonada, sem esperar por um toque manual na árvore.
-    const bricksPorGeocodificar = [];
 
     // Mapeamento síncrono e de acordo com o concelho selecionado
     driversArr.forEach(drv => {
@@ -251,10 +242,6 @@ function desenharBricksNoMapa() {
                 // Isto ignora imediatamente os Bricks antigos obsoletos e elimina as molas/espirais do mapa!
                 if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
                     return; 
-                }
-
-                if (!brickCoordsCache[id]) {
-                    bricksPorGeocodificar.push({ freg, loc });
                 }
 
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
@@ -316,29 +303,16 @@ function desenharBricksNoMapa() {
         });
     });
 
-    // Ajusta o zoom/centro do mapa aos pontos reais desenhados, em vez de depender
-    // só do zoom fixo definido na criação do mapa. Adapta-se automaticamente ao
-    // tamanho real do ecrã (PC largo vs. telemóvel estreito).
+    // Ajusta o zoom do mapa apenas se houver pontos válidos, adaptando-se a qualquer ecrã
     if (totalPontosDesenhados > 0) {
         dashboardMap.fitBounds(bounds);
 
-        // Salvaguarda: se só houver 1-2 bricks muito próximos entre si, o fitBounds
-        // pode aproximar demasiado (zoom excessivo, perdendo contexto geográfico).
-        // Limitamos a um zoom máximo sensato só nesse caso extremo.
         google.maps.event.addListenerOnce(dashboardMap, 'bounds_changed', function () {
             if (dashboardMap.getZoom() > 15) {
                 dashboardMap.setZoom(15);
             }
         });
     }
-
-    // Pede a geocodificação real dos Bricks ainda não resolvidos, de forma
-    // escalonada (200ms entre cada pedido) para não saturar a API de uma só vez.
-    // Cada um, ao resolver, redesenha o mapa sozinho na posição exata (e partilha
-    // o resultado via Firestore para todos os outros dispositivos).
-    bricksPorGeocodificar.forEach((item, idx) => {
-        setTimeout(() => geocodificarBrickSobProcura(item.freg, item.loc), idx * 200);
-    });
 }
 
 // =========================================================================
