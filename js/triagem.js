@@ -3,6 +3,7 @@
  * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick (Localidade) designados para o código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
  *      Implementa algoritmo de dupla passagem para priorizar localidades específicas sobre as capitais genéricas homónimas.
  *      NOVO: Deteta automaticamente se o código pertence a Mafra ou Sintra pelo prefixo do código postal.
+ *      NOVO: Divide o sumário de leituras em dois blocos claros (Mafra e Sintra) para melhor usabilidade do gestor.
  *      NOVO: Grava as confirmações de triagem diretamente na coleção 'assignments' do Firestore para sincronização em nuvem de imediato.
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js, ./firebase-init.js (para aceder ao db)
@@ -154,42 +155,95 @@ export function renderSummary(assignments, drivers, painelResumo) {
         return;
     }
 
+    // MELHORADO: Criamos uma grelha responsiva de duas colunas para dividir Mafra e Sintra
+    const gridContainer = document.createElement('div');
+    gridContainer.className = "grid grid-cols-1 md:grid-cols-2 gap-4 mt-3";
+
+    // Coluna Mafra
+    const colMafra = document.createElement('div');
+    colMafra.className = "space-y-1.5 p-3 bg-blue-50/25 rounded-lg border border-blue-100/50";
+    colMafra.innerHTML = `
+        <h4 class="text-[10px] font-black uppercase text-blue-700 bg-blue-100/50 px-2 py-1 rounded flex items-center space-x-1 mb-2">
+            <i class="fa-solid fa-map-pin text-[9px]"></i> <span>Concelho de Mafra</span>
+        </h4>
+        <div class="space-y-1.5" id="lista-resumo-mafra"></div>
+    `;
+
+    // Coluna Sintra
+    const colSintra = document.createElement('div');
+    colSintra.className = "space-y-1.5 p-3 bg-amber-50/25 rounded-lg border border-amber-100/50";
+    colSintra.innerHTML = `
+        <h4 class="text-[10px] font-black uppercase text-amber-700 bg-amber-100/50 px-2 py-1 rounded flex items-center space-x-1 mb-2">
+            <i class="fa-solid fa-map-pin text-[9px]"></i> <span>Concelho de Sintra</span>
+        </h4>
+        <div class="space-y-1.5" id="lista-resumo-sintra"></div>
+    `;
+
+    gridContainer.appendChild(colMafra);
+    gridContainer.appendChild(colSintra);
+    painelResumo.appendChild(gridContainer);
+
+    const listMafra = colMafra.querySelector('#lista-resumo-mafra');
+    const listSintra = colSintra.querySelector('#lista-resumo-sintra');
+
+    let temMafra = false;
+    let temSintra = false;
+
     drivers.forEach(driver => {
         const totalDriver = assignments.filter(a => a.driverId === driver.id).length;
         const totalPrioritariosDriver = assignments.filter(a => a.driverId === driver.id && a.priority === true).length;
         const percent = totalLeituras > 0 ? Math.round((totalDriver / totalLeituras) * 100) : 0;
 
         const row = document.createElement('div');
-        row.className = "flex items-center justify-between text-xs py-1";
+        row.className = "flex items-center justify-between text-xs py-1 hover:bg-white/60 px-1 rounded transition duration-100";
         row.innerHTML = `
-            <div class="flex items-center space-x-2">
-                <span class="w-3.5 h-3.5 rounded-full" style="background-color: ${driver.color}"></span>
-                <span class="font-medium text-gray-700">${driver.name}</span>
+            <div class="flex items-center space-x-2 truncate pr-1">
+                <span class="w-3 h-3 rounded-full flex-shrink-0" style="background-color: ${driver.color}"></span>
+                <span class="font-medium text-gray-700 truncate">${driver.name}</span>
             </div>
-            <div class="flex items-center space-x-2 font-bold text-gray-900">
+            <div class="flex items-center space-x-1.5 font-bold text-gray-900 flex-shrink-0">
                 <span>${totalDriver} un</span>
-                ${totalPrioritariosDriver > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5" title="Prioritários"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalPrioritariosDriver}</span></span>` : ''}
+                ${totalPrioritariosDriver > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1 py-0.5 rounded font-bold flex items-center" title="Prioritários"><i class="fa-solid fa-circle-exclamation text-[8px] mr-0.5"></i> ${totalPrioritariosDriver}</span>` : ''}
                 <span class="text-gray-400 text-[10px] font-normal">(${percent}%)</span>
             </div>
         `;
-        painelResumo.appendChild(row);
+
+        // Atribui o motorista ao seu respetivo bloco com base no concelho de atuação
+        const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
+        
+        if (concelhos.includes("MAFRA")) {
+            listMafra.appendChild(row.cloneNode(true));
+            temMafra = true;
+        }
+        if (concelhos.includes("SINTRA")) {
+            listSintra.appendChild(row);
+            temSintra = true;
+        }
     });
 
+    if (!temMafra) {
+        listMafra.innerHTML = `<p class="text-[10px] text-gray-400 italic py-2 text-center">Sem motoristas registados.</p>`;
+    }
+    if (!temSintra) {
+        listSintra.innerHTML = `<p class="text-[10px] text-gray-400 italic py-2 text-center">Sem motoristas registados.</p>`;
+    }
+
+    // Bloco para contagens de encomendas "Sem Motorista Atribuído" (Caso existam)
     const totalSemMotorista = assignments.filter(a => a.driverId === null).length;
     const totalSemMotoristaPrioridade = assignments.filter(a => a.driverId === null && a.priority === true).length;
     
     if (totalSemMotorista > 0) {
         const percentSem = Math.round((totalSemMotorista / totalLeituras) * 100);
         const rowSem = document.createElement('div');
-        rowSem.className = "flex items-center justify-between text-xs py-1 border-t border-dashed mt-1 pt-1";
+        rowSem.className = "flex items-center justify-between text-xs py-2 border-t border-dashed mt-3 pt-2";
         rowSem.innerHTML = `
             <div class="flex items-center space-x-2 text-gray-500">
                 <span class="w-3.5 h-3.5 rounded-full bg-gray-400"></span>
-                <span class="font-medium italic">Sem Motorista</span>
+                <span class="font-medium italic">Sem Motorista Atribuído</span>
             </div>
             <div class="flex items-center space-x-2 font-bold text-red-600">
                 <span>${totalSemMotorista} un</span>
-                ${totalSemMotoristaPrioridade > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center space-x-0.5"><i class="fa-solid fa-circle-exclamation text-[8px]"></i> <span>${totalSemMotoristaPrioridade}</span></span>` : ''}
+                ${totalSemMotoristaPrioridade > 0 ? `<span class="bg-orange-100 text-orange-700 text-[10px] px-1.5 py-0.5 rounded font-bold flex items-center"><i class="fa-solid fa-circle-exclamation text-[8px] mr-0.5"></i> ${totalSemMotoristaPrioridade}</span>` : ''}
                 <span class="text-gray-400 text-[10px] font-normal">(${percentSem}%)</span>
             </div>
         `;
