@@ -1,5 +1,5 @@
-// sw.js (Versão v57)
-const CACHE_NAME = 'classificapack-v57';
+// sw.js (Versão v58)
+const CACHE_NAME = 'classificapack-v58';
 
 const ASSETS = [
   './',
@@ -8,6 +8,7 @@ const ASSETS = [
   'js/main.js',
   'js/state.js',
   'js/storage.js',
+  'js/firebase-init.js', // Adicionado: módulo usado por vários ficheiros para aceder ao Firestore
   'js/motoristas.js',
   'js/setores.js',
   'js/geografia-data.js',
