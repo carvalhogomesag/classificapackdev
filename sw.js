@@ -1,5 +1,5 @@
-// sw.js (Versão v54)
-const CACHE_NAME = 'classificapack-v54';
+// sw.js (Versão v55)
+const CACHE_NAME = 'classificapack-v55';
 
 const ASSETS = [
   './',
@@ -11,8 +11,8 @@ const ASSETS = [
   'js/motoristas.js',
   'js/setores.js',
   'js/geografia-data.js',
-  'js/geografia-mafra.js',   // NOVO: Adicionado à cache offline-first
-  'js/geografia-sintra.js',  // NOVO: Adicionado à cache offline-first
+  'js/geografia-mafra.js',   // Cache offline-first
+  'js/geografia-sintra.js',  // Cache offline-first
   'js/voz.js',
   'js/triagem.js',
   'js/rotas.js',
