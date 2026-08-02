@@ -1,10 +1,11 @@
 /**
  * setores.js
- * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
+ * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e Sintra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
  *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
  *      Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 550 metros.
+ *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
  *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
@@ -18,6 +19,9 @@ import { db } from './firebase-init.js';
 
 // ID do motorista que está atualmente selecionado na interface para atribuição
 let motoristaAtivoId = null;
+
+// Concelho que está atualmente ativo na interface ("MAFRA" ou "SINTRA")
+let concelhoAtivo = "MAFRA";
 
 // Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
 let freguesiasExpandidas = new Set();
@@ -48,8 +52,9 @@ function salvarCacheCoordenadas() {
     }
 }
 
-// Coordenadas centrais aproximadas das Freguesias de Mafra (funcionam como Fallback temporário)
+// Coordenadas centrais aproximadas das Freguesias de Mafra e Sintra (funcionam como Fallback temporário)
 const FREGUESIA_COORDS = {
+    // ---- CONCELHO DE MAFRA ----
     "AZUEIRA": { lat: 38.9900, lng: -9.2500 },
     "CARVOEIRA MFR": { lat: 38.9300, lng: -9.4100 },
     "CHELEIROS": { lat: 38.8894, lng: -9.3283 },
@@ -66,7 +71,14 @@ const FREGUESIA_COORDS = {
     "SOBRAL DA ABELHEIRA": { lat: 39.0100, lng: -9.2900 },
     "SÃO MIGUEL DE ALCAINÇA": { lat: 38.9400, lng: -9.2900 },
     "VENDA DO PINHEIRO": { lat: 38.9236, lng: -9.2318 },
-    "VILA FRANCA DO ROSÁRIO": { lat: 38.9700, lng: -9.2500 }
+    "VILA FRANCA DO ROSÁRIO": { lat: 38.9700, lng: -9.2500 },
+
+    // ---- CONCELHO DE SINTRA ----
+    "ALGUEIRÃO-MEM MARTINS": { lat: 38.7981, lng: -9.3400 },
+    "ALMARGEM DO BISPO, PÊRO PINHEIRO E MONTELAVAR": { lat: 38.8500, lng: -9.3100 },
+    "COLARES": { lat: 38.7997, lng: -9.4704 },
+    "SÃO JOÃO DAS LAMPAS E TERRUGEM": { lat: 38.8600, lng: -9.4100 },
+    "SINTRA (U.F.)": { lat: 38.8000, lng: -9.3800 }
 };
 
 // ==========================================
@@ -81,7 +93,8 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     }
 
     // 2. Fallback síncrono ultra-rápido (centroide de freguesia com desvio inteligente) para evitar lag
-    const base = FREGUESIA_COORDS[freguesia] || { lat: 38.9376, lng: -9.3276 };
+    const defaultCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9376, lng: -9.3276 };
+    const base = FREGUESIA_COORDS[freguesia] || defaultCoords;
     let hash = 0;
     for (let i = 0; i < localidade.length; i++) {
         hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
@@ -104,8 +117,9 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
 
     if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
         const geocoder = new google.maps.Geocoder();
-        const cleanFregName = freguesia.replace(/\s+MFR$/i, "");
-        const queryAddress = `${localidade}, ${cleanFregName}, Mafra, Portugal`;
+        const cleanFregName = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "");
+        const concelhoName = concelhoAtivo === "SINTRA" ? "Sintra" : "Mafra";
+        const queryAddress = `${localidade}, ${cleanFregName}, ${concelhoName}, Portugal`;
 
         geocoder.geocode({ address: queryAddress }, (results, status) => {
             if (status === "OK" && results[0]) {
@@ -121,16 +135,18 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
 }
 
 // =========================================================================
-// INICIALIZAÇÃO DO MAPA DENTAL DO GESTOR
+// INICIALIZAÇÃO DO MAPA GERAL DO GESTOR
 // =========================================================================
 function inicializarMapaBricksDashboard() {
     const mapEl = document.getElementById('map-dashboard-bricks');
     if (!mapEl || typeof google === 'undefined') return;
 
+    const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
+
     if (!dashboardMap) {
         dashboardMap = new google.maps.Map(mapEl, {
             zoom: 11,
-            center: { lat: 38.9500, lng: -9.3000 }, // Centralizado no concelho de Mafra
+            center: centerCoords,
             mapTypeControl: false,
             streetViewControl: false,
             fullscreenControl: false
@@ -141,6 +157,7 @@ function inicializarMapaBricksDashboard() {
             disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
         });
     } else {
+        dashboardMap.setCenter(centerCoords);
         google.maps.event.trigger(dashboardMap, 'resize');
     }
 
@@ -162,15 +179,22 @@ function desenharBricksNoMapa() {
     dashboardOverlays.forEach(overlay => overlay.setMap(null));
     dashboardOverlays = [];
 
-    // Mapeamento síncrono e ultra-estável
+    // Mapeamento síncrono e de acordo com o concelho selecionado
     window.drivers.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
             if (id.includes('|')) {
                 const [freg, loc] = id.split('|');
+
+                // Filtro dinâmico: Verifica se a freguesia do brick pertence ao concelho selecionado
+                // Isto evita que as nuvens de Mafra surjam misturadas com as de Sintra no mapa
+                if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg]) {
+                    return; // Ignora o brick se for de outro concelho
+                }
+
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
 
-                // Círculo Translúcido de Atribuição (NOVO: Raio reduzido a metade, fixado em exactamente 550 metros!)
+                // Círculo Translúcido de Atribuição (Raio limitado a exatamente 550 metros)
                 const circle = new google.maps.Circle({
                     strokeColor: drv.color,
                     strokeOpacity: 0.6,
@@ -179,7 +203,7 @@ function desenharBricksNoMapa() {
                     fillOpacity: 0.2, // Visual nebuloso ultra-agradável
                     map: dashboardMap,
                     center: coords,
-                    radius: 550 // Reduzido de 1100m para 550m
+                    radius: 550
                 });
                 dashboardOverlays.push(circle);
 
@@ -300,7 +324,14 @@ export function renderGeographicTree() {
     labelSelected.className = "text-[10px] font-black uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200";
     labelSelected.textContent = activeDriver.name;
 
-    const concelho = "MAFRA";
+    const concelho = concelhoAtivo;
+    
+    // Verificação de segurança caso o concelho selecionado não exista na base de dados
+    if (!GEOGRAPHY[concelho]) {
+        treeContainer.innerHTML = '<p class="text-xs text-red-500 italic text-center py-4">Erro: Concelho não configurado.</p>';
+        return;
+    }
+
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
     // Mapeia onde está cada localidade para mostrar avisos de exclusividade tátil
@@ -338,7 +369,7 @@ export function renderGeographicTree() {
                 <button type="button" class="btn-expand-tree text-gray-500 hover:text-blue-600 font-mono text-[10px] px-2 py-0.5 rounded border bg-white focus:outline-none shadow-sm transition flex items-center space-x-1">
                     ${isExpanded 
                         ? "<span><i class='fa-solid fa-minus mr-0.5'></i> Recolher</span>" 
-                        : "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir Freguesia</span>"
+                        : "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir</span>"
                     }
                 </button>
                 <div class="flex items-center space-x-1.5">
@@ -480,7 +511,7 @@ export function renderGeographicTree() {
             } else {
                 subContainer.classList.add('hidden');
                 freguesiasExpandidas.delete(freguesiaName);
-                btnExpand.innerHTML = "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir Freguesia</span>";
+                btnExpand.innerHTML = "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir</span>";
             }
         });
     });
@@ -490,10 +521,34 @@ export function renderGeographicTree() {
 // CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES E BRICKS (WINDOW)
 // =========================================================================
 window.renderizarSetoresUI = () => {
+    // Configura o seletor de concelho (Mafra vs Sintra)
+    const seletorConcelho = document.getElementById('select-concelho-setores');
+    if (seletorConcelho) {
+        seletorConcelho.value = concelhoAtivo;
+        if (!seletorConcelho.dataset.listenerAtivo) {
+            seletorConcelho.addEventListener('change', (e) => {
+                concelhoAtivo = e.target.value;
+                
+                // Limpa o estado de expansão ao mudar de concelho para evitar árvores inconsistentes
+                freguesiasExpandidas.clear();
+
+                // Recentrabilidade síncrona do mapa
+                if (dashboardMap) {
+                    const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
+                    dashboardMap.setCenter(centerCoords);
+                }
+
+                // Renderização reativa de toda a UI
+                window.renderizarSetoresUI();
+            });
+            seletorConcelho.dataset.listenerAtivo = "true";
+        }
+    }
+
     // Sincroniza a listagem de motoristas no painel de atribuição
     renderDriversForAttribution();
 
-    // Renderiza a árvore de Mafra reativa
+    // Renderiza a árvore do concelho ativo reativa (Mafra ou Sintra)
     renderGeographicTree();
 
     // Inicializa e redesenha o mapa de forma síncrona estável

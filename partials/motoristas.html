@@ -1,12 +1,34 @@
 <!--
   motoristas.html
-  Faz: Contém a estrutura visual integral do ecrã de Gestão de Motoristas, incluindo o sumário de leituras, formulário de registo e lista de motoristas ativos.
+  Faz: Contém a estrutura visual integral do ecrã de Gestão de Motoristas, incluindo o seletor de concelho ativo, sumário de leituras, formulário de registo e lista de motoristas ativos.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
 
 <main id="view-motoristas" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
     
+    <!-- SELETOR DE CONCELHO (MAFRA VS SINTRA) -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+        <div class="flex items-center space-x-2.5">
+            <div class="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
+                <i class="fa-solid fa-earth-europe text-sm"></i>
+            </div>
+            <div>
+                <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider">Concelho Ativo (Gestão)</h3>
+                <p class="text-[11px] text-gray-400">Filtrar estatísticas e motoristas em exibição</p>
+            </div>
+        </div>
+        <div class="relative min-w-[220px]">
+            <select id="select-concelho-motoristas" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 pr-8 appearance-none font-semibold cursor-pointer">
+                <option value="MAFRA">Mafra, Portugal</option>
+                <option value="SINTRA">Sintra, Portugal</option>
+            </select>
+            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-500">
+                <i class="fa-solid fa-chevron-down text-[10px]"></i>
+            </div>
+        </div>
+    </div>
+
     <!-- Painel de Estatísticas de Leituras Gerais do Turno -->
     <div class="bg-gray-50 p-4 rounded-xl border border-gray-200 shadow-sm">
         <div class="flex justify-between items-center mb-3">
@@ -21,12 +43,30 @@
     <h2 class="text-xl font-bold text-gray-800 mt-2">Registo de Motoristas</h2>
     
     <!-- Formulário de Criação e Edição de Motorista -->
-    <form id="form-motorista" class="bg-white p-4 rounded-lg border border-gray-200 space-y-3">
+    <form id="form-motorista" class="bg-white p-4 rounded-lg border border-gray-200 space-y-4">
         <div>
             <label class="block text-xs font-bold uppercase text-gray-600">Nome do Motorista</label>
             <input type="text" id="nome-motorista" required placeholder="Ex: João Silva" 
                    class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
         </div>
+
+        <!-- NOVO CAMPO: SELEÇÃO DE CONCELHOS DE ATUAÇÃO DO MOTORISTA -->
+        <div>
+            <label class="block text-xs font-bold uppercase text-gray-600 mb-1.5">Concelho(s) de Atuação</label>
+            <div class="flex items-center space-x-5 bg-gray-50 p-3 rounded-lg border border-gray-150">
+                <label class="flex items-center space-x-2 text-xs font-bold text-gray-600 cursor-pointer select-none">
+                    <input type="checkbox" id="concelho-mafra" value="MAFRA" checked 
+                           class="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
+                    <span>Mafra</span>
+                </label>
+                <label class="flex items-center space-x-2 text-xs font-bold text-gray-600 cursor-pointer select-none">
+                    <input type="checkbox" id="concelho-sintra" value="SINTRA" 
+                           class="rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
+                    <span>Sintra</span>
+                </label>
+            </div>
+        </div>
+
         <div>
             <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
             <!-- Palete dinâmica de cores criada no main.js -->

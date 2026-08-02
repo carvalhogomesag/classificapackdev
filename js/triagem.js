@@ -2,6 +2,7 @@
  * triagem.js
  * Faz: Controla toda a lógica de triagem, cálculo de motorista e Brick (Localidade) designados para o código postal de 7 dígitos, processamento OCR com câmara e estatísticas de contagem do turno.
  *      Implementa algoritmo de dupla passagem para priorizar localidades específicas sobre as capitais genéricas homónimas.
+ *      NOVO: Deteta automaticamente se o código pertence a Mafra ou Sintra pelo prefixo do código postal.
  *      NOVO: Grava as confirmações de triagem diretamente na coleção 'assignments' do Firestore para sincronização em nuvem de imediato.
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js, ./firebase-init.js (para aceder ao db)
@@ -35,12 +36,23 @@ function sincronizarPersistencia() {
     );
 }
 
+// Auxiliar para detetar o concelho correspondente ao código postal fornecido
+function obterConcelhoPorCodigoPostal(zip) {
+    if (!zip) return "MAFRA";
+    const cleanPrefix = sanitizeDigits(zip).substring(0, 4);
+    // Códigos postais de Sintra começam por 2705, 2710, 2715 ou 2725
+    if (cleanPrefix === "2705" || cleanPrefix === "2710" || cleanPrefix === "2715" || cleanPrefix === "2725") {
+        return "SINTRA";
+    }
+    return "MAFRA"; // Padrão/Fallback para Mafra (2640, 2655, 2665, etc.)
+}
+
 // Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
-    const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
+    const cleanFreg = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "").toLowerCase();
     const cleanLoc = localidade.toLowerCase();
     if (cleanLoc === cleanFreg) return true;
-    // Exceção de normalização: Alcainça é a catch-all de São Miguel de Alcainça
+    // Exceções de normalização:
     if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
     return false;
 }
@@ -50,16 +62,22 @@ function isCatchAllLocality(freguesia, localidade) {
 // =========================================================================
 export function findBrickAndDriverForZip(zip, drivers) {
     if (!zip || !drivers) return { brickId: null, brickName: null, driver: null };
-    const normalizedZip = zip.trim(); // Esperado: "2640-401"
-    const concelho = "MAFRA";
+    const normalizedZip = zip.trim(); // Esperado: "2640-401" ou "2705-011"
+    
+    // Deteta de forma inteligente e autónoma se é Mafra ou Sintra com base no CP7 digitado
+    const concelho = obterConcelhoPorCodigoPostal(normalizedZip);
 
     let matchedFreguesia = null;
     let matchedLocalidade = null;
 
+    if (!GEOGRAPHY[concelho]) {
+        return { brickId: null, brickName: null, driver: null };
+    }
+
     // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas (ignorando as catch-all genéricas)
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
-            // Se for localidade catch-all (ex: Mafra dentro da freguesia MAFRA), ignora nesta primeira passagem
+            // Se for localidade catch-all (ex: Mafra na freguesia MAFRA ou Sintra na freguesia SINTRA U.F.), ignora nesta primeira passagem
             if (isCatchAllLocality(freguesia, localidade)) {
                 continue;
             }
@@ -90,7 +108,7 @@ export function findBrickAndDriverForZip(zip, drivers) {
     }
 
     if (!matchedFreguesia) {
-        return { brickId: null, brickName: null, driver: null };
+        return { brickId: null, brickName: null, driver: null, concelho };
     }
 
     const brickId = `${matchedFreguesia}|${matchedLocalidade}`;
@@ -99,7 +117,7 @@ export function findBrickAndDriverForZip(zip, drivers) {
     // Encontra o motorista ativo que tem esta localidade (Brick) assinalada na sua lista
     const driver = drivers.find(d => Array.isArray(d.brickIds) && d.brickIds.includes(brickId));
 
-    return { brickId, brickName, driver };
+    return { brickId, brickName, driver, concelho };
 }
 
 // ==========================================
@@ -224,7 +242,7 @@ export function setupTriagemLogic() {
             const formattedZip = `${cleanDigits.substring(0, 4)}-${cleanDigits.substring(4, 7)}`;
             
             // Resolução dinâmica priorizada de Brick (Localidade) e Motorista
-            const { brickId, brickName, driver } = findBrickAndDriverForZip(formattedZip, window.drivers);
+            const { brickId, brickName, driver, concelho } = findBrickAndDriverForZip(formattedZip, window.drivers);
             
             const resultadoCodigo = document.getElementById('resultado-codigo');
             const resultadoMotorista = document.getElementById('resultado-motorista');
@@ -252,9 +270,9 @@ export function setupTriagemLogic() {
             }
 
             if (!brickId) {
-                // Código Postal NÃO encontrado na base de dados de Mafra (Aviso de Alerta)
+                // Código Postal NÃO encontrado na base de dados de Mafra ou Sintra (Aviso de Alerta)
                 if (resultadoMotorista) resultadoMotorista.textContent = "CP Não Encontrado";
-                if (resultadoBrickLabel) resultadoBrickLabel.textContent = "Confirmar Código Postal";
+                if (resultadoBrickLabel) resultadoBrickLabel.textContent = `Confirmar Código Postal (${concelho})`;
                 if (resultadoCorBg) resultadoCorBg.style.backgroundColor = "#EA580C"; // Cor Laranja de Alerta
                 
                 window.lastAnalysisResult = { 
@@ -262,12 +280,13 @@ export function setupTriagemLogic() {
                     driverId: null,
                     brickId: null,
                     brickName: "Não Encontrado",
-                    isInvalid: true
+                    isInvalid: true,
+                    concelho: concelho
                 };
             } else {
-                // CASO: Código Postal VÁLIDO em Mafra
+                // CASO: Código Postal VÁLIDO
                 if (resultadoBrickLabel) {
-                    resultadoBrickLabel.textContent = `${brickId.split('|')[0]} - ${brickName}`;
+                    resultadoBrickLabel.textContent = `${brickId.split('|')[0]} - ${brickName} (${concelho})`;
                 }
 
                 if (driver) {
@@ -278,7 +297,8 @@ export function setupTriagemLogic() {
                         driverId: driver.id,
                         brickId: brickId,
                         brickName: brickName,
-                        isInvalid: false
+                        isInvalid: false,
+                        concelho: concelho
                     };
                 } else {
                     if (resultadoMotorista) resultadoMotorista.textContent = "Sem Motorista";
@@ -288,7 +308,8 @@ export function setupTriagemLogic() {
                         driverId: null,
                         brickId: brickId,
                         brickName: brickName,
-                        isInvalid: false
+                        isInvalid: false,
+                        concelho: concelho
                     };
                 }
             }
@@ -327,6 +348,7 @@ export function setupTriagemLogic() {
                 brickId: finalBrickId,
                 brickName: finalBrickName,
                 priority: isPriority,
+                concelho: window.lastAnalysisResult.concelho || obterConcelhoPorCodigoPostal(window.lastAnalysisResult.zip),
                 date: new Date().toISOString().split('T')[0],
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             }).then(() => {
@@ -377,9 +399,9 @@ export function setupCancelButtons() {
     }
 }
 
-// =========================================================================
+// ==========================================
 // RECONHECIMENTO DE VOZ DA TRIAGEM (MÉTODO UNIFICADO VIA VOZ.JS)
-// =========================================================================
+// ==========================================
 export function setupVozTriagemLogic() {
     // Desativado reativamente para manter a triagem pura no Código Postal
 }
@@ -460,11 +482,15 @@ export function extrairMoradaFocada(text) {
         }
     }
 
+    // Deteta se o texto extraído tem termos de Sintra para direcionar o geocoder no concelho certo
+    const isSintraText = /sintra|colares|terrugem|algueirão|mem\s+martins|almargem|pêro\s+pinheiro|montelavar/i.test(text);
+    const concelhoName = isSintraText ? "Sintra" : "Mafra";
+
     if (moradaCandidata.trim().length > 6) {
-        return moradaCandidata.trim() + ", Mafra, Portugal";
+        return moradaCandidata.trim() + `, ${concelhoName}, Portugal`;
     }
 
-    return linhasLimpas.slice(0, 2).join(', ') + ", Mafra, Portugal";
+    return linhasLimpas.slice(0, 2).join(', ') + `, ${concelhoName}, Portugal`;
 }
 
 // ==========================================
