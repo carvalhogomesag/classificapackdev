@@ -8,6 +8,7 @@
  *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
  *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
  *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
+ *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
@@ -307,6 +308,21 @@ export function renderDriversForAttribution() {
     });
 }
 
+// ==========================================
+// AUXILIAR: FORMATAR INTERVALO OU CÓDIGO POSTAL ÚNICO
+// ==========================================
+function formatarIntervaloCPs(cpList) {
+    if (!Array.isArray(cpList) || cpList.length === 0) return "";
+    if (cpList.length === 1) return `(${cpList[0]})`;
+
+    // Ordena os códigos postais para obtermos o menor e o maior limite de forma síncrona
+    const ordenados = [...cpList].sort((a, b) => a.localeCompare(b));
+    const min = ordenados[0];
+    const max = ordenados[ordenados.length - 1];
+
+    return `(${min} a ${max})`;
+}
+
 // =========================================================================
 // DESENHO DA ÁRVORE HIERÁRQUICA E CONTROLO REATIVO DE ATRIBUIÇÃO DE BRICKS
 // =========================================================================
@@ -403,18 +419,23 @@ export function renderGeographicTree() {
 
             const isAssignedToActive = Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
 
+            // Determina a lista de códigos postais para esta localidade e formata o seu intervalo
+            const cpList = localidadesMap[locName] || [];
+            const cpTexto = formatarIntervaloCPs(cpList);
+
             const label = document.createElement('label');
 
             if (motoristaDono && motoristaDono.id !== activeDriver.id) {
-                // Se a localidade já estiver sob a responsabilidade de outro motorista (Adicionado Cadeado Vermelho, Opacidade de bloqueio e fundo tátil de aviso)
+                // Se a localidade já estiver sob a responsabilidade de outro motorista
                 label.className = "flex items-center justify-between p-2 rounded bg-red-50/20 text-gray-400 cursor-not-allowed select-none text-[11px] border border-red-100/10 opacity-70";
                 label.innerHTML = `
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 truncate pr-2">
                         <i class="fa-solid fa-lock text-red-400 text-[10px] animate-none"></i>
                         <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-3.5 h-3.5 cursor-not-allowed">
-                        <span class="font-bold text-gray-400 line-through">${locName}</span>
+                        <span class="font-bold text-gray-400 line-through truncate">${locName}</span>
+                        <span class="text-[9px] text-gray-400 font-mono font-normal ml-1 shrink-0">${cpTexto}</span>
                     </div>
-                    <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded border flex items-center space-x-1" style="background-color: ${motoristaDono.color}15; color: ${motoristaDono.color}; border-color: ${motoristaDono.color}30">
+                    <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded border flex items-center space-x-1 shrink-0" style="background-color: ${motoristaDono.color}15; color: ${motoristaDono.color}; border-color: ${motoristaDono.color}30">
                         <i class="fa-solid fa-user text-[7px]"></i> <span>Com: ${motoristaDono.name}</span>
                     </span>
                 `;
@@ -422,13 +443,14 @@ export function renderGeographicTree() {
                 // Se estiver livre ou já for deste motorista selecionado
                 label.className = "flex items-center justify-between p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 cursor-pointer text-[11px] text-gray-700 transition duration-100";
                 label.innerHTML = `
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 truncate pr-2">
                         <input type="checkbox" value="${brickId}" ${isAssignedToActive ? 'checked' : ''} class="brick-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-3.5 h-3.5 cursor-pointer">
-                        <span class="font-bold text-gray-600">${locName}</span>
+                        <span class="font-bold text-gray-600 truncate">${locName}</span>
+                        <span class="text-[9px] text-gray-400 font-mono font-normal ml-1 shrink-0">${cpTexto}</span>
                     </div>
                     ${isAssignedToActive 
-                        ? `<span class="text-[8px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded border border-blue-200">Associado</span>`
-                        : `<span class="text-[8px] bg-green-50 text-green-700 font-extrabold px-1.5 py-0.5 rounded border border-green-200">Livre</span>`
+                        ? `<span class="text-[8px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded border border-blue-200 shrink-0">Associado</span>`
+                        : `<span class="text-[8px] bg-green-50 text-green-700 font-extrabold px-1.5 py-0.5 rounded border border-green-200 shrink-0">Livre</span>`
                     }
                 `;
 
@@ -548,7 +570,7 @@ window.renderizarSetoresUI = () => {
                 // bricks com um motorista não habilitado no novo concelho
                 motoristaAtivoId = null;
 
-                // Recentrabilidade síncrona do mapa
+                // Recenterabilidade síncrona do mapa
                 if (dashboardMap) {
                     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
                     dashboardMap.setCenter(centerCoords);
