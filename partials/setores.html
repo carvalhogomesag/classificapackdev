@@ -8,73 +8,6 @@
 
 <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
     
-    <!-- NOVO ELEMENTO VISUAL: MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
-        <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
-            <i class="fa-solid fa-map-location-dot text-blue-600"></i>
-            <span>Visão do Gestor: Distribuição Geográfica de Bricks (Estantes)</span>
-        </h3>
-        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
-            <div id="map-dashboard-bricks" class="w-full h-80 bg-gray-50"></div>
-        </div>
-    </div>
-
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
-        <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
-            <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
-            <span>Painel de Atribuição Direta</span>
-        </h2>
-        <p class="text-xs text-gray-500 leading-relaxed">
-            Selecione um motorista na lista à esquerda (ou topo) e assinale na árvore à direita as localidades que pretende entregar a essa estante de arrumação.
-        </p>
-    </div>
-
-    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet, coluna em Telemóvel) -->
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-        
-        <!-- COLUNA ESQUERDA: LISTAGEM E SELEÇÃO DE MOTORISTAS ATIVOS -->
-        <div class="md:col-span-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-            <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
-                <i class="fa-solid fa-users text-blue-500"></i>
-                <span>Passo 1: Escolher Motorista</span>
-            </h3>
-            
-            <div id="lista-atribuicao-motoristas" class="space-y-2 max-h-96 overflow-y-auto pr-1">
-                <!-- Preenchido dinamicamente por setores.js -->
-                <p class="text-xs text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
-            </div>
-        </div>
-
-        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS DE MAFRA -->
-        <div class="md:col-span-8 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-            <div class="flex justify-between items-center">
-                <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
-                    <i class="fa-solid fa-city text-blue-500"></i>
-                    <span>Passo 2: Assinalar Localidades</span>
-                </h3>
-                <span id="label-motorista-selecionado" class="text-[10px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-dashed">
-                    Nenhum Selecionado
-                </span>
-            </div>
-
-            <!-- Contentor dinâmico da árvore preenchido pelo setores.js -->
-            <div id="arvore-bricks-localidades" class="border rounded-lg p-2 max-h-[500px] overflow-y-auto space-y-2 bg-gray-50/50">
-                <p class="text-xs text-gray-400 italic text-center py-8">Por favor, escolha um motorista na lista para carregar os Bricks.</p>
-            </div>
-        </div>
-
-    </div>
-
-</main><!--
-  setores.html
-  Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks (Localidades) aos Motoristas.
-       Suporta mapa interativo de distribuição de nuvens de calor e layout em duas colunas paralelas (split-pane) em ecrãs grandes de PC ou Tablet.
-  NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
-  Depende de: Injeção assíncrona pelo main.js no index.html.
--->
-
-<main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
-    
     <!-- SELETOR DE CONCELHO (MAFRA VS SINTRA) -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
         <div class="flex items-center space-x-2.5">
@@ -97,7 +30,7 @@
         </div>
     </div>
     
-    <!-- NOVO ELEMENTO VISUAL: MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
+    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
         <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
             <i class="fa-solid fa-map-location-dot text-blue-600"></i>
