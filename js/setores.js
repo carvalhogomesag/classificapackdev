@@ -9,6 +9,8 @@
  *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
  *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
  *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
+ *      MELHORADO: Implementa motor de auditoria para aferição de Bricks órfãos e garantia de Saldo Zero de Cobertura.
+ *      CORRIGIDO: Elimina círculos obsoletos (espirais/molas) no mapa e corrige travamento do auditor ("A CALCULAR...") em telemóveis.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
@@ -181,17 +183,19 @@ function desenharBricksNoMapa() {
     dashboardOverlays.forEach(overlay => overlay.setMap(null));
     dashboardOverlays = [];
 
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+
     // Mapeamento síncrono e de acordo com o concelho selecionado
-    window.drivers.forEach(drv => {
+    driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
-            if (id.includes('|')) {
+            if (id && typeof id === 'string' && id.includes('|')) {
                 const [freg, loc] = id.split('|');
 
-                // Filtro dinâmico: Verifica se a freguesia do brick pertence ao concelho selecionado
-                // Isto evita que as nuvens de Mafra surjam misturadas com as de Sintra no mapa
-                if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg]) {
-                    return; // Ignora o brick se for de outro concelho
+                // FILTRO DE SEGURANÇA ABSOLUTO: Só desenha se for um Brick válido e atual do concelho selecionado.
+                // Isto ignora imediatamente os Bricks antigos obsoletos e elimina as molas/espirais do mapa!
+                if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
+                    return; 
                 }
 
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
@@ -205,7 +209,7 @@ function desenharBricksNoMapa() {
                     fillOpacity: 0.2, // Visual nebuloso ultra-agradável
                     map: dashboardMap,
                     center: coords,
-                    radius: 500 // Ajustado de 550 para 500 metros
+                    radius: 500
                 });
                 dashboardOverlays.push(circle);
 
@@ -261,9 +265,10 @@ export function renderDriversForAttribution() {
 
     listContainer.innerHTML = "";
 
-    // NOVO & MELHORADO (Filtro de Usabilidade): 
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+
     // Mostra apenas os motoristas habilitados a atuar no concelho de operação selecionado no topo.
-    const filteredDrivers = window.drivers.filter(driver => {
+    const filteredDrivers = driversArr.filter(driver => {
         const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
         return concelhos.includes(concelhoAtivo);
     });
@@ -324,6 +329,113 @@ function formatarIntervaloCPs(cpList) {
 }
 
 // =========================================================================
+// COMPUTAÇÃO EM TEMPO REAL: AUDITORIA DE BRICKS NÃO ALOCADOS (SALDO ZERO)
+// =========================================================================
+function atualizarAuditoriaBricks() {
+    const concelho = concelhoAtivo;
+    const elTotal = document.getElementById('stat-total-bricks');
+    const elAlocados = document.getElementById('stat-alocados-bricks');
+    const elSaldo = document.getElementById('stat-saldo-bricks');
+    const elLabelSaldo = document.getElementById('label-saldo-bricks');
+    const elCardSaldo = document.getElementById('card-saldo-bricks');
+    const elBadgeStatus = document.getElementById('badge-saldo-status');
+    const elContainerPendentes = document.getElementById('container-bricks-pendentes');
+    const elListaPendentes = document.getElementById('lista-bricks-pendentes');
+
+    if (!elTotal || !elAlocados || !elSaldo) return;
+
+    // 1. Reúne todos os Bricks geográficos que existem no concelho ativo
+    const todosBricksDoConcelho = [];
+    if (GEOGRAPHY[concelho]) {
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+            for (const localidade of Object.keys(localidades)) {
+                todosBricksDoConcelho.push(`${freguesia}|${localidade}`);
+            }
+        }
+    }
+
+    // 2. Mapeia quais Bricks já foram efetivamente alocados a motoristas ativos para este concelho
+    const bricksAlocadosSet = new Set();
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+
+    driversArr.forEach(drv => {
+        const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
+        bIds.forEach(id => {
+            if (id && typeof id === 'string' && id.includes('|')) {
+                const [freg, loc] = id.split('|');
+                
+                // CORREÇÃO DE SEGURANÇA CONTRA TYPEERROR: Verifica de forma estritamente segura 
+                // se a freguesia e a localidade existem no concelho ativo antes de ler.
+                if (GEOGRAPHY[concelho] && GEOGRAPHY[concelho][freg] && GEOGRAPHY[concelho][freg][loc]) {
+                    bricksAlocadosSet.add(id);
+                }
+            }
+        });
+    });
+
+    // 3. Determina o resíduo (quais Bricks estão órfãos/sem motorista)
+    const bricksOrfaos = todosBricksDoConcelho.filter(id => !bricksAlocadosSet.has(id));
+
+    const totalCount = todosBricksDoConcelho.length;
+    const alocadosCount = bricksAlocadosSet.size;
+    const saldoCount = bricksOrfaos.length;
+
+    // Injeta os contadores nos cartões estatísticos do ecrã
+    elTotal.textContent = totalCount;
+    elAlocados.textContent = alocadosCount;
+    elSaldo.textContent = saldoCount;
+
+    // 4. Atualiza reativamente a interface de acordo com o saldo
+    if (saldoCount === 0) {
+        // CASO SEGURO: Saldo Zero atingido com sucesso!
+        if (elBadgeStatus) {
+            elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200 animate-none";
+            elBadgeStatus.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Saldo Zero (100% Coberto)</span>`;
+        }
+        if (elCardSaldo) {
+            elCardSaldo.className = "bg-green-50 p-2.5 rounded-xl border border-green-200";
+        }
+        elSaldo.className = "block text-base font-black text-green-600";
+        if (elLabelSaldo) {
+            elLabelSaldo.textContent = "Sem Alocar";
+            elLabelSaldo.className = "text-[9px] font-bold text-green-500 uppercase";
+        }
+        if (elContainerPendentes) elContainerPendentes.classList.add('hidden');
+        if (elListaPendentes) elListaPendentes.innerHTML = "";
+    } else {
+        // CASO DE ALERTA: Existem zonas sem motorista responsável
+        if (elBadgeStatus) {
+            elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-red-50 text-red-700 border-red-200 animate-pulse";
+            elBadgeStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Cobertura Incompleta</span>`;
+        }
+        if (elCardSaldo) {
+            elCardSaldo.className = "bg-red-50 p-2.5 rounded-xl border border-red-200";
+        }
+        elSaldo.className = "block text-base font-black text-red-600";
+        if (elLabelSaldo) {
+            elLabelSaldo.textContent = "Sem Alocar";
+            elLabelSaldo.className = "text-[9px] font-bold text-red-500 uppercase";
+        }
+
+        // Revela a gaveta vermelha de detalhes e popula com os nomes das zonas em falta
+        if (elContainerPendentes) elContainerPendentes.classList.remove('hidden');
+        if (elListaPendentes) {
+            elListaPendentes.innerHTML = "";
+            bricksOrfaos.forEach(id => {
+                const [freg, loc] = id.split('|');
+                const itemDiv = document.createElement('div');
+                itemDiv.className = "flex items-center space-x-1.5 p-1.5 bg-red-50/50 border border-red-100 rounded text-red-700 truncate";
+                itemDiv.innerHTML = `
+                    <i class="fa-solid fa-circle-xmark text-[9px] text-red-400 shrink-0"></i>
+                    <span class="truncate" title="${freg} - ${loc}">${freg} - ${loc}</span>
+                `;
+                elListaPendentes.appendChild(itemDiv);
+            });
+        }
+    }
+}
+
+// =========================================================================
 // DESENHO DA ÁRVORE HIERÁRQUICA E CONTROLO REATIVO DE ATRIBUIÇÃO DE BRICKS
 // =========================================================================
 export function renderGeographicTree() {
@@ -333,7 +445,8 @@ export function renderGeographicTree() {
 
     treeContainer.innerHTML = "";
 
-    const activeDriver = window.drivers.find(d => d.id === motoristaAtivoId);
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+    const activeDriver = driversArr.find(d => d.id === motoristaAtivoId);
 
     // Se nenhum motorista estiver selecionado na lista esquerda, bloqueia a árvore com aviso amigável
     if (!activeDriver) {
@@ -364,10 +477,12 @@ export function renderGeographicTree() {
 
     // Mapeia onde está cada localidade para mostrar avisos de exclusividade tátil
     const localidadeParaMotorista = new Map();
-    window.drivers.forEach(drv => {
+    driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
-            localidadeParaMotorista.set(id, drv);
+            if (id && typeof id === 'string') {
+                localidadeParaMotorista.set(id, drv);
+            }
         });
     });
 
@@ -519,7 +634,7 @@ export function renderGeographicTree() {
                     }
                 });
 
-                // Envia a lista atualizada de uma só vez para o Firestore
+                // Envia a lista updated de uma só vez para o Firestore
                 db.collection('drivers').doc(activeDriver.id).update({
                     brickIds: updatedBrickIds
                 }).then(() => {
@@ -588,6 +703,9 @@ window.renderizarSetoresUI = () => {
 
     // Renderiza a árvore do concelho ativo reativa (Mafra ou Sintra)
     renderGeographicTree();
+
+    // Executa as contas do painel de auditoria (Saldo Zero) em tempo real
+    atualizarAuditoriaBricks();
 
     // Inicializa e redesenha o mapa de forma síncrona estável
     setTimeout(inicializarMapaBricksDashboard, 150);
