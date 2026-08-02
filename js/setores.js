@@ -56,6 +56,34 @@ function salvarCacheCoordenadas() {
     }
 }
 
+// ==========================================
+// SINCRONIZAÇÃO DA CACHE PARTILHADA DE COORDENADAS (FIRESTORE)
+// CORRIGIDO: a cache de coordenadas geocodificadas era só local (localStorage),
+// por isso um dispositivo novo (ex: telemóvel) começava sempre "vazio" e mostrava
+// os Bricks agrupados no fallback aproximado do centro da freguesia, até alguém
+// tocar manualmente em cada um. Agora sincronizamos com o Firestore, partilhado
+// entre todos os dispositivos: assim que UM aparelho resolve a posição real de um
+// Brick, todos os outros passam a beneficiar dela sem precisar de geocodificar de novo.
+// ==========================================
+let cacheFirestoreSincronizada = false;
+
+async function carregarCacheCoordenadasFirestore() {
+    if (cacheFirestoreSincronizada) return;
+    try {
+        const snapshot = await db.collection('brickCoordinates').get();
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
+                brickCoordsCache[doc.id] = { lat: data.lat, lng: data.lng };
+            }
+        });
+        salvarCacheCoordenadas();
+        cacheFirestoreSincronizada = true;
+    } catch (e) {
+        console.warn("[PWA] Não foi possível sincronizar a cache partilhada de coordenadas de Bricks:", e);
+    }
+}
+
 // Coordenadas centrais aproximadas das Freguesias de Mafra e Sintra (funcionam como Fallback temporário)
 const FREGUESIA_COORDS = {
     // ---- CONCELHO DE MAFRA ----
@@ -128,8 +156,15 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
         geocoder.geocode({ address: queryAddress }, (results, status) => {
             if (status === "OK" && results[0]) {
                 const loc = results[0].geometry.location;
-                brickCoordsCache[brickId] = { lat: loc.lat(), lng: loc.lng() };
+                const coordsResolvidas = { lat: loc.lat(), lng: loc.lng() };
+                brickCoordsCache[brickId] = coordsResolvidas;
                 salvarCacheCoordenadas();
+
+                // Partilha a coordenada resolvida com todos os outros dispositivos via
+                // Firestore, para que este Brick nunca mais precise de ser geocodificado.
+                db.collection('brickCoordinates').doc(brickId).set(coordsResolvidas).catch((err) => {
+                    console.warn("[PWA] Falha ao partilhar coordenada de Brick via Firestore:", err);
+                });
 
                 // Redesenha reativamente o mapa apenas após o sucesso, movendo o circulo para o local real
                 desenharBricksNoMapa();
@@ -160,6 +195,11 @@ function inicializarMapaBricksDashboard() {
         dashboardInfoWindow = new google.maps.InfoWindow({
             disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
         });
+
+        // Sincroniza a cache partilhada de coordenadas (Firestore) uma única vez por
+        // sessão, para já aproveitar Bricks geocodificados anteriormente por OUTROS
+        // dispositivos, e redesenha assim que a sincronização terminar.
+        carregarCacheCoordenadasFirestore().then(() => desenharBricksNoMapa());
     } else {
         dashboardMap.setCenter(centerCoords);
         google.maps.event.trigger(dashboardMap, 'resize');
@@ -195,6 +235,11 @@ function desenharBricksNoMapa() {
     const bounds = new google.maps.LatLngBounds();
     let totalPontosDesenhados = 0;
 
+    // Acumula aqui os Bricks que ainda não têm coordenada real (estão a usar o
+    // fallback), para pedirmos a geocodificação automaticamente, de forma
+    // escalonada, sem esperar por um toque manual na árvore.
+    const bricksPorGeocodificar = [];
+
     // Mapeamento síncrono e de acordo com o concelho selecionado
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -206,6 +251,10 @@ function desenharBricksNoMapa() {
                 // Isto ignora imediatamente os Bricks antigos obsoletos e elimina as molas/espirais do mapa!
                 if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
                     return; 
+                }
+
+                if (!brickCoordsCache[id]) {
+                    bricksPorGeocodificar.push({ freg, loc });
                 }
 
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
@@ -282,6 +331,14 @@ function desenharBricksNoMapa() {
             }
         });
     }
+
+    // Pede a geocodificação real dos Bricks ainda não resolvidos, de forma
+    // escalonada (200ms entre cada pedido) para não saturar a API de uma só vez.
+    // Cada um, ao resolver, redesenha o mapa sozinho na posição exata (e partilha
+    // o resultado via Firestore para todos os outros dispositivos).
+    bricksPorGeocodificar.forEach((item, idx) => {
+        setTimeout(() => geocodificarBrickSobProcura(item.freg, item.loc), idx * 200);
+    });
 }
 
 // =========================================================================
