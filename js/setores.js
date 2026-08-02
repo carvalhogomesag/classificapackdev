@@ -4,7 +4,7 @@
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
  *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
- *      Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 550 metros.
+ *      NOVO: Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 500 metros de raio.
  *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
  *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
  *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
@@ -196,7 +196,7 @@ function desenharBricksNoMapa() {
 
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
 
-                // Círculo Translúcido de Atribuição (Raio limitado a exatamente 550 metros)
+                // Círculo Translúcido de Atribuição (Raio limitado a exatamente 500 metros)
                 const circle = new google.maps.Circle({
                     strokeColor: drv.color,
                     strokeOpacity: 0.6,
@@ -205,7 +205,7 @@ function desenharBricksNoMapa() {
                     fillOpacity: 0.2, // Visual nebuloso ultra-agradável
                     map: dashboardMap,
                     center: coords,
-                    radius: 550
+                    radius: 500 // Ajustado de 550 para 500 metros
                 });
                 dashboardOverlays.push(circle);
 

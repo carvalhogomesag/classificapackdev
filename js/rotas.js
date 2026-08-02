@@ -7,6 +7,7 @@
  *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
  *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
  *      NOVO: Implementa alerta de re-otimização e inserção inteligente direta de pacotes em rotas ativas com indicação visual pulsante (por confirmar).
+ *      MELHORADO: Adapta a resolução de Bricks para centenas e suporta re-atribuição dinâmica inteligente de concelho (Sintra/Mafra).
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
  */
@@ -146,10 +147,23 @@ export function setupVozLogic() {
 // Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
-    const cleanLoc = localidade.toLowerCase();
+    
+    // Remove os parênteses de centenas (ex: "Sintra (000-099)" passa a "sintra") para fins de comparação
+    const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
+    
     if (cleanLoc === cleanFreg) return true;
     if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
     return false;
+}
+
+// Auxiliar para detetar o concelho correspondente ao código postal fornecido
+function obterConcelhoPorCodigoPostal(zip) {
+    if (!zip) return "MAFRA";
+    const cleanPrefix = zip.replace(/\D/g, '').substring(0, 4);
+    if (cleanPrefix === "2705" || cleanPrefix === "2710" || cleanPrefix === "2715" || cleanPrefix === "2725") {
+        return "SINTRA";
+    }
+    return "MAFRA";
 }
 
 // ==========================================
@@ -161,9 +175,15 @@ function resolveBrickForZip(zip, drivers) {
     const match = zip.match(regexZip);
     const normalizedZip = match ? match[0] : zip.trim();
 
+    // Deteta reativamente o concelho com base no código postal
+    const concelho = obterConcelhoPorCodigoPostal(normalizedZip);
+
     let matchedFreguesia = null;
     let matchedLocalidade = null;
-    const concelho = "MAFRA";
+
+    if (!GEOGRAPHY[concelho]) {
+        return { brickId: null, brickName: null };
+    }
 
     // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
@@ -1036,7 +1056,7 @@ function configurarFormatacaoCodigoPostal() {
         const numerosApenas = valor.replace(/\D/g, '');
 
         if (numerosApenas.length <= 4) {
-            offset = numerosApenas;
+            valor = numerosApenas;
         } else {
             // Insere o hífen automaticamente a seguir ao quarto dígito
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
@@ -1077,10 +1097,13 @@ function configurarEscutaCodigoPostalParaLimites() {
             const { brickName } = resolveBrickForZip(valor, window.drivers);
             
             if (inputMorada) {
-                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra
+                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra/Sintra
+                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
+                const nomeConcelhoFormatado = concelhoDetectado.charAt(0) + concelhoDetectado.slice(1).toLowerCase();
+
                 const textoPreenchido = brickName 
-                    ? `${valor} ${brickName}, Mafra, `
-                    : `${valor} Mafra, `;
+                    ? `${valor} ${brickName}, ${nomeConcelhoFormatado}, `
+                    : `${valor} ${nomeConcelhoFormatado}, `;
 
                 inputMorada.value = textoPreenchido;
                 inputMorada.focus();
@@ -1090,11 +1113,12 @@ function configurarEscutaCodigoPostalParaLimites() {
                 inputMorada.setSelectionRange(comprimento, comprimento);
             }
 
-            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho de Mafra
+            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho
             if (autocompleteInstancia) {
-                const centroMafra = { lat: 38.9369, lng: -9.3282 };
-                const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
-                autocompleteInstancia.setBounds(circuloMafra.getBounds());
+                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
+                const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
+                const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
+                autocompleteInstancia.setBounds(circuloConcelho.getBounds());
                 autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa restrição e prioriza por texto
                 console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por texto livre.");
             }
@@ -1343,7 +1367,7 @@ export function setupRotasLogic() {
         btnIniciarRota.addEventListener('click', () => {
             const dataSelecionada = dataRotaInput.value;
             if (!dataSelecionada) {
-                alert("Por favor, selecione uma data para continuar.");
+                alert("Por favor, select uma data para continuar.");
                 return;
             }
             const d = new Date(dataSelecionada);
@@ -1597,4 +1621,3 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         editMoradaObs.select();
     }, 150);
 }
-

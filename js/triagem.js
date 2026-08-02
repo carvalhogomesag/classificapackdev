@@ -5,6 +5,7 @@
  *      NOVO: Deteta automaticamente se o código pertence a Mafra ou Sintra pelo prefixo do código postal.
  *      NOVO: Divide o sumário de leituras em dois blocos claros (Mafra e Sintra) para melhor usabilidade do gestor.
  *      NOVO: Grava as confirmações de triagem diretamente na coleção 'assignments' do Firestore para sincronização em nuvem de imediato.
+ *      MELHORADO: Suporta a lógica de Bricks por centenas, limpando os parênteses ao calcular a localidade capital (catch-all).
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js, ./firebase-init.js (para aceder ao db)
  */
@@ -51,7 +52,10 @@ function obterConcelhoPorCodigoPostal(zip) {
 // Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "").toLowerCase();
-    const cleanLoc = localidade.toLowerCase();
+    
+    // Remove os parênteses de centenas (ex: "Sintra (000-099)" passa a "sintra") para fins de comparação
+    const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
+    
     if (cleanLoc === cleanFreg) return true;
     // Exceções de normalização:
     if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
