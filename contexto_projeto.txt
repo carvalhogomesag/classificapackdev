@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 02/08/2026, 02:48:39
+Gerado em: 02/08/2026, 22:05:45
 
 =========================================
 ARQUIVO: index.html
@@ -10,7 +10,7 @@ ARQUIVO: index.html
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v54, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v57, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -97,14 +97,14 @@ ARQUIVO: index.html
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v54 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v57 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <!-- Botão de Sair de Sessão / Logout para motoristas -->
             <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
                 <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
             </button>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v54</span>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v57</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -422,8 +422,8 @@ ARQUIVO: manifest.json
 ARQUIVO: sw.js
 =========================================
 
-// sw.js (Versão v54)
-const CACHE_NAME = 'classificapack-v54';
+// sw.js (Versão v57)
+const CACHE_NAME = 'classificapack-v57';
 
 const ASSETS = [
   './',
@@ -435,8 +435,8 @@ const ASSETS = [
   'js/motoristas.js',
   'js/setores.js',
   'js/geografia-data.js',
-  'js/geografia-mafra.js',   // NOVO: Adicionado à cache offline-first
-  'js/geografia-sintra.js',  // NOVO: Adicionado à cache offline-first
+  'js/geografia-mafra.js',   // Cache offline-first
+  'js/geografia-sintra.js',  // Cache offline-first
   'js/voz.js',
   'js/triagem.js',
   'js/rotas.js',
@@ -860,17 +860,73 @@ ARQUIVO: js/geografia-data.js
 /**
  * geografia-data.js
  * Faz: Funciona como ponto de entrada central (agregador) para a base geográfica.
- *      Importa as bases de dados de Mafra e Sintra de forma modular e exporta um único objeto GEOGRAPHY.
+ *      Importa as bases de dados de Mafra e Sintra e agrupa dinamicamente CPs por centenas 
+ *      dos últimos 3 dígitos se a localidade contiver múltiplos códigos postais.
  * NÃO faz: Não contém dados rígidos (hardcoded) para manter o ficheiro leve e modular.
  * Depende de: './geografia-mafra.js' e './geografia-sintra.js'
  */
 
-import { MAFRA } from './geografia-mafra.js';
-import { SINTRA } from './geografia-sintra.js';
+import { MAFRA as RAW_MAFRA } from './geografia-mafra.js';
+import { SINTRA as RAW_SINTRA } from './geografia-sintra.js';
+
+/**
+ * Agrupa os códigos postais das localidades de cada freguesia pelas centenas do sufixo de 3 dígitos (ex: 000-099, 100-199).
+ */
+function agruparLocalidadesPorCentenas(rawGeography) {
+    const groupedGeography = {};
+
+    for (const [freguesia, localidades] of Object.entries(rawGeography)) {
+        groupedGeography[freguesia] = {};
+
+        for (const [localidade, cpList] of Object.entries(localidades)) {
+            if (!Array.isArray(cpList) || cpList.length === 0) continue;
+
+            // Se a localidade tiver apenas 1 CP, mantém-na como está para evitar sobrecarga visual
+            if (cpList.length <= 1) {
+                groupedGeography[freguesia][localidade] = cpList;
+            } else {
+                const grupos = {};
+
+                cpList.forEach(cp => {
+                    const partes = cp.split('-');
+                    if (partes.length < 2) return;
+
+                    const sufixoTexto = partes[1].trim();
+                    const sufixoNumero = parseInt(sufixoTexto, 10);
+
+                    if (isNaN(sufixoNumero)) {
+                        const rangeKey = "Outros";
+                        if (!grupos[rangeKey]) grupos[rangeKey] = [];
+                        grupos[rangeKey].push(cp);
+                        return;
+                    }
+
+                    // Determina a centena (ex: 157 -> centena 1 -> 100 a 199)
+                    const centena = Math.floor(sufixoNumero / 100);
+                    const de = centena * 100;
+                    const ate = de + 99;
+
+                    const rangeKey = `${String(de).padStart(3, '0')}-${String(ate).padStart(3, '0')}`;
+
+                    if (!grupos[rangeKey]) grupos[rangeKey] = [];
+                    grupos[rangeKey].push(cp);
+                });
+
+                // Insere cada sub-grupo como uma nova localidade (Brick) independente na árvore
+                for (const [rangeKey, listaCps] of Object.entries(grupos)) {
+                    const nomeNovoBrick = `${localidade} (${rangeKey})`;
+                    groupedGeography[freguesia][nomeNovoBrick] = listaCps;
+                }
+            }
+        }
+    }
+
+    return groupedGeography;
+}
 
 export const GEOGRAPHY = {
-    "MAFRA": MAFRA,
-    "SINTRA": SINTRA
+    "MAFRA": agruparLocalidadesPorCentenas(RAW_MAFRA),
+    "SINTRA": agruparLocalidadesPorCentenas(RAW_SINTRA)
 };
 
 =========================================
@@ -2979,6 +3035,7 @@ ARQUIVO: js/rotas.js
  *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
  *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
  *      NOVO: Implementa alerta de re-otimização e inserção inteligente direta de pacotes em rotas ativas com indicação visual pulsante (por confirmar).
+ *      MELHORADO: Adapta a resolução de Bricks para centenas e suporta re-atribuição dinâmica inteligente de concelho (Sintra/Mafra).
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
  */
@@ -3118,10 +3175,23 @@ export function setupVozLogic() {
 // Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
-    const cleanLoc = localidade.toLowerCase();
+    
+    // Remove os parênteses de centenas (ex: "Sintra (000-099)" passa a "sintra") para fins de comparação
+    const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
+    
     if (cleanLoc === cleanFreg) return true;
     if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
     return false;
+}
+
+// Auxiliar para detetar o concelho correspondente ao código postal fornecido
+function obterConcelhoPorCodigoPostal(zip) {
+    if (!zip) return "MAFRA";
+    const cleanPrefix = zip.replace(/\D/g, '').substring(0, 4);
+    if (cleanPrefix === "2705" || cleanPrefix === "2710" || cleanPrefix === "2715" || cleanPrefix === "2725") {
+        return "SINTRA";
+    }
+    return "MAFRA";
 }
 
 // ==========================================
@@ -3133,9 +3203,15 @@ function resolveBrickForZip(zip, drivers) {
     const match = zip.match(regexZip);
     const normalizedZip = match ? match[0] : zip.trim();
 
+    // Deteta reativamente o concelho com base no código postal
+    const concelho = obterConcelhoPorCodigoPostal(normalizedZip);
+
     let matchedFreguesia = null;
     let matchedLocalidade = null;
-    const concelho = "MAFRA";
+
+    if (!GEOGRAPHY[concelho]) {
+        return { brickId: null, brickName: null };
+    }
 
     // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
@@ -4008,7 +4084,7 @@ function configurarFormatacaoCodigoPostal() {
         const numerosApenas = valor.replace(/\D/g, '');
 
         if (numerosApenas.length <= 4) {
-            offset = numerosApenas;
+            valor = numerosApenas;
         } else {
             // Insere o hífen automaticamente a seguir ao quarto dígito
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
@@ -4049,10 +4125,13 @@ function configurarEscutaCodigoPostalParaLimites() {
             const { brickName } = resolveBrickForZip(valor, window.drivers);
             
             if (inputMorada) {
-                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra
+                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra/Sintra
+                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
+                const nomeConcelhoFormatado = concelhoDetectado.charAt(0) + concelhoDetectado.slice(1).toLowerCase();
+
                 const textoPreenchido = brickName 
-                    ? `${valor} ${brickName}, Mafra, `
-                    : `${valor} Mafra, `;
+                    ? `${valor} ${brickName}, ${nomeConcelhoFormatado}, `
+                    : `${valor} ${nomeConcelhoFormatado}, `;
 
                 inputMorada.value = textoPreenchido;
                 inputMorada.focus();
@@ -4062,11 +4141,12 @@ function configurarEscutaCodigoPostalParaLimites() {
                 inputMorada.setSelectionRange(comprimento, comprimento);
             }
 
-            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho de Mafra
+            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho
             if (autocompleteInstancia) {
-                const centroMafra = { lat: 38.9369, lng: -9.3282 };
-                const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
-                autocompleteInstancia.setBounds(circuloMafra.getBounds());
+                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
+                const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
+                const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
+                autocompleteInstancia.setBounds(circuloConcelho.getBounds());
                 autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa restrição e prioriza por texto
                 console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por texto livre.");
             }
@@ -4315,7 +4395,7 @@ export function setupRotasLogic() {
         btnIniciarRota.addEventListener('click', () => {
             const dataSelecionada = dataRotaInput.value;
             if (!dataSelecionada) {
-                alert("Por favor, selecione uma data para continuar.");
+                alert("Por favor, select uma data para continuar.");
                 return;
             }
             const d = new Date(dataSelecionada);
@@ -4570,8 +4650,6 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     }, 150);
 }
 
-
-
 =========================================
 ARQUIVO: js/setores.js
 =========================================
@@ -4582,10 +4660,13 @@ ARQUIVO: js/setores.js
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
  *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
- *      Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 550 metros.
+ *      NOVO: Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 500 metros de raio.
  *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
  *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
  *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
+ *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
+ *      MELHORADO: Implementa motor de auditoria para aferição de Bricks órfãos e garantia de Saldo Zero de Cobertura.
+ *      CORRIGIDO: Elimina círculos obsoletos (espirais/molas) no mapa e corrige travamento do auditor ("A CALCULAR...") em telemóveis.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
@@ -4758,22 +4839,24 @@ function desenharBricksNoMapa() {
     dashboardOverlays.forEach(overlay => overlay.setMap(null));
     dashboardOverlays = [];
 
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+
     // Mapeamento síncrono e de acordo com o concelho selecionado
-    window.drivers.forEach(drv => {
+    driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
-            if (id.includes('|')) {
+            if (id && typeof id === 'string' && id.includes('|')) {
                 const [freg, loc] = id.split('|');
 
-                // Filtro dinâmico: Verifica se a freguesia do brick pertence ao concelho selecionado
-                // Isto evita que as nuvens de Mafra surjam misturadas com as de Sintra no mapa
-                if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg]) {
-                    return; // Ignora o brick se for de outro concelho
+                // FILTRO DE SEGURANÇA ABSOLUTO: Só desenha se for um Brick válido e atual do concelho selecionado.
+                // Isto ignora imediatamente os Bricks antigos obsoletos e elimina as molas/espirais do mapa!
+                if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
+                    return; 
                 }
 
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
 
-                // Círculo Translúcido de Atribuição (Raio limitado a exatamente 550 metros)
+                // Círculo Translúcido de Atribuição (Raio limitado a exatamente 500 metros)
                 const circle = new google.maps.Circle({
                     strokeColor: drv.color,
                     strokeOpacity: 0.6,
@@ -4782,7 +4865,7 @@ function desenharBricksNoMapa() {
                     fillOpacity: 0.2, // Visual nebuloso ultra-agradável
                     map: dashboardMap,
                     center: coords,
-                    radius: 550
+                    radius: 500
                 });
                 dashboardOverlays.push(circle);
 
@@ -4838,9 +4921,10 @@ export function renderDriversForAttribution() {
 
     listContainer.innerHTML = "";
 
-    // NOVO & MELHORADO (Filtro de Usabilidade): 
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+
     // Mostra apenas os motoristas habilitados a atuar no concelho de operação selecionado no topo.
-    const filteredDrivers = window.drivers.filter(driver => {
+    const filteredDrivers = driversArr.filter(driver => {
         const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
         return concelhos.includes(concelhoAtivo);
     });
@@ -4885,6 +4969,128 @@ export function renderDriversForAttribution() {
     });
 }
 
+// ==========================================
+// AUXILIAR: FORMATAR INTERVALO OU CÓDIGO POSTAL ÚNICO
+// ==========================================
+function formatarIntervaloCPs(cpList) {
+    if (!Array.isArray(cpList) || cpList.length === 0) return "";
+    if (cpList.length === 1) return `(${cpList[0]})`;
+
+    // Ordena os códigos postais para obtermos o menor e o maior limite de forma síncrona
+    const ordenados = [...cpList].sort((a, b) => a.localeCompare(b));
+    const min = ordenados[0];
+    const max = ordenados[ordenados.length - 1];
+
+    return `(${min} a ${max})`;
+}
+
+// =========================================================================
+// COMPUTAÇÃO EM TEMPO REAL: AUDITORIA DE BRICKS NÃO ALOCADOS (SALDO ZERO)
+// =========================================================================
+function atualizarAuditoriaBricks() {
+    const concelho = concelhoAtivo;
+    const elTotal = document.getElementById('stat-total-bricks');
+    const elAlocados = document.getElementById('stat-alocados-bricks');
+    const elSaldo = document.getElementById('stat-saldo-bricks');
+    const elLabelSaldo = document.getElementById('label-saldo-bricks');
+    const elCardSaldo = document.getElementById('card-saldo-bricks');
+    const elBadgeStatus = document.getElementById('badge-saldo-status');
+    const elContainerPendentes = document.getElementById('container-bricks-pendentes');
+    const elListaPendentes = document.getElementById('lista-bricks-pendentes');
+
+    if (!elTotal || !elAlocados || !elSaldo) return;
+
+    // 1. Reúne todos os Bricks geográficos que existem no concelho ativo
+    const todosBricksDoConcelho = [];
+    if (GEOGRAPHY[concelho]) {
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
+            for (const localidade of Object.keys(localidades)) {
+                todosBricksDoConcelho.push(`${freguesia}|${localidade}`);
+            }
+        }
+    }
+
+    // 2. Mapeia quais Bricks já foram efetivamente alocados a motoristas ativos para este concelho
+    const bricksAlocadosSet = new Set();
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+
+    driversArr.forEach(drv => {
+        const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
+        bIds.forEach(id => {
+            if (id && typeof id === 'string' && id.includes('|')) {
+                const [freg, loc] = id.split('|');
+                
+                // CORREÇÃO DE SEGURANÇA CONTRA TYPEERROR: Verifica de forma estritamente segura 
+                // se a freguesia e a localidade existem no concelho ativo antes de ler.
+                if (GEOGRAPHY[concelho] && GEOGRAPHY[concelho][freg] && GEOGRAPHY[concelho][freg][loc]) {
+                    bricksAlocadosSet.add(id);
+                }
+            }
+        });
+    });
+
+    // 3. Determina o resíduo (quais Bricks estão órfãos/sem motorista)
+    const bricksOrfaos = todosBricksDoConcelho.filter(id => !bricksAlocadosSet.has(id));
+
+    const totalCount = todosBricksDoConcelho.length;
+    const alocadosCount = bricksAlocadosSet.size;
+    const saldoCount = bricksOrfaos.length;
+
+    // Injeta os contadores nos cartões estatísticos do ecrã
+    elTotal.textContent = totalCount;
+    elAlocados.textContent = alocadosCount;
+    elSaldo.textContent = saldoCount;
+
+    // 4. Atualiza reativamente a interface de acordo com o saldo
+    if (saldoCount === 0) {
+        // CASO SEGURO: Saldo Zero atingido com sucesso!
+        if (elBadgeStatus) {
+            elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200 animate-none";
+            elBadgeStatus.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Saldo Zero (100% Coberto)</span>`;
+        }
+        if (elCardSaldo) {
+            elCardSaldo.className = "bg-green-50 p-2.5 rounded-xl border border-green-200";
+        }
+        elSaldo.className = "block text-base font-black text-green-600";
+        if (elLabelSaldo) {
+            elLabelSaldo.textContent = "Sem Alocar";
+            elLabelSaldo.className = "text-[9px] font-bold text-green-500 uppercase";
+        }
+        if (elContainerPendentes) elContainerPendentes.classList.add('hidden');
+        if (elListaPendentes) elListaPendentes.innerHTML = "";
+    } else {
+        // CASO DE ALERTA: Existem zonas sem motorista responsável
+        if (elBadgeStatus) {
+            elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-red-50 text-red-700 border-red-200 animate-pulse";
+            elBadgeStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Cobertura Incompleta</span>`;
+        }
+        if (elCardSaldo) {
+            elCardSaldo.className = "bg-red-50 p-2.5 rounded-xl border border-red-200";
+        }
+        elSaldo.className = "block text-base font-black text-red-600";
+        if (elLabelSaldo) {
+            elLabelSaldo.textContent = "Sem Alocar";
+            elLabelSaldo.className = "text-[9px] font-bold text-red-500 uppercase";
+        }
+
+        // Revela a gaveta vermelha de detalhes e popula com os nomes das zonas em falta
+        if (elContainerPendentes) elContainerPendentes.classList.remove('hidden');
+        if (elListaPendentes) {
+            elListaPendentes.innerHTML = "";
+            bricksOrfaos.forEach(id => {
+                const [freg, loc] = id.split('|');
+                const itemDiv = document.createElement('div');
+                itemDiv.className = "flex items-center space-x-1.5 p-1.5 bg-red-50/50 border border-red-100 rounded text-red-700 truncate";
+                itemDiv.innerHTML = `
+                    <i class="fa-solid fa-circle-xmark text-[9px] text-red-400 shrink-0"></i>
+                    <span class="truncate" title="${freg} - ${loc}">${freg} - ${loc}</span>
+                `;
+                elListaPendentes.appendChild(itemDiv);
+            });
+        }
+    }
+}
+
 // =========================================================================
 // DESENHO DA ÁRVORE HIERÁRQUICA E CONTROLO REATIVO DE ATRIBUIÇÃO DE BRICKS
 // =========================================================================
@@ -4895,7 +5101,8 @@ export function renderGeographicTree() {
 
     treeContainer.innerHTML = "";
 
-    const activeDriver = window.drivers.find(d => d.id === motoristaAtivoId);
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+    const activeDriver = driversArr.find(d => d.id === motoristaAtivoId);
 
     // Se nenhum motorista estiver selecionado na lista esquerda, bloqueia a árvore com aviso amigável
     if (!activeDriver) {
@@ -4926,10 +5133,12 @@ export function renderGeographicTree() {
 
     // Mapeia onde está cada localidade para mostrar avisos de exclusividade tátil
     const localidadeParaMotorista = new Map();
-    window.drivers.forEach(drv => {
+    driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
-            localidadeParaMotorista.set(id, drv);
+            if (id && typeof id === 'string') {
+                localidadeParaMotorista.set(id, drv);
+            }
         });
     });
 
@@ -4981,18 +5190,23 @@ export function renderGeographicTree() {
 
             const isAssignedToActive = Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
 
+            // Determina a lista de códigos postais para esta localidade e formata o seu intervalo
+            const cpList = localidadesMap[locName] || [];
+            const cpTexto = formatarIntervaloCPs(cpList);
+
             const label = document.createElement('label');
 
             if (motoristaDono && motoristaDono.id !== activeDriver.id) {
-                // Se a localidade já estiver sob a responsabilidade de outro motorista (Adicionado Cadeado Vermelho, Opacidade de bloqueio e fundo tátil de aviso)
+                // Se a localidade já estiver sob a responsabilidade de outro motorista
                 label.className = "flex items-center justify-between p-2 rounded bg-red-50/20 text-gray-400 cursor-not-allowed select-none text-[11px] border border-red-100/10 opacity-70";
                 label.innerHTML = `
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 truncate pr-2">
                         <i class="fa-solid fa-lock text-red-400 text-[10px] animate-none"></i>
                         <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-3.5 h-3.5 cursor-not-allowed">
-                        <span class="font-bold text-gray-400 line-through">${locName}</span>
+                        <span class="font-bold text-gray-400 line-through truncate">${locName}</span>
+                        <span class="text-[9px] text-gray-400 font-mono font-normal ml-1 shrink-0">${cpTexto}</span>
                     </div>
-                    <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded border flex items-center space-x-1" style="background-color: ${motoristaDono.color}15; color: ${motoristaDono.color}; border-color: ${motoristaDono.color}30">
+                    <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded border flex items-center space-x-1 shrink-0" style="background-color: ${motoristaDono.color}15; color: ${motoristaDono.color}; border-color: ${motoristaDono.color}30">
                         <i class="fa-solid fa-user text-[7px]"></i> <span>Com: ${motoristaDono.name}</span>
                     </span>
                 `;
@@ -5000,13 +5214,14 @@ export function renderGeographicTree() {
                 // Se estiver livre ou já for deste motorista selecionado
                 label.className = "flex items-center justify-between p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 cursor-pointer text-[11px] text-gray-700 transition duration-100";
                 label.innerHTML = `
-                    <div class="flex items-center space-x-2">
+                    <div class="flex items-center space-x-2 truncate pr-2">
                         <input type="checkbox" value="${brickId}" ${isAssignedToActive ? 'checked' : ''} class="brick-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-3.5 h-3.5 cursor-pointer">
-                        <span class="font-bold text-gray-600">${locName}</span>
+                        <span class="font-bold text-gray-600 truncate">${locName}</span>
+                        <span class="text-[9px] text-gray-400 font-mono font-normal ml-1 shrink-0">${cpTexto}</span>
                     </div>
                     ${isAssignedToActive 
-                        ? `<span class="text-[8px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded border border-blue-200">Associado</span>`
-                        : `<span class="text-[8px] bg-green-50 text-green-700 font-extrabold px-1.5 py-0.5 rounded border border-green-200">Livre</span>`
+                        ? `<span class="text-[8px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded border border-blue-200 shrink-0">Associado</span>`
+                        : `<span class="text-[8px] bg-green-50 text-green-700 font-extrabold px-1.5 py-0.5 rounded border border-green-200 shrink-0">Livre</span>`
                     }
                 `;
 
@@ -5075,7 +5290,7 @@ export function renderGeographicTree() {
                     }
                 });
 
-                // Envia a lista atualizada de uma só vez para o Firestore
+                // Envia a lista updated de uma só vez para o Firestore
                 db.collection('drivers').doc(activeDriver.id).update({
                     brickIds: updatedBrickIds
                 }).then(() => {
@@ -5126,7 +5341,7 @@ window.renderizarSetoresUI = () => {
                 // bricks com um motorista não habilitado no novo concelho
                 motoristaAtivoId = null;
 
-                // Recentrabilidade síncrona do mapa
+                // Recenterabilidade síncrona do mapa
                 if (dashboardMap) {
                     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
                     dashboardMap.setCenter(centerCoords);
@@ -5144,6 +5359,9 @@ window.renderizarSetoresUI = () => {
 
     // Renderiza a árvore do concelho ativo reativa (Mafra ou Sintra)
     renderGeographicTree();
+
+    // Executa as contas do painel de auditoria (Saldo Zero) em tempo real
+    atualizarAuditoriaBricks();
 
     // Inicializa e redesenha o mapa de forma síncrona estável
     setTimeout(inicializarMapaBricksDashboard, 150);
@@ -5280,6 +5498,7 @@ ARQUIVO: js/triagem.js
  *      NOVO: Deteta automaticamente se o código pertence a Mafra ou Sintra pelo prefixo do código postal.
  *      NOVO: Divide o sumário de leituras em dois blocos claros (Mafra e Sintra) para melhor usabilidade do gestor.
  *      NOVO: Grava as confirmações de triagem diretamente na coleção 'assignments' do Firestore para sincronização em nuvem de imediato.
+ *      MELHORADO: Suporta a lógica de Bricks por centenas, limpando os parênteses ao calcular a localidade capital (catch-all).
  * NÃO faz: Não gere ecrãs de planeamento ou Jitter do mapa do condutor (rotas.js / maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./voz.js, ./ui.js, ./firebase-init.js (para aceder ao db)
  */
@@ -5326,7 +5545,10 @@ function obterConcelhoPorCodigoPostal(zip) {
 // Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "").toLowerCase();
-    const cleanLoc = localidade.toLowerCase();
+    
+    // Remove os parênteses de centenas (ex: "Sintra (000-099)" passa a "sintra") para fins de comparação
+    const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
+    
     if (cleanLoc === cleanFreg) return true;
     // Exceções de normalização:
     if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
@@ -6548,73 +6770,7 @@ ARQUIVO: partials/setores.html
   setores.html
   Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks (Localidades) aos Motoristas.
        Suporta mapa interativo de distribuição de nuvens de calor e layout em duas colunas paralelas (split-pane) em ecrãs grandes de PC ou Tablet.
-  NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
-  Depende de: Injeção assíncrona pelo main.js no index.html.
--->
-
-<main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
-    
-    <!-- NOVO ELEMENTO VISUAL: MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
-        <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
-            <i class="fa-solid fa-map-location-dot text-blue-600"></i>
-            <span>Visão do Gestor: Distribuição Geográfica de Bricks (Estantes)</span>
-        </h3>
-        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
-            <div id="map-dashboard-bricks" class="w-full h-80 bg-gray-50"></div>
-        </div>
-    </div>
-
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
-        <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
-            <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
-            <span>Painel de Atribuição Direta</span>
-        </h2>
-        <p class="text-xs text-gray-500 leading-relaxed">
-            Selecione um motorista na lista à esquerda (ou topo) e assinale na árvore à direita as localidades que pretende entregar a essa estante de arrumação.
-        </p>
-    </div>
-
-    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet, coluna em Telemóvel) -->
-    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-        
-        <!-- COLUNA ESQUERDA: LISTAGEM E SELEÇÃO DE MOTORISTAS ATIVOS -->
-        <div class="md:col-span-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-            <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
-                <i class="fa-solid fa-users text-blue-500"></i>
-                <span>Passo 1: Escolher Motorista</span>
-            </h3>
-            
-            <div id="lista-atribuicao-motoristas" class="space-y-2 max-h-96 overflow-y-auto pr-1">
-                <!-- Preenchido dinamicamente por setores.js -->
-                <p class="text-xs text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
-            </div>
-        </div>
-
-        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS DE MAFRA -->
-        <div class="md:col-span-8 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-            <div class="flex justify-between items-center">
-                <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
-                    <i class="fa-solid fa-city text-blue-500"></i>
-                    <span>Passo 2: Assinalar Localidades</span>
-                </h3>
-                <span id="label-motorista-selecionado" class="text-[10px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-dashed">
-                    Nenhum Selecionado
-                </span>
-            </div>
-
-            <!-- Contentor dinâmico da árvore preenchido pelo setores.js -->
-            <div id="arvore-bricks-localidades" class="border rounded-lg p-2 max-h-[500px] overflow-y-auto space-y-2 bg-gray-50/50">
-                <p class="text-xs text-gray-400 italic text-center py-8">Por favor, escolha um motorista na lista para carregar os Bricks.</p>
-            </div>
-        </div>
-
-    </div>
-
-</main><!--
-  setores.html
-  Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks (Localidades) aos Motoristas.
-       Suporta mapa interativo de distribuição de nuvens de calor e layout em duas colunas paralelas (split-pane) em ecrãs grandes de PC ou Tablet.
+       NOVO: Inclui o Painel de Auditoria e Cobertura Geográfica (Saldo Zero) para controlo de Bricks não alocados.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -6643,7 +6799,7 @@ ARQUIVO: partials/setores.html
         </div>
     </div>
     
-    <!-- NOVO ELEMENTO VISUAL: MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
+    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
         <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
             <i class="fa-solid fa-map-location-dot text-blue-600"></i>
@@ -6654,6 +6810,46 @@ ARQUIVO: partials/setores.html
         </div>
     </div>
 
+    <!-- NOVO PAINEL: AUDITORIA E BALANÇO DE BRICKS (SALDO ZERO) -->
+    <div id="painel-auditoria-bricks" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+        <div class="flex items-center justify-between">
+            <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
+                <i class="fa-solid fa-scale-balanced text-blue-600"></i>
+                <span>Auditoria de Cobertura: Saldo de Bricks</span>
+            </h3>
+            <span id="badge-saldo-status" class="text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-gray-100 text-gray-600 border-gray-200">
+                A calcular...
+            </span>
+        </div>
+        
+        <div class="grid grid-cols-3 gap-3 text-center">
+            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-150">
+                <span id="stat-total-bricks" class="block text-base font-black text-gray-800">0</span>
+                <span class="text-[9px] font-bold text-gray-400 uppercase">Total Bricks</span>
+            </div>
+            <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50">
+                <span id="stat-alocados-bricks" class="block text-base font-black text-blue-600">0</span>
+                <span class="text-[9px] font-bold text-blue-500 uppercase">Alocados</span>
+            </div>
+            <div id="card-saldo-bricks" class="bg-green-50 p-2.5 rounded-xl border border-green-200 transition-colors">
+                <span id="stat-saldo-bricks" class="block text-base font-black text-green-600">0</span>
+                <span id="label-saldo-bricks" class="text-[9px] font-bold text-green-500 uppercase">Sem Alocar</span>
+            </div>
+        </div>
+
+        <!-- Lista colapsável de Bricks pendentes de dono (Só surge se houver falhas de alocação) -->
+        <div id="container-bricks-pendentes" class="hidden border border-red-100 bg-red-50/20 p-3 rounded-xl space-y-2 animate-fade-in">
+            <span class="block text-[10px] font-black text-red-700 uppercase tracking-wider flex items-center space-x-1">
+                <i class="fa-solid fa-triangle-exclamation"></i>
+                <span>Bricks Órfãos (Sem Motorista)</span>
+            </span>
+            <div id="lista-bricks-pendentes" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto text-[10px] text-gray-600 font-bold pr-1">
+                <!-- Preenchido dinamicamente por setores.js -->
+            </div>
+        </div>
+    </div>
+
+    <!-- EXPLICAÇÃO DO PAINEL -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
         <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
             <i class="fa-solid fa-boxes-stacked text-blue-600"></i>

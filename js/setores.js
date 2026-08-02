@@ -185,6 +185,16 @@ function desenharBricksNoMapa() {
 
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
 
+    // CORRIGIDO: em vez de confiar apenas no zoom fixo definido na inicialização do
+    // mapa (que faz os círculos parecerem muito mais próximos/"embolados" em ecrãs
+    // estreitos como o telemóvel, já que a mesma escala mostra menos área total),
+    // acumulamos os limites geográficos reais de todos os bricks desenhados e, no
+    // final, ajustamos o mapa a esses limites (fitBounds). Isto garante que o nível
+    // de zoom se adapta ao tamanho real do ecrã, mantendo a mesma legibilidade
+    // visual tanto no PC como no telemóvel.
+    const bounds = new google.maps.LatLngBounds();
+    let totalPontosDesenhados = 0;
+
     // Mapeamento síncrono e de acordo com o concelho selecionado
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -199,6 +209,8 @@ function desenharBricksNoMapa() {
                 }
 
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
+                bounds.extend(coords);
+                totalPontosDesenhados++;
 
                 // Círculo Translúcido de Atribuição (Raio limitado a exatamente 500 metros)
                 const circle = new google.maps.Circle({
@@ -254,6 +266,22 @@ function desenharBricksNoMapa() {
             }
         });
     });
+
+    // Ajusta o zoom/centro do mapa aos pontos reais desenhados, em vez de depender
+    // só do zoom fixo definido na criação do mapa. Adapta-se automaticamente ao
+    // tamanho real do ecrã (PC largo vs. telemóvel estreito).
+    if (totalPontosDesenhados > 0) {
+        dashboardMap.fitBounds(bounds);
+
+        // Salvaguarda: se só houver 1-2 bricks muito próximos entre si, o fitBounds
+        // pode aproximar demasiado (zoom excessivo, perdendo contexto geográfico).
+        // Limitamos a um zoom máximo sensato só nesse caso extremo.
+        google.maps.event.addListenerOnce(dashboardMap, 'bounds_changed', function () {
+            if (dashboardMap.getZoom() > 15) {
+                dashboardMap.setZoom(15);
+            }
+        });
+    }
 }
 
 // =========================================================================
