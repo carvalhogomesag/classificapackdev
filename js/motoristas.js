@@ -2,6 +2,7 @@
  * motoristas.js
  * Faz: Gere o registo, edição, eliminação, listagem e coloração dos motoristas ativos, integrando diretamente as gravações no Cloud Firestore.
  *      NOVO: Suporta múltiplos concelhos de atuação (concelhos: ["MAFRA", "SINTRA"]) por motorista e filtragem reativa no ecrã.
+ *      NOVO: Sincroniza automaticamente as checkboxes do formulário de registo com o concelho ativo selecionado no filtro.
  * NÃO faz: Não gere a atribuição geográfica direta de Bricks (atribuídos no painel de Bricks).
  * Depende de: ./firebase-init.js (para aceder ao banco de dados Firestore db)
  */
@@ -124,6 +125,16 @@ window.renderizarMotoristasUI = () => {
         if (!seletor.dataset.listenerAtivo) {
             seletor.addEventListener('change', (e) => {
                 concelhoMotoristasAtivo = e.target.value;
+
+                // MELHORADO: Se o gestor não estiver em edição de um motorista específico, 
+                // sincroniza as checkboxes do formulário de registo para poupar cliques.
+                if (!window.driverSendoEditado) {
+                    const mafraCheck = document.getElementById('concelho-mafra');
+                    const sintraCheck = document.getElementById('concelho-sintra');
+                    if (mafraCheck) mafraCheck.checked = (concelhoMotoristasAtivo === "MAFRA");
+                    if (sintraCheck) sintraCheck.checked = (concelhoMotoristasAtivo === "SINTRA");
+                }
+
                 window.renderizarMotoristasUI();
             });
             seletor.dataset.listenerAtivo = "true";
@@ -196,11 +207,11 @@ window.cancelarEdicaoDriver = () => {
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
-    // Repoem o estado padrão das checkboxes do formulário
+    // MELHORADO: Repoem o estado padrão das checkboxes do formulário com base no filtro ativo no topo
     const mafraCheck = document.getElementById('concelho-mafra');
     const sintraCheck = document.getElementById('concelho-sintra');
-    if (mafraCheck) mafraCheck.checked = true;
-    if (sintraCheck) sintraCheck.checked = false;
+    if (mafraCheck) mafraCheck.checked = (concelhoMotoristasAtivo === "MAFRA");
+    if (sintraCheck) sintraCheck.checked = (concelhoMotoristasAtivo === "SINTRA");
 };
 
 window.deleteDriver = (id) => {

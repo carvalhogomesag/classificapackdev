@@ -6,6 +6,7 @@
  *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
  *      Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 550 metros.
  *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
+ *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
  *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
@@ -258,12 +259,23 @@ export function renderDriversForAttribution() {
     if (!listContainer) return;
 
     listContainer.innerHTML = "";
-    if (window.drivers.length === 0) {
-        listContainer.innerHTML = '<p class="text-xs text-gray-400 italic text-center py-4">Crie motoristas na aba de Motoristas para começar.</p>';
+
+    // NOVO & MELHORADO (Filtro de Usabilidade): 
+    // Mostra apenas os motoristas habilitados a atuar no concelho de operação selecionado no topo.
+    const filteredDrivers = window.drivers.filter(driver => {
+        const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
+        return concelhos.includes(concelhoAtivo);
+    });
+
+    if (filteredDrivers.length === 0) {
+        listContainer.innerHTML = `
+            <p class="text-xs text-gray-400 italic text-center py-6 px-4 bg-gray-50 border border-dashed rounded-lg">
+                Nenhum motorista registado em ${concelhoAtivo.charAt(0) + concelhoAtivo.slice(1).toLowerCase()}.
+            </p>`;
         return;
     }
 
-    window.drivers.forEach(driver => {
+    filteredDrivers.forEach(driver => {
         const brickCount = Array.isArray(driver.brickIds) ? driver.brickIds.length : 0;
         const btn = document.createElement('button');
         btn.type = "button";
@@ -532,6 +544,10 @@ window.renderizarSetoresUI = () => {
                 // Limpa o estado de expansão ao mudar de concelho para evitar árvores inconsistentes
                 freguesiasExpandidas.clear();
 
+                // NOVO & MELHORADO: Limpa o motorista ativo para garantir que não tentamos gerir 
+                // bricks com um motorista não habilitado no novo concelho
+                motoristaAtivoId = null;
+
                 // Recentrabilidade síncrona do mapa
                 if (dashboardMap) {
                     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
@@ -545,7 +561,7 @@ window.renderizarSetoresUI = () => {
         }
     }
 
-    // Sincroniza a listagem de motoristas no painel de atribuição
+    // Sincroniza a listagem de motoristas no painel de atribuição (filtrada dinamicamente)
     renderDriversForAttribution();
 
     // Renderiza a árvore do concelho ativo reativa (Mafra ou Sintra)
