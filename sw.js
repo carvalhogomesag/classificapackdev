@@ -1,5 +1,10 @@
-// sw.js (Versão v58)
-const CACHE_NAME = 'classificapack-v58';
+/**
+ * sw.js
+ * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
+ *      Atualizado para a versão v59 para forçar os navegadores a descarregar as otimizações dos Bricks.
+ */
+
+const CACHE_NAME = 'classificapack-v59';
 
 const ASSETS = [
   './',
@@ -51,6 +56,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // Ignora chamadas externas para recursos em nuvem que requerem rede ativa direta
   if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google') || e.request.url.includes('firebase') || e.request.url.includes('firestore')) {
     return;
   }
