@@ -3,20 +3,20 @@
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e Sintra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
- *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
- *      NOVO: Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 500 metros de raio.
+ *      Desenha e atualiza pins coloridos e leves no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
+ *      NOVO: Otimizado com marcadores vetoriais em formato de pin (removidos círculos pesados de 500m para máximo desempenho).
  *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
  *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
  *      NOVO: Envia as updates dos Bricks em tempo real diretamente para o Firestore.
  *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
  *      MELHORADO: Implementa motor de auditoria para aferição de Bricks órfãos e garantia de Saldo Zero de Cobertura.
- *      CORRIGIDO: Elimina círculos obsoletos (espirais/molas) no mapa e corrige travamento do auditor ("A CALCULAR...") em telemóveis.
- *      CORRIGIDO: Remove loop recursivo de geocodificação em massa que causava crash de memória no browser.
+ *      CORRIGIDO: Elimina espirais/molas sobrepostas e corrige travamento do auditor em telemóveis antigos utilizando desvios de dispersão alargados.
+ *      CORRIGIDO: Utiliza geocodificação higienizada baseada em CPs reais para evitar falhas de endereço no Google Maps.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
 
-import { GEOGRAPHY } from './geografia-data.js';
+import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
 import { saveData } from './storage.js';
 
 // Importa a instância segura do Firestore
@@ -109,7 +109,7 @@ const FREGUESIA_COORDS = {
 };
 
 // ==========================================
-// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
+// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (DISPERSÃO DE RECURSO)
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -119,15 +119,17 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
         return brickCoordsCache[brickId];
     }
 
-    // 2. Fallback síncrono ultra-rápido (centroide de freguesia com desvio inteligente) para evitar lag
+    // 2. Fallback síncrono com dispersão visual melhorada para evitar sobreposição em telemóveis
     const defaultCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9376, lng: -9.3276 };
     const base = FREGUESIA_COORDS[freguesia] || defaultCoords;
     let hash = 0;
     for (let i = 0; i < localidade.length; i++) {
         hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
     }
-    const latOffset = ((hash % 100) / 10000) - 0.005;
-    const lngOffset = (((hash >> 8) % 100) / 10000) - 0.005;
+    
+    // Alargámos o divisor de 10000 para 4000 para espalhar os pins de recurso de forma mais visível
+    const latOffset = (((hash % 100) - 50) / 4000);
+    const lngOffset = ((((hash >> 8) % 100) - 50) / 4000);
 
     return {
         lat: base.lat + latOffset,
@@ -140,17 +142,18 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 // ==========================================
 function geocodificarBrickSobProcura(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
-    if (brickCoordsCache[brickId]) return; // Evita gastos se já estiver na cache
+    if (brickCoordsCache[brickId]) return; // Evita processamento redundante se já estiver na cache
 
     if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
         const geocoder = new google.maps.Geocoder();
-        const cleanFregName = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "");
-        const concelhoName = concelhoAtivo === "SINTRA" ? "Sintra" : "Mafra";
         
-        // CORRIGIDO: Limpa os parênteses (ex: "Algueirão (000-099)" passa a "Algueirão") 
-        // antes de enviar para o Google, para que a pesquisa não falhe.
-        const cleanLocalidade = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "");
-        const queryAddress = `${cleanLocalidade}, ${cleanFregName}, ${concelhoName}, Portugal`;
+        // Obtém a lista real de CPs para esta localidade a partir da base estruturada de GEOGRAPHY
+        const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freguesia]) 
+            ? GEOGRAPHY[concelhoAtivo][freguesia][localidade] || [] 
+            : [];
+            
+        // Constrói o endereço de pesquisa limpo, formatado com o CP representante (ex: "2705-100 Colares")
+        const queryAddress = obterEnderecoHigienizado(localidade, cpList, freguesia, concelhoAtivo);
 
         geocoder.geocode({ address: queryAddress }, (results, status) => {
             if (status === "OK" && results[0]) {
@@ -212,7 +215,7 @@ function inicializarMapaBricksDashboard() {
 }
 
 // ==========================================
-// DESENHAR NUVENS DE COR DE CADA MOTORISTA NO MAPA GERAL
+// DESENHAR OS PINS GEOGRÁFICOS DE CADA MOTORISTA NO MAPA GERAL
 // ==========================================
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
@@ -239,7 +242,6 @@ function desenharBricksNoMapa() {
                 const [freg, loc] = id.split('|');
 
                 // FILTRO DE SEGURANÇA ABSOLUTO: Só desenha se for um Brick válido e atual do concelho selecionado.
-                // Isto ignora imediatamente os Bricks antigos obsoletos e elimina as molas/espirais do mapa!
                 if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
                     return; 
                 }
@@ -248,21 +250,28 @@ function desenharBricksNoMapa() {
                 bounds.extend(coords);
                 totalPontosDesenhados++;
 
-                // Círculo Translúcido de Atribuição (Raio limitado a exatamente 500 metros)
-                const circle = new google.maps.Circle({
-                    strokeColor: drv.color,
-                    strokeOpacity: 0.6,
-                    strokeWeight: 1,
-                    fillColor: drv.color,
-                    fillOpacity: 0.2, // Visual nebuloso ultra-agradável
-                    map: dashboardMap,
-                    center: coords,
-                    radius: 500
-                });
-                dashboardOverlays.push(circle);
+                // SVG Path nativo para desenhar um Pin Geográfico leve, colorido e perfeito
+                const pinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
 
-                // Ouvinte de passagem de rato (Hover) sobre o círculo para mostrar balão explicativo instantâneo
-                circle.addListener('mouseover', () => {
+                // Criamos o marcador com o pin colorido em vetor para desempenho imediato
+                const marker = new google.maps.Marker({
+                    position: coords,
+                    map: dashboardMap,
+                    icon: {
+                        path: pinSvgPath,
+                        fillColor: drv.color,
+                        fillOpacity: 1.0,
+                        strokeWeight: 1,
+                        strokeColor: "#FFFFFF",
+                        scale: 1.2,
+                        anchor: new google.maps.Point(12, 22)
+                    },
+                    title: `${freg} - ${loc} (${drv.name})`
+                });
+                dashboardOverlays.push(marker);
+
+                // Ouvinte de passagem de rato (Hover) diretamente no marcador de desempenho
+                marker.addListener('mouseover', () => {
                     if (dashboardInfoWindow) {
                         dashboardInfoWindow.setContent(`
                             <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 2px 4px; line-height: 1.4;">
@@ -274,31 +283,15 @@ function desenharBricksNoMapa() {
                             </div>
                         `);
                         dashboardInfoWindow.setPosition(coords);
-                        dashboardInfoWindow.open(dashboardMap);
+                        dashboardInfoWindow.open(dashboardMap, marker);
                     }
                 });
 
-                circle.addListener('mouseout', () => {
+                marker.addListener('mouseout', () => {
                     if (dashboardInfoWindow) {
                         dashboardInfoWindow.close();
                     }
                 });
-
-                // Pequeno ponto de ancoragem no centro da nuvem
-                const marker = new google.maps.Marker({
-                    position: coords,
-                    map: dashboardMap,
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 4,
-                        fillColor: drv.color,
-                        fillOpacity: 0.9,
-                        strokeWeight: 1,
-                        strokeColor: "#FFFFFF"
-                    },
-                    title: `${freg} - ${loc} (${drv.name})`
-                });
-                dashboardOverlays.push(marker);
             }
         });
     });
@@ -639,7 +632,7 @@ export function renderGeographicTree() {
                     if (e.target.checked) {
                         updatedBrickIds.push(brickId);
                         
-                        // Geocodifica sob procura apenas a localidade interada, evitando sobrecarga
+                        // Geocodifica sob procura apenas a localidade interagida, evitando sobrecarga
                         geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
                         updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);

@@ -65,6 +65,30 @@ function agruparLocalidadesPorCentenas(rawGeography) {
     return groupedGeography;
 }
 
+/**
+ * Constrói um endereço livre de parênteses e formatado com o primeiro CP real do Brick.
+ * Formato gerado: "2705-100 Colares, Sintra, Portugal" (altamente compreendido pelo Google).
+ * 
+ * @param {string} nomeBrick - O nome do Brick (ex: "Colares (100-199)")
+ * @param {Array<string>} listaCps - Lista de CPs associados a este Brick
+ * @param {string} freguesia - Nome da freguesia ativa
+ * @param {string} concelho - Nome do concelho ativo (Sintra ou Mafra)
+ * @returns {string} Endereço higienizado pronto para pesquisa
+ */
+export function obterEnderecoHigienizado(nomeBrick, listaCps, freguesia, concelho) {
+    // Remove parênteses e intervalos de texto do nome (ex: "Colares (100-199)" -> "Colares")
+    const localidadeLimpa = nomeBrick.replace(/\s*\(.*?\)\s*/g, '').trim();
+
+    // Se tivermos códigos postais reais na lista, utilizamos o primeiro como representante preciso
+    if (Array.isArray(listaCps) && listaCps.length > 0) {
+        const cpRepresentante = listaCps[0];
+        return `${cpRepresentante} ${localidadeLimpa}, ${concelho}, Portugal`;
+    }
+
+    // Fallback caso a lista de CPs esteja temporariamente vazia
+    return `${localidadeLimpa}, ${freguesia}, ${concelho}, Portugal`;
+}
+
 export const GEOGRAPHY = {
     "MAFRA": agruparLocalidadesPorCentenas(RAW_MAFRA),
     "SINTRA": agruparLocalidadesPorCentenas(RAW_SINTRA)

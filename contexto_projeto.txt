@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 02/08/2026, 22:05:45
+Gerado em: 03/08/2026, 20:28:39
 
 =========================================
 ARQUIVO: index.html
@@ -10,7 +10,7 @@ ARQUIVO: index.html
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v57, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v58, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -26,7 +26,7 @@ ARQUIVO: index.html
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Ícones simples -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link class="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Tesseract.js para processamento OCR local na câmara do telemóvel -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -97,14 +97,14 @@ ARQUIVO: index.html
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v57 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v58 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <!-- Botão de Sair de Sessão / Logout para motoristas -->
             <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
                 <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
             </button>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v57</span>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v58</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -422,8 +422,8 @@ ARQUIVO: manifest.json
 ARQUIVO: sw.js
 =========================================
 
-// sw.js (Versão v57)
-const CACHE_NAME = 'classificapack-v57';
+// sw.js (Versão v58)
+const CACHE_NAME = 'classificapack-v58';
 
 const ASSETS = [
   './',
@@ -4663,10 +4663,11 @@ ARQUIVO: js/setores.js
  *      NOVO: Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 500 metros de raio.
  *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
  *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
- *      NOVO: Envia as atualizações dos Bricks em tempo real diretamente para o Firestore.
+ *      NOVO: Envia as updates dos Bricks em tempo real diretamente para o Firestore.
  *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
  *      MELHORADO: Implementa motor de auditoria para aferição de Bricks órfãos e garantia de Saldo Zero de Cobertura.
  *      CORRIGIDO: Elimina círculos obsoletos (espirais/molas) no mapa e corrige travamento do auditor ("A CALCULAR...") em telemóveis.
+ *      CORRIGIDO: Remove loop recursivo de geocodificação em massa que causava crash de memória no browser.
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
@@ -4709,6 +4710,28 @@ function salvarCacheCoordenadas() {
         localStorage.setItem('cp_brick_coords', JSON.stringify(brickCoordsCache));
     } catch (e) {
         console.warn("[PWA] Erro ao persistir cache local de coordenadas de Bricks:", e);
+    }
+}
+
+// ==========================================
+// SINCRONIZAÇÃO DA CACHE PARTILHADA DE COORDENADAS (FIRESTORE)
+// ==========================================
+let cacheFirestoreSincronizada = false;
+
+async function carregarCacheCoordenadasFirestore() {
+    if (cacheFirestoreSincronizada) return;
+    try {
+        const snapshot = await db.collection('brickCoordinates').get();
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
+                brickCoordsCache[doc.id] = { lat: data.lat, lng: data.lng };
+            }
+        });
+        salvarCacheCoordenadas();
+        cacheFirestoreSincronizada = true;
+    } catch (e) {
+        console.warn("[PWA] Não foi possível sincronizar a cache partilhada de coordenadas de Bricks:", e);
     }
 }
 
@@ -4779,16 +4802,33 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
         const geocoder = new google.maps.Geocoder();
         const cleanFregName = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "");
         const concelhoName = concelhoAtivo === "SINTRA" ? "Sintra" : "Mafra";
-        const queryAddress = `${localidade}, ${cleanFregName}, ${concelhoName}, Portugal`;
+        
+        // CORRIGIDO: Limpa os parênteses (ex: "Algueirão (000-099)" passa a "Algueirão") 
+        // antes de enviar para o Google, para que a pesquisa não falhe.
+        const cleanLocalidade = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "");
+        const queryAddress = `${cleanLocalidade}, ${cleanFregName}, ${concelhoName}, Portugal`;
 
         geocoder.geocode({ address: queryAddress }, (results, status) => {
             if (status === "OK" && results[0]) {
                 const loc = results[0].geometry.location;
-                brickCoordsCache[brickId] = { lat: loc.lat(), lng: loc.lng() };
+                const coordsResolvidas = { lat: loc.lat(), lng: loc.lng() };
+                brickCoordsCache[brickId] = coordsResolvidas;
                 salvarCacheCoordenadas();
 
-                // Redesenha reativamente o mapa apenas após o sucesso, movendo o circulo para o local real
+                // Partilha a coordenada resolvida com todos os outros dispositivos via Firestore
+                db.collection('brickCoordinates').doc(brickId).set(coordsResolvidas).catch((err) => {
+                    console.warn("[PWA] Falha ao partilhar coordenada de Brick via Firestore:", err);
+                });
+
+                // Redesenha o mapa de forma segura
                 desenharBricksNoMapa();
+            } else {
+                // EVITA LOOP INFINITO: Se falhar ou não encontrar resultados, guarda temporariamente
+                // o fallback padrão para que o sistema saiba que "já tentou" este Brick e não repita o pedido.
+                console.warn(`[PWA] Não foi possível geocodificar "${queryAddress}". Caching fallback.`);
+                const fallbackCoords = obterCoordenadaPrecisaBrick(freguesia, localidade);
+                brickCoordsCache[brickId] = fallbackCoords;
+                salvarCacheCoordenadas();
             }
         });
     }
@@ -4816,6 +4856,9 @@ function inicializarMapaBricksDashboard() {
         dashboardInfoWindow = new google.maps.InfoWindow({
             disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
         });
+
+        // Sincroniza a cache partilhada de coordenadas (Firestore) uma única vez por sessão
+        carregarCacheCoordenadasFirestore().then(() => desenharBricksNoMapa());
     } else {
         dashboardMap.setCenter(centerCoords);
         google.maps.event.trigger(dashboardMap, 'resize');
@@ -4841,6 +4884,9 @@ function desenharBricksNoMapa() {
 
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
 
+    const bounds = new google.maps.LatLngBounds();
+    let totalPontosDesenhados = 0;
+
     // Mapeamento síncrono e de acordo com o concelho selecionado
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -4855,6 +4901,8 @@ function desenharBricksNoMapa() {
                 }
 
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
+                bounds.extend(coords);
+                totalPontosDesenhados++;
 
                 // Círculo Translúcido de Atribuição (Raio limitado a exatamente 500 metros)
                 const circle = new google.maps.Circle({
@@ -4910,6 +4958,17 @@ function desenharBricksNoMapa() {
             }
         });
     });
+
+    // Ajusta o zoom do mapa apenas se houver pontos válidos, adaptando-se a qualquer ecrã
+    if (totalPontosDesenhados > 0) {
+        dashboardMap.fitBounds(bounds);
+
+        google.maps.event.addListenerOnce(dashboardMap, 'bounds_changed', function () {
+            if (dashboardMap.getZoom() > 15) {
+                dashboardMap.setZoom(15);
+            }
+        });
+    }
 }
 
 // =========================================================================
