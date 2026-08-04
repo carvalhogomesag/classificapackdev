@@ -328,19 +328,13 @@ export async function processarAdicaoPorPostal() {
                 // Define como novo por confirmar (ativa a bolinha laranja saltitante)
                 novaMorada.isNewUnconfirmed = true;
 
+                // CORREÇÃO: Insere como último automaticamente e não abre o modal de sequência logo no arranque
                 window.rotaOtimizada.push(novaMorada);
 
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
                 renderizarItinerarioOtimizado();
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-
-                const novoIndex = window.rotaOtimizada.length - 1;
-                setTimeout(() => {
-                    if (typeof window.abrirModalAlterarSequencia === 'function') {
-                        window.abrirModalAlterarSequencia(novoIndex, novaMorada);
-                    }
-                }, 400);
 
             } else {
                 renderMoradasAdicionadas();
@@ -397,7 +391,6 @@ export function renderMoradasAdicionadas() {
         
         item.querySelector('.btn-edit-morada').onclick = () => abrirModalEdicaoParagem(morada, false);
         
-        // NOVO: Adicionado aviso de confirmação antes de excluir no planeamento
         item.querySelector('.btn-del-morada').onclick = () => {
             const confirmar = confirm(`Tem a certeza que deseja excluir esta entrega no planeamento?\nMorada: ${morada.address}`);
             if (!confirmar) return;
@@ -564,7 +557,7 @@ export function renderizarItinerarioOtimizado() {
         const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
         if (isNewUnconfirmed) {
-            // Card de destaque Laranja Pulsante para nova entrega
+            // Fica com contorno laranja em pulse
             item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-orange-500 bg-orange-50/70 shadow-md animate-pulse ring-4 ring-orange-200";
         } else if (isLastNavigated) {
             if (isPriority) {
@@ -583,18 +576,25 @@ export function renderizarItinerarioOtimizado() {
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
+        // CORREÇÃO: Bolinha de contagem fica laranja e saltitante (animate-bounce) se não confirmada. 
+        // Adicionada a classe cursor-pointer para facilitar o clique.
+        const bolinhaHtml = isNewUnconfirmed 
+            ? `<span class="btn-index-badge w-5 h-5 rounded-full bg-orange-500 text-white animate-bounce font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer" title="Clique para ordenar">
+                ${index + 1}
+               </span>`
+            : `<span class="btn-index-badge w-5 h-5 rounded-full ${statusColor} text-white font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
+                ${index + 1}
+               </span>`;
+
         item.innerHTML = `
             <div class="flex items-center justify-between space-x-2">
                 <div class="flex-1 truncate">
                     <div class="flex items-center space-x-2 flex-wrap gap-1">
-                        <!-- Bolinha de contagem. Fica laranja e a saltar (animate-bounce) se não confirmada -->
-                        <span class="w-5 h-5 rounded-full ${isNewUnconfirmed ? 'bg-orange-500 text-white animate-bounce' : statusColor + ' text-white'} font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
-                            ${index + 1}
-                        </span>
+                        ${bolinhaHtml}
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
-                        ${isNewUnconfirmed ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
+                        ${isNewUnconfirmed ? `<span class="btn-confirm-seq bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse cursor-pointer"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
                         ${isLastNavigated && !isNewUnconfirmed ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                         
@@ -643,6 +643,24 @@ export function renderizarItinerarioOtimizado() {
         };
 
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
+
+        // CORREÇÃO: Liga o clique na bolinha laranja ou na etiqueta "Novo" para abrir o modal de ordenação
+        if (isNewUnconfirmed) {
+            const btnIndex = item.querySelector('.btn-index-badge');
+            if (btnIndex) {
+                btnIndex.onclick = (e) => {
+                    e.stopPropagation();
+                    window.abrirModalAlterarSequencia(index, paragem);
+                };
+            }
+            const btnConfirmSeq = item.querySelector('.btn-confirm-seq');
+            if (btnConfirmSeq) {
+                btnConfirmSeq.onclick = (e) => {
+                    e.stopPropagation();
+                    window.abrirModalAlterarSequencia(index, paragem);
+                };
+            }
+        }
 
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
@@ -922,8 +940,15 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         const novoIndex = novaPos - 1;
 
-        // Mantém a flag 'isNewUnconfirmed' como true para manter o estado laranja saltitante ativo
         const wasUnconfirmed = !!paragem.isNewUnconfirmed;
+
+        // Limpa o estado pendente aqui (muda a cor do pin para normal e para de saltar)
+        paragem.isNewUnconfirmed = false;
+
+        const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
+        if (originalPre) {
+            originalPre.isNewUnconfirmed = false;
+        }
 
         if (indexAtual !== novoIndex) {
             const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
@@ -947,11 +972,11 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         modal.classList.add('hidden');
 
-        // Se o pacote for novo, abre automaticamente o modal de detalhes mantendo o saltitante
+        // Abre o modal de observações logo a seguir, após a bolinha já ter mudado de cor
         if (wasUnconfirmed) {
             setTimeout(() => {
                 abrirModalEdicaoParagem(paragem, true);
-            }, 300);
+            }, 350);
         }
     };
 
@@ -1217,7 +1242,6 @@ function configurarBotoesRapidosModal() {
             if (origemSelecionada === origem) {
                 origemSelecionada = "";
             } else {
-                origemSelecionada = Math.floor;
                 origemSelecionada = origem;
             }
             
