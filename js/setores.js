@@ -4,14 +4,8 @@
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
  *      Desenha e atualiza pins coloridos e leves no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
- *      NOVO: Otimizado com marcadores vetoriais em formato de pin (removidos círculos pesados de 500m para máximo desempenho).
- *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
- *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
- *      NOVO: Envia as updates dos Bricks em tempo real diretamente para o Firestore.
- *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
- *      MELHORADO: Implementa motor de auditoria para aferição de Bricks órfãos e garantia de Saldo Zero de Cobertura.
- *      CORRIGIDO: Elimina espirais/molas sobrepostas e corrige travamento do auditor em telemóveis antigos utilizando desvios de dispersão alargados.
- *      CORRIGIDO: Utiliza geocodificação higienizada baseada em CPs reais para evitar falhas de endereço no Google Maps.
+ *      NOVO: Mapeamento de IDs normalizado (Case-Insensitive) para corrigir falhas de leitura de Bricks já atribuídos.
+ *      NOVO: Mensagem de confirmação tátil antes de atribuir ou retirar qualquer Brick (individual ou em lote).
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
@@ -19,7 +13,7 @@
 import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
 import { saveData } from './storage.js';
 
-// Importa a instância segura do Firestore
+// Importa a instância ativa do Firestore
 import { db } from './firebase-init.js';
 
 // ID do motorista que está atualmente selecionado na interface para atribuição
@@ -55,6 +49,15 @@ function salvarCacheCoordenadas() {
     } catch (e) {
         console.warn("[PWA] Erro ao persistir cache local de coordenadas de Bricks:", e);
     }
+}
+
+// =========================================================================
+// AUXILIAR DE COMPATIBILIDADE E ROBUSTEZ: NORMALIZADOR DE IDS (CASE-INSENSITIVE)
+// =========================================================================
+function normalizarBrickId(id) {
+    if (!id || typeof id !== 'string') return "";
+    // Limpa espaços extras e força maiúsculas para que "Sintra" e "SINTRA" coincidam 100%
+    return id.toUpperCase().trim();
 }
 
 // ==========================================
@@ -114,20 +117,17 @@ const FREGUESIA_COORDS = {
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
 
-    // 1. Devolve instantaneamente se já estiver na cache local do dispositivo
     if (brickCoordsCache[brickId]) {
         return brickCoordsCache[brickId];
     }
 
-    // 2. Fallback síncrono com dispersão visual melhorada para evitar sobreposição em telemóveis
     const defaultCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9376, lng: -9.3276 };
-    const base = FREGUESIA_COORDS[freguesia] || defaultCoords;
+    const base = FREGUESIA_COORDS[normalizarBrickId(freguesia)] || FREGUESIA_COORDS[freguesia] || defaultCoords;
     let hash = 0;
     for (let i = 0; i < localidade.length; i++) {
         hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
     }
     
-    // Alargámos o divisor de 10000 para 4000 para espalhar os pins de recurso de forma mais visível
     const latOffset = (((hash % 100) - 50) / 4000);
     const lngOffset = ((((hash >> 8) % 100) - 50) / 4000);
 
@@ -142,17 +142,15 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 // ==========================================
 function geocodificarBrickSobProcura(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
-    if (brickCoordsCache[brickId]) return; // Evita processamento redundante se já estiver na cache
+    if (brickCoordsCache[brickId]) return;
 
     if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
         const geocoder = new google.maps.Geocoder();
         
-        // Obtém a lista real de CPs para esta localidade a partir da base estruturada de GEOGRAPHY
         const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freguesia]) 
             ? GEOGRAPHY[concelhoAtivo][freguesia][localidade] || [] 
             : [];
             
-        // Constrói o endereço de pesquisa limpo, formatado com o CP representante (ex: "2705-100 Colares")
         const queryAddress = obterEnderecoHigienizado(localidade, cpList, freguesia, concelhoAtivo);
 
         geocoder.geocode({ address: queryAddress }, (results, status) => {
@@ -162,16 +160,12 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
                 brickCoordsCache[brickId] = coordsResolvidas;
                 salvarCacheCoordenadas();
 
-                // Partilha a coordenada resolvida com todos os outros dispositivos via Firestore
                 db.collection('brickCoordinates').doc(brickId).set(coordsResolvidas).catch((err) => {
                     console.warn("[PWA] Falha ao partilhar coordenada de Brick via Firestore:", err);
                 });
 
-                // Redesenha o mapa de forma segura
                 desenharBricksNoMapa();
             } else {
-                // EVITA LOOP INFINITO: Se falhar ou não encontrar resultados, guarda temporariamente
-                // o fallback padrão para que o sistema saiba que "já tentou" este Brick e não repita o pedido.
                 console.warn(`[PWA] Não foi possível geocodificar "${queryAddress}". Caching fallback.`);
                 const fallbackCoords = obterCoordenadaPrecisaBrick(freguesia, localidade);
                 brickCoordsCache[brickId] = fallbackCoords;
@@ -199,12 +193,10 @@ function inicializarMapaBricksDashboard() {
             fullscreenControl: false
         });
 
-        // Inicializa o balão partilhado de Hover
         dashboardInfoWindow = new google.maps.InfoWindow({
-            disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
+            disableAutoPan: true
         });
 
-        // Sincroniza a cache partilhada de coordenadas (Firestore) uma única vez por sessão
         carregarCacheCoordenadasFirestore().then(() => desenharBricksNoMapa());
     } else {
         dashboardMap.setCenter(centerCoords);
@@ -220,12 +212,10 @@ function inicializarMapaBricksDashboard() {
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
 
-    // Fecha o balão se estiver aberto para evitar órfãos em re-desenhos
     if (dashboardInfoWindow) {
         dashboardInfoWindow.close();
     }
 
-    // Limpa desenhos e marcas antigas do mapa de forma síncrona
     dashboardOverlays.forEach(overlay => overlay.setMap(null));
     dashboardOverlays = [];
 
@@ -234,14 +224,12 @@ function desenharBricksNoMapa() {
     const bounds = new google.maps.LatLngBounds();
     let totalPontosDesenhados = 0;
 
-    // Mapeamento síncrono e de acordo com o concelho selecionado
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
             if (id && typeof id === 'string' && id.includes('|')) {
                 const [freg, loc] = id.split('|');
 
-                // FILTRO DE SEGURANÇA ABSOLUTO: Só desenha se for um Brick válido e atual do concelho selecionado.
                 if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
                     return; 
                 }
@@ -250,10 +238,8 @@ function desenharBricksNoMapa() {
                 bounds.extend(coords);
                 totalPontosDesenhados++;
 
-                // SVG Path nativo para desenhar um Pin Geográfico leve, colorido e perfeito
                 const pinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
 
-                // Criamos o marcador com o pin colorido em vetor para desempenho imediato
                 const marker = new google.maps.Marker({
                     position: coords,
                     map: dashboardMap,
@@ -270,7 +256,6 @@ function desenharBricksNoMapa() {
                 });
                 dashboardOverlays.push(marker);
 
-                // Ouvinte de passagem de rato (Hover) diretamente no marcador de desempenho
                 marker.addListener('mouseover', () => {
                     if (dashboardInfoWindow) {
                         dashboardInfoWindow.setContent(`
@@ -296,7 +281,6 @@ function desenharBricksNoMapa() {
         });
     });
 
-    // Ajusta o zoom do mapa apenas se houver pontos válidos, adaptando-se a qualquer ecrã
     if (totalPontosDesenhados > 0) {
         dashboardMap.fitBounds(bounds);
 
@@ -319,7 +303,6 @@ export function renderDriversForAttribution() {
 
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
 
-    // Mostra apenas os motoristas habilitados a atuar no concelho de operação selecionado no topo.
     const filteredDrivers = driversArr.filter(driver => {
         const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
         return concelhos.includes(concelhoAtivo);
@@ -338,7 +321,6 @@ export function renderDriversForAttribution() {
         const btn = document.createElement('button');
         btn.type = "button";
         
-        // Estilo visual destacado se for o motorista atualmente ativo
         if (motoristaAtivoId === driver.id) {
             btn.className = "w-full flex items-center justify-between p-3 rounded-lg border-2 text-left bg-blue-50 border-blue-500 shadow-xs transition duration-150";
         } else {
@@ -357,8 +339,8 @@ export function renderDriversForAttribution() {
 
         btn.addEventListener('click', () => {
             motoristaAtivoId = driver.id;
-            renderDriversForAttribution(); // Atualiza destaque
-            window.renderizarSetoresUI(); // Atualiza a árvore para as caixas deste motorista
+            renderDriversForAttribution();
+            window.renderizarSetoresUI();
         });
 
         listContainer.appendChild(btn);
@@ -372,7 +354,6 @@ function formatarIntervaloCPs(cpList) {
     if (!Array.isArray(cpList) || cpList.length === 0) return "";
     if (cpList.length === 1) return `(${cpList[0]})`;
 
-    // Ordena os códigos postais para obtermos o menor e o maior limite de forma síncrona
     const ordenados = [...cpList].sort((a, b) => a.localeCompare(b));
     const min = ordenados[0];
     const max = ordenados[ordenados.length - 1];
@@ -396,7 +377,6 @@ function atualizarAuditoriaBricks() {
 
     if (!elTotal || !elAlocados || !elSaldo) return;
 
-    // 1. Reúne todos os Bricks geográficos que existem no concelho ativo
     const todosBricksDoConcelho = [];
     if (GEOGRAPHY[concelho]) {
         for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
@@ -406,7 +386,6 @@ function atualizarAuditoriaBricks() {
         }
     }
 
-    // 2. Mapeia quais Bricks já foram efetivamente alocados a motoristas ativos para este concelho
     const bricksAlocadosSet = new Set();
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
 
@@ -416,30 +395,25 @@ function atualizarAuditoriaBricks() {
             if (id && typeof id === 'string' && id.includes('|')) {
                 const [freg, loc] = id.split('|');
                 
-                // CORREÇÃO DE SEGURANÇA CONTRA TYPEERROR: Verifica de forma estritamente segura 
-                // se a freguesia e a localidade existem no concelho ativo antes de ler.
+                // Normaliza a validação contra o concelho ativo para máxima robustez
                 if (GEOGRAPHY[concelho] && GEOGRAPHY[concelho][freg] && GEOGRAPHY[concelho][freg][loc]) {
-                    bricksAlocadosSet.add(id);
+                    bricksAlocadosSet.add(normalizarBrickId(id));
                 }
             }
         });
     });
 
-    // 3. Determina o resíduo (quais Bricks estão órfãos/sem motorista)
-    const bricksOrfaos = todosBricksDoConcelho.filter(id => !bricksAlocadosSet.has(id));
+    const bricksOrfaos = todosBricksDoConcelho.filter(id => !bricksAlocadosSet.has(normalizarBrickId(id)));
 
     const totalCount = todosBricksDoConcelho.length;
     const alocadosCount = bricksAlocadosSet.size;
     const saldoCount = bricksOrfaos.length;
 
-    // Injeta os contadores nos cartões estatísticos do ecrã
     elTotal.textContent = totalCount;
     elAlocados.textContent = alocadosCount;
     elSaldo.textContent = saldoCount;
 
-    // 4. Atualiza reativamente a interface de acordo com o saldo
     if (saldoCount === 0) {
-        // CASO SEGURO: Saldo Zero atingido com sucesso!
         if (elBadgeStatus) {
             elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200 animate-none";
             elBadgeStatus.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Saldo Zero (100% Coberto)</span>`;
@@ -455,7 +429,6 @@ function atualizarAuditoriaBricks() {
         if (elContainerPendentes) elContainerPendentes.classList.add('hidden');
         if (elListaPendentes) elListaPendentes.innerHTML = "";
     } else {
-        // CASO DE ALERTA: Existem zonas sem motorista responsável
         if (elBadgeStatus) {
             elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-red-50 text-red-700 border-red-200 animate-pulse";
             elBadgeStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Cobertura Incompleta</span>`;
@@ -469,7 +442,6 @@ function atualizarAuditoriaBricks() {
             elLabelSaldo.className = "text-[9px] font-bold text-red-500 uppercase";
         }
 
-        // Revela a gaveta vermelha de detalhes e popula com os nomes das zonas em falta
         if (elContainerPendentes) elContainerPendentes.classList.remove('hidden');
         if (elListaPendentes) {
             elListaPendentes.innerHTML = "";
@@ -500,7 +472,6 @@ export function renderGeographicTree() {
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
     const activeDriver = driversArr.find(d => d.id === motoristaAtivoId);
 
-    // Se nenhum motorista estiver selecionado na lista esquerda, bloqueia a árvore com aviso amigável
     if (!activeDriver) {
         labelSelected.className = "text-[10px] font-black uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded border border-red-200";
         labelSelected.textContent = "Nenhum Selecionado";
@@ -513,13 +484,11 @@ export function renderGeographicTree() {
         return;
     }
 
-    // Identifica o motorista ativo e mostra-o no topo do painel
     labelSelected.className = "text-[10px] font-black uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200";
     labelSelected.textContent = activeDriver.name;
 
     const concelho = concelhoAtivo;
     
-    // Verificação de segurança caso o concelho selecionado não exista na base de dados
     if (!GEOGRAPHY[concelho]) {
         treeContainer.innerHTML = '<p class="text-xs text-red-500 italic text-center py-4">Erro: Concelho não configurado.</p>';
         return;
@@ -527,13 +496,14 @@ export function renderGeographicTree() {
 
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    // Mapeia onde está cada localidade para mostrar avisos de exclusividade tátil
+    // Map estruturado e normalizado (Case-Insensitive) para ler instantaneamente o motorista dono de cada localidade
     const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
             if (id && typeof id === 'string') {
-                localidadeParaMotorista.set(id, drv);
+                // Guarda a chave sempre normalizada (Maiúsculas) para eliminar o bug visual do ecrã
+                localidadeParaMotorista.set(normalizarBrickId(id), drv);
             }
         });
     });
@@ -542,15 +512,15 @@ export function renderGeographicTree() {
         const localidadesMap = GEOGRAPHY[concelho][freguesiaName];
         const localidadesKeys = Object.keys(localidadesMap).sort();
 
-        // Verifica se todas as localidades desta freguesia pertencem a este motorista
         const allLocs = Object.keys(localidadesMap);
         const ownedLocs = allLocs.filter(locName => {
             const brickId = `${freguesiaName}|${locName}`;
-            return Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
+            const normalizedBid = normalizarBrickId(brickId);
+            return Array.isArray(activeDriver.brickIds) && 
+                activeDriver.brickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
         });
         const isAllOwned = allLocs.length > 0 && ownedLocs.length === allLocs.length;
 
-        // Recupera o estado de expansão desta freguesia
         const isExpanded = freguesiasExpandidas.has(freguesiaName);
 
         const fregDiv = document.createElement('div');
@@ -568,7 +538,6 @@ export function renderGeographicTree() {
                     }
                 </button>
                 <div class="flex items-center space-x-1.5">
-                    <!-- Checkbox de seleção rápida de Freguesia inteira -->
                     <input type="checkbox" ${isAllOwned ? 'checked' : ''} class="freg-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
                     <span class="font-bold text-gray-700 text-xs">${freguesiaName}</span>
                 </div>
@@ -577,24 +546,26 @@ export function renderGeographicTree() {
         `;
 
         const subContainer = document.createElement('div');
-        // Mantém a visibilidade da pasta de acordo com a memória de expansão
         subContainer.className = `${isExpanded ? '' : 'hidden'} p-2 bg-gray-50/50 border-t border-dashed space-y-2.5 pl-6 animate-fade-in`;
 
         localidadesKeys.forEach(locName => {
             const brickId = `${freguesiaName}|${locName}`;
-            const motoristaDono = localidadeParaMotorista.get(brickId);
+            const normalizedBid = normalizarBrickId(brickId);
+            
+            // Leitura segura baseada na chave normalizada (Case-Insensitive)
+            const motoristaDono = localidadeParaMotorista.get(normalizedBid);
 
-            const isAssignedToActive = Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
+            const isAssignedToActive = Array.isArray(activeDriver.brickIds) && 
+                activeDriver.brickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
 
-            // Determina a lista de códigos postais para esta localidade e formata o seu intervalo
             const cpList = localidadesMap[locName] || [];
             const cpTexto = formatarIntervaloCPs(cpList);
 
             const label = document.createElement('label');
 
+            // CORREÇÃO USABILIDADE: Se pertencer a outro motorista, fica trancado de forma visível
             if (motoristaDono && motoristaDono.id !== activeDriver.id) {
-                // Se a localidade já estiver sob a responsabilidade de outro motorista
-                label.className = "flex items-center justify-between p-2 rounded bg-red-50/20 text-gray-400 cursor-not-allowed select-none text-[11px] border border-red-100/10 opacity-70";
+                label.className = "flex items-center justify-between p-2 rounded bg-gray-100/50 text-gray-400 cursor-not-allowed select-none text-[11px] border border-gray-200 opacity-60";
                 label.innerHTML = `
                     <div class="flex items-center space-x-2 truncate pr-2">
                         <i class="fa-solid fa-lock text-red-400 text-[10px] animate-none"></i>
@@ -607,7 +578,6 @@ export function renderGeographicTree() {
                     </span>
                 `;
             } else {
-                // Se estiver livre ou já for deste motorista selecionado
                 label.className = "flex items-center justify-between p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 cursor-pointer text-[11px] text-gray-700 transition duration-100";
                 label.innerHTML = `
                     <div class="flex items-center space-x-2 truncate pr-2">
@@ -621,24 +591,31 @@ export function renderGeographicTree() {
                     }
                 `;
 
-                // Guarda reativamente a alteração com um simples clique (GRAVAÇÃO DIRETA NO FIRESTORE!)
                 const cb = label.querySelector('.brick-checkbox');
                 cb.addEventListener('change', (e) => {
+                    const checkedState = e.target.checked;
+                    const acao = checkedState ? "atribuir" : "retirar";
+                    
+                    // NOVO: Mensagem de confirmação tátil antes de gravar no banco de dados
+                    const confirmar = confirm(`Tem a certeza que deseja ${acao} o Brick "${locName}" do motorista "${activeDriver.name}"?`);
+                    if (!confirmar) {
+                        e.target.checked = !checkedState; // Reverte a checkbox na UI
+                        return;
+                    }
+
                     if (!Array.isArray(activeDriver.brickIds)) {
                         activeDriver.brickIds = [];
                     }
 
                     let updatedBrickIds = [...activeDriver.brickIds];
-                    if (e.target.checked) {
+                    if (checkedState) {
                         updatedBrickIds.push(brickId);
-                        
-                        // Geocodifica sob procura apenas a localidade interagida, evitando sobrecarga
                         geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
-                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
+                        // Faz a filtragem normalizada para garantir a exclusão correta
+                        updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
 
-                    // Grava diretamente no Firestore no documento do motorista correspondente
                     db.collection('drivers').doc(activeDriver.id).update({
                         brickIds: updatedBrickIds
                     }).then(() => {
@@ -653,40 +630,47 @@ export function renderGeographicTree() {
             subContainer.appendChild(label);
         });
 
-        // Evento de alteração em lote de toda a Freguesia (GRAVAÇÃO DIRETA NO FIRESTORE!)
         const fregCb = header.querySelector('.freg-checkbox');
         if (fregCb) {
             fregCb.addEventListener('change', (e) => {
+                const checkedState = e.target.checked;
+                const acao = checkedState ? "atribuir em lote" : "retirar em lote";
+                
+                // NOVO: Mensagem de confirmação em lote de segurança
+                const confirmar = confirm(`Tem a certeza que deseja ${acao} todos os Bricks livres da freguesia "${freguesiaName}" para o motorista "${activeDriver.name}"?`);
+                if (!confirmar) {
+                    e.target.checked = !checkedState;
+                    return;
+                }
+
                 if (!Array.isArray(activeDriver.brickIds)) {
                     activeDriver.brickIds = [];
                 }
 
                 let updatedBrickIds = [...activeDriver.brickIds];
-                let delayPacing = 0; // Atraso progressivo para evitar over limit
+                let delayPacing = 0;
 
                 allLocs.forEach(locName => {
                     const brickId = `${freguesiaName}|${locName}`;
-                    const motoristaDono = localidadeParaMotorista.get(brickId);
+                    const normalizedBid = normalizarBrickId(brickId);
+                    const motoristaDono = localidadeParaMotorista.get(normalizedBid);
                     const isOwnedByOther = motoristaDono && motoristaDono.id !== activeDriver.id;
 
-                    if (e.target.checked) {
-                        // Associa em lote apenas as localidades que estão realmente livres
-                        if (!isOwnedByOther && !updatedBrickIds.includes(brickId)) {
+                    if (checkedState) {
+                        const isAlreadyOwned = updatedBrickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
+                        if (!isOwnedByOther && !isAlreadyOwned) {
                             updatedBrickIds.push(brickId);
 
-                            // Geocodifica com compassamento de 300ms entre localidades para respeitar o Google
                             setTimeout(() => {
                                 geocodificarBrickSobProcura(freguesiaName, locName);
                             }, delayPacing);
                             delayPacing += 300;
                         }
                     } else {
-                        // Remove todas as localidades desta freguesia que pertenciam a este motorista
-                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
+                        updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
                 });
 
-                // Envia a lista updated de uma só vez para o Firestore
                 db.collection('drivers').doc(activeDriver.id).update({
                     brickIds: updatedBrickIds
                 }).then(() => {
@@ -722,43 +706,29 @@ export function renderGeographicTree() {
 // CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES E BRICKS (WINDOW)
 // =========================================================================
 window.renderizarSetoresUI = () => {
-    // Configura o seletor de concelho (Mafra vs Sintra)
     const seletorConcelho = document.getElementById('select-concelho-setores');
     if (seletorConcelho) {
         seletorConcelho.value = concelhoAtivo;
         if (!seletorConcelho.dataset.listenerAtivo) {
             seletorConcelho.addEventListener('change', (e) => {
                 concelhoAtivo = e.target.value;
-                
-                // Limpa o estado de expansão ao mudar de concelho para evitar árvores inconsistentes
                 freguesiasExpandidas.clear();
-
-                // NOVO & MELHORADO: Limpa o motorista ativo para garantir que não tentamos gerir 
-                // bricks com um motorista não habilitado no novo concelho
                 motoristaAtivoId = null;
 
-                // Recenterabilidade síncrona do mapa
                 if (dashboardMap) {
                     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
                     dashboardMap.setCenter(centerCoords);
                 }
 
-                // Renderização reativa de toda a UI
                 window.renderizarSetoresUI();
             });
             seletorConcelho.dataset.listenerAtivo = "true";
         }
     }
 
-    // Sincroniza a listagem de motoristas no painel de atribuição (filtrada dinamicamente)
     renderDriversForAttribution();
-
-    // Renderiza a árvore do concelho ativo reativa (Mafra ou Sintra)
     renderGeographicTree();
-
-    // Executa as contas do painel de auditoria (Saldo Zero) em tempo real
     atualizarAuditoriaBricks();
 
-    // Inicializa e redesenha o mapa de forma síncrona estável
     setTimeout(inicializarMapaBricksDashboard, 150);
 };
