@@ -6,7 +6,7 @@
  *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
  *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
  *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
- *      NOVO: Implementa alerta de re-otimização e inserção inteligente direta de pacotes em rotas ativas com indicação visual pulsante (por confirmar).
+ *      NOVO: Suporta seletor segmentado tátil de Entrega vs. Recolha com etiquetas roxas vibrantes de arrumação física para motoristas.
  *      MELHORADO: Adapta a resolução de Bricks para centenas e suporta re-atribuição dinâmica inteligente de concelho (Sintra/Mafra).
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
@@ -295,6 +295,9 @@ export async function processarAdicaoPorPostal() {
 
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
 
+        // NOVO: Lê o tipo de operação ativa no formulário ("Entrega" ou "Recolha")
+        const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
+
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
             lat: data.lat,
@@ -304,7 +307,8 @@ export async function processarAdicaoPorPostal() {
             observation: "",
             priority: false,
             brickId: brickId,
-            brickName: brickName
+            brickName: brickName,
+            tipoOperacao: tipoOperacaoVal // Gravação do tipo no objeto
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -328,7 +332,7 @@ export async function processarAdicaoPorPostal() {
                 // Define como novo por confirmar (ativa a bolinha laranja saltitante)
                 novaMorada.isNewUnconfirmed = true;
 
-                // CORREÇÃO: Insere como último automaticamente e não abre o modal de sequência logo no arranque
+                // Insere como último automaticamente e não abre o modal de sequência logo no arranque
                 window.rotaOtimizada.push(novaMorada);
 
                 sincronizarPersistencia();
@@ -343,8 +347,18 @@ export async function processarAdicaoPorPostal() {
             }
         }
 
+        // Limpa os campos e repõe o switcher de operação para o padrão ("Entrega")
         inputPostal.value = "";
         if (inputMorada) inputMorada.value = "";
+        
+        const btnTipoEntrega = document.getElementById('btn-tipo-entrega');
+        const btnTipoRecolha = document.getElementById('btn-tipo-recolha');
+        const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
+        if (btnTipoEntrega && btnTipoRecolha && inputTipoOperacao) {
+            inputTipoOperacao.value = "Entrega";
+            btnTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+            btnTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 hover:text-gray-700 transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+        }
 
     } catch (err) {
         console.error("Erro na geocodificação:", err);
@@ -376,10 +390,13 @@ export function renderMoradasAdicionadas() {
             item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs animate-fade-in space-x-2";
         }
 
+        const isRecolha = morada.tipoOperacao === "Recolha";
+
         item.innerHTML = `
             <div class="flex-1 truncate">
                 <strong class="text-gray-500">#${index + 1}</strong> 
                 <span>${morada.address}</span>
+                ${isRecolha ? `<span class="bg-purple-100 text-purple-700 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border border-purple-200 ml-1.5"><i class="fa-solid fa-hand-holding-hand mr-0.5"></i> Recolha</span>` : ''}
                 ${morada.priority ? `<span class="bg-orange-500 text-white text-[8px] font-bold uppercase px-1 py-0.5 rounded ml-1.5"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                 ${morada.observation ? `<p class="text-[10px] text-blue-500 font-semibold italic mt-0.5 truncate">Nota: ${morada.observation}</p>` : ''}
             </div>
@@ -548,16 +565,23 @@ export function renderizarItinerarioOtimizado() {
         const item = document.createElement('div');
         item.id = `paragem-${paragem.id}`; 
         
+        const isRecolha = paragem.tipoOperacao === "Recolha";
+
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
         if (paragem.status === "Falhou") statusColor = "bg-red-500";
+
+        // Se for recolha, a bolinha numérica ganha a cor de recolha (roxa/violeta)
+        if (isRecolha && paragem.status === "Pendente") {
+            statusColor = "bg-purple-600";
+        }
 
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
         const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
         if (isNewUnconfirmed) {
-            // Fica com contorno laranja em pulse
+            // Card de destaque Laranja Pulsante para nova entrega
             item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-orange-500 bg-orange-50/70 shadow-md animate-pulse ring-4 ring-orange-200";
         } else if (isLastNavigated) {
             if (isPriority) {
@@ -576,8 +600,7 @@ export function renderizarItinerarioOtimizado() {
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
-        // CORREÇÃO: Bolinha de contagem fica laranja e saltitante (animate-bounce) se não confirmada. 
-        // Adicionada a classe cursor-pointer para facilitar o clique.
+        // Bolinha de contagem. Fica laranja e a saltar (animate-bounce) se não confirmada. 
         const bolinhaHtml = isNewUnconfirmed 
             ? `<span class="btn-index-badge w-5 h-5 rounded-full bg-orange-500 text-white animate-bounce font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer" title="Clique para ordenar">
                 ${index + 1}
@@ -594,6 +617,9 @@ export function renderizarItinerarioOtimizado() {
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
+                        
+                        <!-- EMBLEMAS (BADGES) EXPLICATIVOS DE OPERAÇÃO -->
+                        ${isRecolha ? `<span class="bg-purple-100 text-purple-700 border border-purple-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="Operação de Recolha"><i class="fa-solid fa-hand-holding-hand text-purple-500"></i> <span>Recolha</span></span>` : ''}
                         ${isNewUnconfirmed ? `<span class="btn-confirm-seq bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse cursor-pointer"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
                         ${isLastNavigated && !isNewUnconfirmed ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
@@ -644,7 +670,7 @@ export function renderizarItinerarioOtimizado() {
 
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
-        // CORREÇÃO: Liga o clique na bolinha laranja ou na etiqueta "Novo" para abrir o modal de ordenação
+        // Liga o clique na bolinha laranja ou na etiqueta "Novo" para abrir o modal de ordenação
         if (isNewUnconfirmed) {
             const btnIndex = item.querySelector('.btn-index-badge');
             if (btnIndex) {
@@ -942,7 +968,7 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         const wasUnconfirmed = !!paragem.isNewUnconfirmed;
 
-        // Limpa o estado pendente aqui (muda a cor do pin para normal e para de saltar)
+        // Limpa o estado pendente aqui (muda a cor do pin para normal e para de saltar!)
         paragem.isNewUnconfirmed = false;
 
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
@@ -972,7 +998,7 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         modal.classList.add('hidden');
 
-        // Abre o modal de observações logo a seguir, após a bolinha já ter mudado de cor
+        // Abre o modal de observações logo a seguir, após a bolinha já ter mudado de cor e parado de saltar
         if (wasUnconfirmed) {
             setTimeout(() => {
                 abrirModalEdicaoParagem(paragem, true);
@@ -1274,6 +1300,11 @@ export function setupRotasLogic() {
 
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
 
+    // Elementos do seletor de tipo de operação
+    const btnTipoEntrega = document.getElementById('btn-tipo-entrega');
+    const btnTipoRecolha = document.getElementById('btn-tipo-recolha');
+    const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
+
     configurarEventosPrefixoRapido();
     configurarFormatacaoPostal();
     inicializarAutocompleteMorada();
@@ -1286,6 +1317,21 @@ export function setupRotasLogic() {
         });
         btnConducao.addEventListener('click', () => {
             alternarModoRota('conducao');
+        });
+    }
+
+    // Configura os cliques táteis do switcher segmentado (Entrega vs. Recolha)
+    if (btnTipoEntrega && btnTipoRecolha && inputTipoOperacao) {
+        btnTipoEntrega.addEventListener('click', () => {
+            inputTipoOperacao.value = "Entrega";
+            btnTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+            btnTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 hover:text-gray-700 transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+        });
+
+        btnTipoRecolha.addEventListener('click', () => {
+            inputTipoOperacao.value = "Recolha";
+            btnTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+            btnTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 hover:text-gray-700 transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
         });
     }
 
@@ -1479,11 +1525,16 @@ export function setupModaisEdicao() {
         const editMoradaTexto = document.getElementById('edit-morada-texto');
         const editMoradaObs = document.getElementById('edit-morada-obs');
         const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
+        
+        // Elementos do switcher no Modal de Edição (Se existirem no index.html)
+        const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
+
         if (!editMoradaTexto || !editMoradaObs) return;
 
         const novaMorada = editMoradaTexto.value.trim();
         const novaObs = editMoradaObs.value.trim();
         const novaPrioridade = editMoradaPrioridade ? editMoradaPrioridade.checked : false;
+        const novoTipoOperacao = editTipoOperacaoInput ? editTipoOperacaoInput.value : "Entrega";
 
         if (!novaMorada) {
             alert("A morada de entrega não pode ficar em branco.");
@@ -1531,8 +1582,10 @@ export function setupModaisEdicao() {
             // Remove o estado pendente "não confirmado", visto que o utilizador guardou com sucesso as observações
             itemSendoEditado.isNewUnconfirmed = false;
 
+            // Grava os novos valores, incluindo o tipo de operação atualizado do Modal
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
+            itemSendoEditado.tipoOperacao = novoTipoOperacao;
 
             let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
             let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
@@ -1575,6 +1628,25 @@ export function setupModaisEdicao() {
         }
     });
 
+    // Configura os cliques do switcher no Modal de Edição (Se existirem no index.html)
+    const editTipoEntrega = document.getElementById('edit-tipo-entrega');
+    const editTipoRecolha = document.getElementById('edit-tipo-recolha');
+    const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
+
+    if (editTipoEntrega && editTipoRecolha && editTipoOperacaoInput) {
+        editTipoEntrega.addEventListener('click', () => {
+            editTipoOperacaoInput.value = "Entrega";
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        });
+
+        editTipoRecolha.addEventListener('click', () => {
+            editTipoOperacaoInput.value = "Recolha";
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        });
+    }
+
     configurarBotoesRapidosModal();
 }
 
@@ -1593,6 +1665,23 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     editMoradaObs.value = paragem.observation || "";
     if (editMoradaPrioridade) {
         editMoradaPrioridade.checked = !!paragem.priority;
+    }
+
+    // Sincroniza visualmente o tipo de operação atual da paragem no Modal de Edição
+    const tipoOperacao = paragem.tipoOperacao || "Entrega";
+    const editTipoEntrega = document.getElementById('edit-tipo-entrega');
+    const editTipoRecolha = document.getElementById('edit-tipo-recolha');
+    const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
+
+    if (editTipoEntrega && editTipoRecolha && editTipoOperacaoInput) {
+        editTipoOperacaoInput.value = tipoOperacao;
+        if (tipoOperacao === "Recolha") {
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        } else {
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        }
     }
 
     preencherSelecoesPorTexto(paragem.observation || "");

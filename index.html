@@ -3,7 +3,7 @@
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v64, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v65, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -90,14 +90,14 @@
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v64 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v65 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <!-- Botão de Sair de Sessão / Logout para motoristas -->
             <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
                 <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
             </button>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v64</span>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v65</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -173,6 +173,21 @@
                     <div>
                         <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Morada de Entrega</label>
                         <input type="text" id="edit-morada-texto" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50">
+                    </div>
+
+                    <!-- NOVO: TIPO DE SERVIÇO SWITCHER (ENTREGA VS RECOLHA) -->
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Tipo de Serviço</label>
+                        <div class="flex bg-gray-100 p-1 rounded-xl border border-gray-200">
+                            <button type="button" id="btn-servico-entrega" class="flex-1 py-2.5 text-xs font-black rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer focus:outline-none">
+                                <i class="fa-solid fa-truck-ramp-box mr-1"></i> Entrega
+                            </button>
+                            <button type="button" id="btn-servico-recolha" class="flex-1 py-2.5 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer focus:outline-none">
+                                <i class="fa-solid fa-hand-holding-hand mr-1"></i> Recolha
+                            </button>
+                        </div>
+                        <!-- Campo oculto integrado para gravação reativa de edições -->
+                        <input type="hidden" id="edit-tipo-operacao" value="Entrega">
                     </div>
 
                     <!-- Secção 1: Tipo de Embalagem (Grelha Tátil) -->
