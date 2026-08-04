@@ -1,10 +1,10 @@
 /**
  * sw.js
  * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
- *      Atualizado para a versão v61 para forçar a descarga do cabeçalho corrigido de ícones.
+ *      Atualizado para a versão v62 para forçar a descarga do cabeçalho corrigido de ícones.
  */
 
-const CACHE_NAME = 'classificapack-v61';
+const CACHE_NAME = 'classificapack-v62';
 
 const ASSETS = [
   './',

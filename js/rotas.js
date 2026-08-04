@@ -43,7 +43,6 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
 // CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS (SINC DE CLOUD REAL-TIME!)
 // ==========================================
 function sincronizarPersistencia() {
-    // Grava de cache síncrona no LocalStorage local
     saveData(
         window.drivers, 
         [], // intervals obsoletos
@@ -64,7 +63,6 @@ function sincronizarPersistencia() {
     localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
     localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
 
-    // Sincroniza reativamente com o seu documento correspondente em 'routes' se houver login ativo
     if (window.currentUserUid) {
         db.collection('routes').doc(window.currentUserUid).set({
             partidaLocalizacao: window.partidaLocalizacao || null,
@@ -74,7 +72,6 @@ function sincronizarPersistencia() {
             rotaIniciada: window.rotaIniciada || false,
             routingMethodUsed: window.routingMethodUsed || 'Cloud',
 
-            // Sincroniza dados do Odómetro para a nuvem
             tripStarted: window.tripStarted || false,
             tripCompleted: window.tripCompleted || false,
             odometerStart: window.odometerStart || 0,
@@ -104,17 +101,13 @@ export function alternarModoRota(modo) {
 
     if (modo === 'conducao') {
         planningControls.classList.add('hidden');
-        
         btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
         btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
-        
         localStorage.setItem('cp_modo_rota', 'conducao');
     } else {
         planningControls.classList.remove('hidden');
-        
         btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
         btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
-        
         localStorage.setItem('cp_modo_rota', 'planeamento');
     }
 }
@@ -147,8 +140,6 @@ export function setupVozLogic() {
 // Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
-    
-    // Remove os parênteses de centenas (ex: "Sintra (000-099)" passa a "sintra") para fins de comparação
     const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
     
     if (cleanLoc === cleanFreg) return true;
@@ -175,7 +166,6 @@ function resolveBrickForZip(zip, drivers) {
     const match = zip.match(regexZip);
     const normalizedZip = match ? match[0] : zip.trim();
 
-    // Deteta reativamente o concelho com base no código postal
     const concelho = obterConcelhoPorCodigoPostal(normalizedZip);
 
     let matchedFreguesia = null;
@@ -185,7 +175,6 @@ function resolveBrickForZip(zip, drivers) {
         return { brickId: null, brickName: null };
     }
 
-    // PASSAGEM 1: Procura nas localidades específicas
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
             if (isCatchAllLocality(freguesia, localidade)) {
@@ -201,7 +190,6 @@ function resolveBrickForZip(zip, drivers) {
         if (matchedFreguesia) break;
     }
 
-    // PASSAGEM 2: Fallback - Procura nas genéricas (catch-all)
     if (!matchedFreguesia) {
         for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
             for (const [localidade, cpList] of Object.entries(localidades)) {
@@ -277,7 +265,6 @@ export async function processarAdicaoPorPostal() {
     const postalCodeVal = inputPostal.value.trim();
     const moradaVal = inputMorada ? inputMorada.value.trim() : "";
 
-    // 1. Valida se o Código Postal tem 7 dígitos numéricos
     const cleanZip = postalCodeVal.replace(/\D/g, '');
     if (cleanZip.length !== 7) {
         alert("Por favor, introduza um Código Postal válido com 7 dígitos (ex: 2655-319).");
@@ -291,7 +278,6 @@ export async function processarAdicaoPorPostal() {
     btnAdicionar.disabled = true;
 
     try {
-        // 3. Consulta o endpoint dinâmico (Local ou Render)
         const response = await fetch(`${API_BASE_URL}/api/geocode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -307,15 +293,13 @@ export async function processarAdicaoPorPostal() {
             throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
         }
 
-        // Resolve e associa estante física (Brick) na criação da paragem
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
 
-        // 4. Constrói o objeto de morada mapeada vinda da Google
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
             lat: data.lat,
             lng: data.lng,
-            address: data.address, // Endereço oficial mapeado pela Google
+            address: data.address,
             status: "Pendente",
             observation: "",
             priority: false,
@@ -323,7 +307,6 @@ export async function processarAdicaoPorPostal() {
             brickName: brickName
         };
 
-        // 5. Verifica se o clique anterior foi para definir o Ponto de Partida
         if (window.definindoPartidaPorMorada) {
             window.partidaLocalizacao = novaMorada;
             if (statusPartida) statusPartida.innerHTML = `<strong>Partida:</strong> ${novaMorada.address}`;
@@ -331,12 +314,9 @@ export async function processarAdicaoPorPostal() {
             sincronizarPersistencia();
             alert("Ponto de Partida configurado com sucesso!");
         } else {
-            // Caso contrário, adiciona como paragem de entrega à lista base de moradas
             window.moradasEntregas.push(novaMorada);
 
-            // Verificação de Rota Ativa/Otimizada para Inserção Inteligente Sem Perda de Ordem
             if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
-                // Calcula de forma síncrona a distância Haversine a partir do último ponto atual da rota otimizada
                 const ultimaParagem = window.rotaOtimizada[window.rotaOtimizada.length - 1];
                 novaMorada.distanciaDoAnterior = calcularDistanciaHaversine(
                     ultimaParagem.lat,
@@ -345,19 +325,16 @@ export async function processarAdicaoPorPostal() {
                     novaMorada.lng
                 );
 
-                // Define esta paragem como um Pacote Novo por Confirmar (Ativa animação e bounce no mapa)
+                // Define como novo por confirmar (ativa a bolinha laranja saltitante)
                 novaMorada.isNewUnconfirmed = true;
 
-                // Anexa o novo pacote diretamente ao final da rota otimizada atual
                 window.rotaOtimizada.push(novaMorada);
 
-                // Grava e desenha imediatamente as atualizações no ecrã e no mapa
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
                 renderizarItinerarioOtimizado();
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 
-                // Abre de forma automática o seletor de sequência para o novo pacote
                 const novoIndex = window.rotaOtimizada.length - 1;
                 setTimeout(() => {
                     if (typeof window.abrirModalAlterarSequencia === 'function') {
@@ -366,14 +343,12 @@ export async function processarAdicaoPorPostal() {
                 }, 400);
 
             } else {
-                // Lógica de fallback original se a rota ainda não estiver otimizada
                 renderMoradasAdicionadas();
                 sincronizarPersistencia();
                 abrirModalEdicaoParagem(novaMorada, false);
             }
         }
 
-        // Limpa os campos de destino após adicionar com sucesso
         inputPostal.value = "";
         if (inputMorada) inputMorada.value = "";
 
@@ -381,7 +356,6 @@ export async function processarAdicaoPorPostal() {
         console.error("Erro na geocodificação:", err);
         alert(`Erro: ${err.message}`);
     } finally {
-        // Devolve o botão ao estado padrão
         btnAdicionar.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Adicionar Pacote</span>';
         btnAdicionar.disabled = false;
     }
@@ -423,7 +397,11 @@ export function renderMoradasAdicionadas() {
         
         item.querySelector('.btn-edit-morada').onclick = () => abrirModalEdicaoParagem(morada, false);
         
+        // NOVO: Adicionado aviso de confirmação antes de excluir no planeamento
         item.querySelector('.btn-del-morada').onclick = () => {
+            const confirmar = confirm(`Tem a certeza que deseja excluir esta entrega no planeamento?\nMorada: ${morada.address}`);
+            if (!confirmar) return;
+
             window.moradasEntregas = window.moradasEntregas.filter(m => m.id !== morada.id);
             window.rotaOtimizada = window.rotaOtimizada.filter(m => m.id !== morada.id); 
             
@@ -458,11 +436,10 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     const btnOtimizar = document.getElementById('btn-otimizar-rota');
 
-    // Alerta preventivo contra perda acidental de sequenciação manual personalizada
     if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
         const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa com ordenação personalizada. Se otimizar de novo, o sistema recalculará todo o percurso e perderá as suas alterações manuais. Deseja continuar?");
         if (!confirmarRecalculo) {
-            return; // Aborta e preserva as alterações manuais intactas
+            return;
         }
     }
 
@@ -472,7 +449,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
     }
 
     try {
-        // Envia as coordenadas para o endpoint dinâmico (Local ou Render)
         const response = await fetch(`${API_BASE_URL}/api/optimize-route`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -497,7 +473,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
             const indices = data.optimizedIndices;
             window.rotaOtimizada = [];
 
-            // Reorganiza a rota local na ordem correta devolvida pela Google
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
                 
@@ -589,7 +564,8 @@ export function renderizarItinerarioOtimizado() {
         const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
         if (isNewUnconfirmed) {
-            item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-yellow-500 bg-yellow-50/70 shadow-md animate-pulse ring-4 ring-yellow-200";
+            // Card de destaque Laranja Pulsante para nova entrega
+            item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-orange-500 bg-orange-50/70 shadow-md animate-pulse ring-4 ring-orange-200";
         } else if (isLastNavigated) {
             if (isPriority) {
                 item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
@@ -611,17 +587,17 @@ export function renderizarItinerarioOtimizado() {
             <div class="flex items-center justify-between space-x-2">
                 <div class="flex-1 truncate">
                     <div class="flex items-center space-x-2 flex-wrap gap-1">
-                        <span class="w-5 h-5 rounded-full ${isNewUnconfirmed ? 'bg-yellow-500 text-black' : statusColor + ' text-white'} font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
+                        <!-- Bolinha de contagem. Fica laranja e a saltar (animate-bounce) se não confirmada -->
+                        <span class="w-5 h-5 rounded-full ${isNewUnconfirmed ? 'bg-orange-500 text-white animate-bounce' : statusColor + ' text-white'} font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
                             ${index + 1}
                         </span>
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
-                        ${isNewUnconfirmed ? `<span class="bg-yellow-500 text-black text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
+                        ${isNewUnconfirmed ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
                         ${isLastNavigated && !isNewUnconfirmed ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                         
-                        <!-- INDICADOR VISUAL: Etiqueta de Estante (Brick) de arrumação na lista de rotas de condução -->
                         ${paragem.brickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="${paragem.brickId ? paragem.brickId.split('|')[0] : ''} - ${paragem.brickName}"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante: ${paragem.brickName}</span></span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
@@ -946,15 +922,8 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         const novoIndex = novaPos - 1;
 
-        // Captura o estado de novo pendente antes de desativá-lo
+        // Mantém a flag 'isNewUnconfirmed' como true para manter o estado laranja saltitante ativo
         const wasUnconfirmed = !!paragem.isNewUnconfirmed;
-
-        paragem.isNewUnconfirmed = false;
-
-        const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
-        if (originalPre) {
-            originalPre.isNewUnconfirmed = false;
-        }
 
         if (indexAtual !== novoIndex) {
             const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
@@ -978,7 +947,7 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         modal.classList.add('hidden');
 
-        // Se o pacote for de inserção recente pós-otimização, abre diretamente o modal de detalhes
+        // Se o pacote for novo, abre automaticamente o modal de detalhes mantendo o saltitante
         if (wasUnconfirmed) {
             setTimeout(() => {
                 abrirModalEdicaoParagem(paragem, true);
@@ -999,7 +968,6 @@ function aplicarPrefixoNoCampo(prefixo) {
     if (!inputCP) return;
 
     inputCP.value = `${prefixo}-`;
-    
     inputCP.focus();
 
     const comprimentoTexto = inputCP.value.length;
@@ -1074,11 +1042,11 @@ function configurarEscutaCodigoPostalParaLimites() {
                 const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
                 const nomeConcelhoFormatado = concelhoDetectado.charAt(0) + concelhoDetectado.slice(1).toLowerCase();
 
-                const textoPreenchido = brickName 
+                const textPreenchido = brickName 
                     ? `${valor} ${brickName}, ${nomeConcelhoFormatado}, `
                     : `${valor} ${nomeConcelhoFormatado}, `;
 
-                inputMorada.value = textoPreenchido;
+                inputMorada.value = textPreenchido;
                 inputMorada.focus();
                 
                 const comprimento = inputMorada.value.length;
@@ -1091,7 +1059,7 @@ function configurarEscutaCodigoPostalParaLimites() {
                 const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
                 autocompleteInstancia.setBounds(circuloConcelho.getBounds());
                 autocompleteInstancia.setOptions({ strictBounds: false });
-                console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por texto livre.");
+                console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por text livre.");
             }
         }
     });
@@ -1249,6 +1217,7 @@ function configurarBotoesRapidosModal() {
             if (origemSelecionada === origem) {
                 origemSelecionada = "";
             } else {
+                origemSelecionada = Math.floor;
                 origemSelecionada = origem;
             }
             
@@ -1497,19 +1466,17 @@ export function setupModaisEdicao() {
             return;
         }
 
-        // Ativa feedback visual de carregamento no botão
         const textoOriginalBotao = btnSalvarEdicao.innerHTML;
         btnSalvarEdicao.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> A geolocalizar...';
         btnSalvarEdicao.disabled = true;
 
         try {
-            // Se a morada foi alterada, executa a re-geocodificação assíncrona automática
             if (novaMorada !== itemSendoEditado._originalAddress) {
                 const response = await fetch(`${API_BASE_URL}/api/geocode`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        postalCode: "", // Geocodificação baseada na string completa
+                        postalCode: "",
                         address: novaMorada
                     })
                 });
@@ -1519,12 +1486,10 @@ export function setupModaisEdicao() {
                     throw new Error(data.error || "Falha ao validar a nova morada geográfica.");
                 }
 
-                // Atualiza as coordenadas e o endereço oficial resolvido pelo Google Maps
                 itemSendoEditado.lat = data.lat;
                 itemSendoEditado.lng = data.lng;
                 itemSendoEditado.address = data.address;
 
-                // Re-calcula a estante física (Brick) correspondente com base no endereço oficial
                 const postalCodeMatch = data.address.match(/\d{4}-\d{3}/);
                 if (postalCodeMatch) {
                     const { brickId, brickName } = resolveBrickForZip(postalCodeMatch[0], window.drivers);
@@ -1539,11 +1504,12 @@ export function setupModaisEdicao() {
                 }
             }
 
-            // Atualiza as observações e prioridade
+            // Remove o estado pendente "não confirmado", visto que o utilizador guardou com sucesso as observações
+            itemSendoEditado.isNewUnconfirmed = false;
+
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
 
-            // Sincroniza em ambas as listas de paragens (Planeamento e Otimização)
             let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
             let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
 
@@ -1554,7 +1520,6 @@ export function setupModaisEdicao() {
             if (itemIndexPos !== -1) {
                 window.rotaOtimizada[itemIndexPos] = { ...itemSendoEditado };
 
-                // Recalcula as distâncias relativas pós-modificação para fins do diário de bordo/odómetro
                 window.rotaOtimizada.forEach((p, idx) => {
                     p.distanciaDoAnterior = calcularDistanciaHaversine(
                         idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
@@ -1598,7 +1563,7 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
 
     itemSendoEditado = paragem;
-    itemSendoEditado._originalAddress = paragem.address; // Guarda a morada original para validação de alteração
+    itemSendoEditado._originalAddress = paragem.address;
 
     editMoradaTexto.value = paragem.address;
     editMoradaObs.value = paragem.observation || "";
