@@ -47,10 +47,10 @@
         <div>
             <label class="block text-xs font-bold uppercase text-gray-600">Nome do Motorista</label>
             <input type="text" id="nome-motorista" required placeholder="Ex: João Silva" 
-                   class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                   class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-xs font-semibold">
         </div>
 
-        <!-- NOVO CAMPO: SELEÇÃO DE CONCELHOS DE ATUAÇÃO DO MOTORISTA -->
+        <!-- SELEÇÃO DE CONCELHOS DE ATUAÇÃO DO MOTORISTA -->
         <div>
             <label class="block text-xs font-bold uppercase text-gray-600 mb-1.5">Concelho(s) de Atuação</label>
             <div class="flex items-center space-x-5 bg-gray-50 p-3 rounded-lg border border-gray-150">
@@ -68,15 +68,28 @@
         </div>
 
         <div>
-            <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
-            <!-- Palete dinâmica de cores criada no main.js -->
-            <div class="grid grid-cols-6 gap-2" id="color-picker-container"></div>
+            <label class="block text-xs font-bold uppercase text-gray-600 mb-1.5">Cor de Identificação</label>
+            <!-- Palete estática otimizada com 12 cores profissionais de alto contraste para o mapa -->
+            <div class="grid grid-cols-6 gap-2.5" id="color-picker-container">
+                <button type="button" data-cor="#EF4444" style="background-color: #EF4444;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#3B82F6" style="background-color: #3B82F6;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#10B981" style="background-color: #10B981;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#F59E0B" style="background-color: #F59E0B;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#8B5CF6" style="background-color: #8B5CF6;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#EC4899" style="background-color: #EC4899;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#14B8A6" style="background-color: #14B8A6;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#6366F1" style="background-color: #6366F1;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#A855F7" style="background-color: #A855F7;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#F97316" style="background-color: #F97316;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#06B6D4" style="background-color: #06B6D4;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#84CC16" style="background-color: #84CC16;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+            </div>
         </div>
         <div class="flex space-x-2">
-            <button type="button" id="btn-cancelar-motorista" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded shadow">
+            <button type="button" id="btn-cancelar-motorista" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded shadow text-xs transition duration-150">
                 Cancelar
             </button>
-            <button type="submit" id="btn-submit-motorista" class="flex-1 bg-blue-600 text-white font-bold py-2 rounded shadow">
+            <button type="submit" id="btn-submit-motorista" class="flex-1 bg-blue-600 text-white font-bold py-2 rounded shadow text-xs transition duration-150">
                 Adicionar Motorista
             </button>
         </div>

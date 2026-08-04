@@ -1,10 +1,11 @@
 /**
  * sw.js
  * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
- *      Atualizado para a versão v59 para forçar os navegadores a descarregar as otimizações dos Bricks.
+ *      Atualizado para a versão v60 para forçar a limpeza de caches antigas e descarregar 
+ *      as novas correções de edição georreferenciada e CRUD autónomo de motoristas.
  */
 
-const CACHE_NAME = 'classificapack-v59';
+const CACHE_NAME = 'classificapack-v60';
 
 const ASSETS = [
   './',

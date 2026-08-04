@@ -3,6 +3,7 @@
  * Faz: Gere o registo, edição, eliminação, listagem e coloração dos motoristas ativos, integrando diretamente as gravações no Cloud Firestore.
  *      NOVO: Suporta múltiplos concelhos de atuação (concelhos: ["MAFRA", "SINTRA"]) por motorista e filtragem reativa no ecrã.
  *      NOVO: Sincroniza automaticamente as checkboxes do formulário de registo com o concelho ativo selecionado no filtro.
+ *      NOVO: Inicializa de forma autónoma e reativa os escutadores da palete de cores de registo.
  * NÃO faz: Não gere a atribuição geográfica direta de Bricks (atribuídos no painel de Bricks).
  * Depende de: ./firebase-init.js (para aceder ao banco de dados Firestore db)
  */
@@ -11,6 +12,35 @@ import { db } from './firebase-init.js';
 
 // Concelho que está atualmente selecionado no filtro do ecrã de motoristas ("MAFRA" ou "SINTRA")
 let concelhoMotoristasAtivo = "MAFRA";
+
+// =========================================================================
+// INICIALIZAÇÃO DA PALETE DE CORES (AUTÓNOMA)
+// =========================================================================
+export function inicializarPaleteCores() {
+    const colorPickerContainer = document.getElementById('color-picker-container');
+    if (!colorPickerContainer) return;
+
+    // Evita a duplicação de listeners na palete de cores
+    if (colorPickerContainer.dataset.listenerAtivo === "true") return;
+
+    Array.from(colorPickerContainer.children).forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Obtém a cor definida no atributo do botão
+            const cor = btn.getAttribute('data-cor') || btn.style.backgroundColor;
+            window.selectedColor = cor;
+
+            // Destaca visualmente o círculo da cor que foi selecionado
+            Array.from(colorPickerContainer.children).forEach(b => {
+                b.classList.remove('border-black', 'scale-110');
+            });
+            btn.classList.add('border-black', 'scale-110');
+        });
+    });
+
+    colorPickerContainer.dataset.listenerAtivo = "true";
+}
 
 // =========================================================================
 // RENDERIZAÇÃO DA LISTA DE MOTORISTAS ATIVOS
@@ -79,17 +109,24 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     }
 
     const emEdicao = window.driverSendoEditado;
+    
+    // Suporta a cor vinda do argumento ou faz o fallback seguro para a variável global do picker
+    const corFinal = selectedColor || window.selectedColor || "#2563EB";
 
     if (emEdicao) {
         // Atualiza o motorista no Firestore
         db.collection('drivers').doc(emEdicao.id).update({
             name: nome,
-            color: selectedColor,
+            color: corFinal,
             concelhos: concelhos
         }).then(() => {
             console.log("[FIREBASE] Motorista atualizado com sucesso no Firestore.");
             window.cancelarEdicaoDriver();
-            renderCallback();
+            if (typeof renderCallback === 'function') {
+                renderCallback();
+            } else {
+                window.renderizarMotoristasUI();
+            }
         }).catch((err) => {
             console.error("[FIREBASE] Erro ao atualizar motorista:", err);
             alert("Erro de ligação: Não foi possível atualizar o motorista.");
@@ -100,13 +137,17 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
         db.collection('drivers').doc(newId).set({ 
             id: newId, 
             name: nome, 
-            color: selectedColor,
+            color: corFinal,
             brickIds: [], // Inicia uma lista de Bricks vazia para nova atribuição
             concelhos: concelhos
         }).then(() => {
             console.log("[FIREBASE] Novo motorista inserido com sucesso no Firestore.");
             window.cancelarEdicaoDriver();
-            renderCallback();
+            if (typeof renderCallback === 'function') {
+                renderCallback();
+            } else {
+                window.renderizarMotoristasUI();
+            }
         }).catch((err) => {
             console.error("[FIREBASE] Erro ao inserir motorista:", err);
             alert("Erro de ligação: Não foi possível registar o motorista.");
@@ -126,8 +167,7 @@ window.renderizarMotoristasUI = () => {
             seletor.addEventListener('change', (e) => {
                 concelhoMotoristasAtivo = e.target.value;
 
-                // MELHORADO: Se o gestor não estiver em edição de um motorista específico, 
-                // sincroniza as checkboxes do formulário de registo para poupar cliques.
+                // Se o gestor não estiver em edição, sincroniza as checkboxes com o filtro
                 if (!window.driverSendoEditado) {
                     const mafraCheck = document.getElementById('concelho-mafra');
                     const sintraCheck = document.getElementById('concelho-sintra');
@@ -141,10 +181,15 @@ window.renderizarMotoristasUI = () => {
         }
     }
 
+    // Inicializa os cliques do color picker de forma reativa e segura
+    inicializarPaleteCores();
+
     const listaMotoristas = document.getElementById('lista-motoristas');
     if (listaMotoristas) {
+        const driversList = Array.isArray(window.drivers) ? window.drivers : [];
+        
         // Filtra os motoristas ativos com base no concelho selecionado no topo do painel
-        const filteredDrivers = window.drivers.filter(driver => {
+        const filteredDrivers = driversList.filter(driver => {
             const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
             return concelhos.includes(concelhoMotoristasAtivo);
         });
@@ -187,7 +232,8 @@ window.editDriver = (driver) => {
     const colorPickerContainer = document.getElementById('color-picker-container');
     if (colorPickerContainer) {
         Array.from(colorPickerContainer.children).forEach(btn => {
-            if (btn.style.backgroundColor === driver.color || btn.style.backgroundColor.replace(/\s/g, "") === driver.color.toLowerCase()) {
+            const btnCor = btn.getAttribute('data-cor') || btn.style.backgroundColor;
+            if (btnCor === driver.color || btnCor.replace(/\s/g, "") === driver.color.toLowerCase()) {
                 btn.classList.add('border-black', 'scale-110');
             } else {
                 btn.classList.remove('border-black', 'scale-110');
@@ -207,16 +253,25 @@ window.cancelarEdicaoDriver = () => {
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
-    // MELHORADO: Repoem o estado padrão das checkboxes do formulário com base no filtro ativo no topo
+    // Repõe o estado padrão das checkboxes do formulário com base no filtro ativo no topo
     const mafraCheck = document.getElementById('concelho-mafra');
     const sintraCheck = document.getElementById('concelho-sintra');
     if (mafraCheck) mafraCheck.checked = (concelhoMotoristasAtivo === "MAFRA");
     if (sintraCheck) sintraCheck.checked = (concelhoMotoristasAtivo === "SINTRA");
+    
+    // Reseta visualmente a seleção da palete de cores
+    const colorPickerContainer = document.getElementById('color-picker-container');
+    if (colorPickerContainer) {
+        Array.from(colorPickerContainer.children).forEach(btn => {
+            btn.classList.remove('border-black', 'scale-110');
+        });
+    }
+    window.selectedColor = null;
 };
 
 window.deleteDriver = (id) => {
     if (confirm("Ao apagar este motorista, as suas contagens de pacotes também serão removidas. Confirmar?")) {
-        // Elimina o motorista do Firestore de forma síncrona
+        // Elimina o motorista do Firestore
         db.collection('drivers').doc(id).delete()
             .then(() => {
                 console.log("[FIREBASE] Motorista eliminado no Firestore.");

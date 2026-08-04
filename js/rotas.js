@@ -14,7 +14,7 @@
 
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
-import { GEOGRAPHY } from './geografia-data.js';
+import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
 import { 
     obterEnderecoPorGPSGoogle, 
     calcularDistanciaHaversine, 
@@ -64,7 +64,7 @@ function sincronizarPersistencia() {
     localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
     localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
 
-    // NOVO: Se houver um utilizador autenticado, sincroniza reativamente com o seu documento correspondente em 'routes'!
+    // Sincroniza reativamente com o seu documento correspondente em 'routes' se houver login ativo
     if (window.currentUserUid) {
         db.collection('routes').doc(window.currentUserUid).set({
             partidaLocalizacao: window.partidaLocalizacao || null,
@@ -124,7 +124,7 @@ export function alternarModoRota(modo) {
 // ==========================================
 export function setupVozLogic() {
     const btnVoz = document.getElementById('btn-voz');
-    const buscaMoradaInput = document.getElementById('rota-morada-completa'); // Aponta agora para a morada opcional
+    const buscaMoradaInput = document.getElementById('rota-morada-completa');
     const micAtivo = document.getElementById('microfone-ativo');
     const micInativo = document.getElementById('microfone-inativo');
 
@@ -185,7 +185,7 @@ function resolveBrickForZip(zip, drivers) {
         return { brickId: null, brickName: null };
     }
 
-    // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas
+    // PASSAGEM 1: Procura nas localidades específicas
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
             if (isCatchAllLocality(freguesia, localidade)) {
@@ -201,7 +201,7 @@ function resolveBrickForZip(zip, drivers) {
         if (matchedFreguesia) break;
     }
 
-    // PASSAGEM 2: Fallback - Se não encontrou, procura nas genéricas (catch-all)
+    // PASSAGEM 2: Fallback - Procura nas genéricas (catch-all)
     if (!matchedFreguesia) {
         for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
             for (const [localidade, cpList] of Object.entries(localidades)) {
@@ -277,7 +277,7 @@ export async function processarAdicaoPorPostal() {
     const postalCodeVal = inputPostal.value.trim();
     const moradaVal = inputMorada ? inputMorada.value.trim() : "";
 
-    // 1. Limpa e valida se o Código Postal tem 7 dígitos numéricos
+    // 1. Valida se o Código Postal tem 7 dígitos numéricos
     const cleanZip = postalCodeVal.replace(/\D/g, '');
     if (cleanZip.length !== 7) {
         alert("Por favor, introduza um Código Postal válido com 7 dígitos (ex: 2655-319).");
@@ -287,7 +287,6 @@ export async function processarAdicaoPorPostal() {
 
     const formattedZip = `${cleanZip.substring(0, 4)}-${cleanZip.substring(4, 7)}`;
 
-    // 2. Coloca o botão em estado de carregamento de segurança
     btnAdicionar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A geolocalizar...</span>';
     btnAdicionar.disabled = true;
 
@@ -321,7 +320,7 @@ export async function processarAdicaoPorPostal() {
             observation: "",
             priority: false,
             brickId: brickId,
-            brickName: brickName // Gravação física da estante (Brick) correspondente à localidade
+            brickName: brickName
         };
 
         // 5. Verifica se o clique anterior foi para definir o Ponto de Partida
@@ -335,7 +334,7 @@ export async function processarAdicaoPorPostal() {
             // Caso contrário, adiciona como paragem de entrega à lista base de moradas
             window.moradasEntregas.push(novaMorada);
 
-            // NOVO: Verificação de Rota Ativa/Otimizada para Inserção Inteligente Sem Perda de Ordem
+            // Verificação de Rota Ativa/Otimizada para Inserção Inteligente Sem Perda de Ordem
             if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
                 // Calcula de forma síncrona a distância Haversine a partir do último ponto atual da rota otimizada
                 const ultimaParagem = window.rotaOtimizada[window.rotaOtimizada.length - 1];
@@ -346,7 +345,7 @@ export async function processarAdicaoPorPostal() {
                     novaMorada.lng
                 );
 
-                // NOVO: Define esta paragem como um Pacote Novo por Confirmar
+                // Define esta paragem como um Pacote Novo por Confirmar (Ativa animação e bounce no mapa)
                 novaMorada.isNewUnconfirmed = true;
 
                 // Anexa o novo pacote diretamente ao final da rota otimizada atual
@@ -459,7 +458,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     const btnOtimizar = document.getElementById('btn-otimizar-rota');
 
-    // NOVO: Alerta preventivo contra perda acidental de sequenciação manual personalizada
+    // Alerta preventivo contra perda acidental de sequenciação manual personalizada
     if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
         const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa com ordenação personalizada. Se otimizar de novo, o sistema recalculará todo o percurso e perderá as suas alterações manuais. Deseja continuar?");
         if (!confirmarRecalculo) {
@@ -484,7 +483,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         });
 
         if (!response.ok) {
-            // Deteta reativamente o código e erro HTTP real do Render para diagnosticar timeout ou chaves
             let errorDetails = `Erro ${response.status} (${response.statusText})`;
             try {
                 const errJson = await response.json();
@@ -496,14 +494,13 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         const data = await response.json();
         
         if (data.optimizedIndices) {
-            const indices = data.optimizedIndices; // Array de índices ordenados da Google (ex: [2, 0, 1])
+            const indices = data.optimizedIndices;
             window.rotaOtimizada = [];
 
             // Reorganiza a rota local na ordem correta devolvida pela Google
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
                 
-                // Atribui uma distância teórica de condução (estimativa local)
                 paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
@@ -517,7 +514,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
             window.routingMethodUsed = 'Cloud';
             localStorage.setItem('cp_routing_method', 'Cloud');
         } else {
-            // Se a API não deu erro mas não ordenou, mantém a original
             window.rotaOtimizada = [...window.moradasEntregas];
             window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
             window.routingMethodUsed = 'Local';
@@ -539,7 +535,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         alternarModoRota('conducao');
 
     } catch (err) {
-        // Resolvedor de Contingência Local Ativo se o Render falhar, der timeout ou estiver a dormir
         console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
         
         calcularRotaVizinhoMaisProximoLocal();
@@ -591,10 +586,9 @@ export function renderizarItinerarioOtimizado() {
 
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
-        const isNewUnconfirmed = !!paragem.isNewUnconfirmed; // NOVO: Estado de pendência do novo pacote
+        const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
         if (isNewUnconfirmed) {
-            // NOVO: Card Amarelo Vivo Pulsante para Chamar a Atenção Visual do Motorista
             item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-yellow-500 bg-yellow-50/70 shadow-md animate-pulse ring-4 ring-yellow-200";
         } else if (isLastNavigated) {
             if (isPriority) {
@@ -658,7 +652,6 @@ export function renderizarItinerarioOtimizado() {
             </div>
         `;
 
-        // INTERCEÇÃO TÁTIL DA PRIMEIRA MORADA DE NAVEGAÇÃO PARA REGISTO DO ODÓMETRO
         item.querySelector('.btn-navegar').onclick = () => {
             if (index === 0 && (!window.tripStarted || !window.odometerStart || window.odometerStart === 0)) {
                 abrirModalOdometroSaida(() => {
@@ -707,12 +700,10 @@ export function renderEstatisticasRota() {
     const statFalhas = document.getElementById('stat-falhas'); 
     const statPendentes = document.getElementById('stat-pendentes');
 
-    // Elementos visuais para distância, tempo e motor de roteamento
     const statDistancia = document.getElementById('stat-distancia');
     const statTempo = document.getElementById('stat-tempo');
     const statSistema = document.getElementById('stat-sistema');
 
-    // Elementos dinâmicos do Diário de Bordo e do Fecho de Turno
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
     const painelOdometroResumo = document.getElementById('painel-odometro-resumo');
 
@@ -730,7 +721,6 @@ export function renderEstatisticasRota() {
     if (statFalhas) statFalhas.textContent = falhadas;
     if (statPendentes) statPendentes.textContent = pendentes;
 
-    // Calcular distância total acumulada (km)
     let totalDist = 0;
     window.rotaOtimizada.forEach(p => {
         totalDist += p.distanciaDoAnterior || 0;
@@ -740,7 +730,6 @@ export function renderEstatisticasRota() {
         statDistancia.textContent = `${totalDist.toFixed(2)} km`;
     }
 
-    // Estimar tempo com velocidade média de condução de 40 km/h (urban/rural mix em Mafra)
     if (statTempo) {
         if (totalDist === 0) {
             statTempo.textContent = "0 min";
@@ -756,7 +745,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // Mostrar qual o motor de roteamento utilizado de forma visual e reativa
     if (statSistema) {
         const metodo = window.routingMethodUsed || localStorage.getItem('cp_routing_method') || 'Cloud';
         if (metodo === 'Cloud') {
@@ -768,7 +756,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // GESTÃO REATIVA DE VISIBILIDADE DO BOTÃO "FINALIZAR TURNO"
     if (btnFinalizarTurno) {
         if (window.tripStarted && !window.tripCompleted) {
             btnFinalizarTurno.classList.remove('hidden');
@@ -777,7 +764,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // GESTÃO REATIVA E COMPLEMENTO VISUAL DO DIÁRIO DE BORDO
     if (painelOdometroResumo) {
         if (window.tripStarted) {
             painelOdometroResumo.classList.remove('hidden');
@@ -816,7 +802,6 @@ function abrirModalOdometroSaida(callback) {
     const modal = document.getElementById('modal-odometro-saida');
     if (!modal) return;
 
-    // Obtém o horário do dispositivo em formato síncrono para preenchimento
     const agora = new Date();
     const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
     
@@ -837,7 +822,6 @@ function abrirModalOdometroSaida(callback) {
         const kmVal = parseFloat(inputKm.value);
         const horaVal = inputHora.value.trim();
 
-        // Validação defensiva absoluta contra quilometragens inferiores de início
         if (isNaN(kmVal) || kmVal < (window.lastOdometer || 0)) {
             alert(`Erro de validação: O valor de quilometragem de partida não pode ser menor do que o último registo final (${window.lastOdometer || 0} KM).`);
             return;
@@ -851,7 +835,7 @@ function abrirModalOdometroSaida(callback) {
         window.tripCompleted = false;
         window.odometerStart = kmVal;
         window.odometerStartHour = horaVal;
-        window.lastOdometer = kmVal; // Define o novo limiar benchmark mínimo
+        window.lastOdometer = kmVal;
 
         sincronizarPersistencia();
         modal.classList.add('hidden');
@@ -875,7 +859,7 @@ function abrirModalOdometroChegada() {
     const txtMinimo = document.getElementById('odometro-chegada-minimo');
 
     if (inputHora) inputHora.value = horaStr;
-    if (inputKm) inputKm.value = ""; // Fica em branco para introdução tátil do condutor
+    if (inputKm) inputKm.value = "";
     if (txtMinimo) txtMinimo.textContent = `Mínimo de partida: ${window.odometerStart || 0} KM`;
 
     modal.classList.remove('hidden');
@@ -887,7 +871,6 @@ function abrirModalOdometroChegada() {
         const kmVal = parseFloat(inputKm.value);
         const horaVal = inputHora.value.trim();
 
-        // Validação defensiva absoluta contra quilometragens inferiores ao ponto de partida
         if (isNaN(kmVal) || kmVal < window.odometerStart) {
             alert(`Erro de validação: O valor de quilometragem final de regresso não pode ser inferior ao valor de saída (${window.odometerStart} KM).`);
             return;
@@ -897,23 +880,19 @@ function abrirModalOdometroChegada() {
             return;
         }
 
-        // Exibe resumo final de viagem antes de arquivar o dia
         alert(`Turno Encerrado com Sucesso!\n\nPartida: ${window.odometerStart} KM às ${window.odometerStartHour}\nChegada: ${kmVal} KM às ${horaVal}\nTotal Percorrido: ${(kmVal - window.odometerStart).toFixed(1)} km`);
 
-        // GRAVAÇÃO E ARQUIVO COMPLETO DO TURNO (Finalizar Turno é o único encerramento possível de rota)
         window.tripCompleted = true;
         window.odometerEnd = kmVal;
         window.odometerEndHour = horaVal;
-        window.lastOdometer = kmVal; // Define o novo mínimo incontornável para inícios futuros
+        window.lastOdometer = kmVal;
 
-        // Limpa a rota e paragens ativas do ecrã de entregas, preparando para o turno seguinte
         window.partidaLocalizacao = null;
         window.moradasEntregas = [];
         window.rotaOtimizada = [];
         window.dataRotaSelecionada = "";
         window.rotaIniciada = false;
 
-        // Reseta estados temporários de viagem
         window.tripStarted = false;
         window.tripCompleted = false;
         window.odometerStart = 0;
@@ -927,7 +906,6 @@ function abrirModalOdometroChegada() {
         sincronizarPersistencia();
         modal.classList.add('hidden');
         
-        // Recarrega a interface para o ecrã de setup inicial de data
         sincronizarInterfaceRota();
     };
 
@@ -968,21 +946,20 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         const novoIndex = novaPos - 1;
 
-        // NOVO: Remove o estado pendente "não confirmado", visto que o motorista confirmou a posição
+        // Captura o estado de novo pendente antes de desativá-lo
+        const wasUnconfirmed = !!paragem.isNewUnconfirmed;
+
         paragem.isNewUnconfirmed = false;
 
-        // Garante a limpeza do estado correspondente na lista de moradas de planeamento
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) {
             originalPre.isNewUnconfirmed = false;
         }
 
         if (indexAtual !== novoIndex) {
-            // Re-ordena o array de entregas de forma reativa e sequencial
             const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
             window.rotaOtimizada.splice(novoIndex, 0, item);
 
-            // Recalcula as distâncias acumuladas entre as paragens sucessivas
             window.rotaOtimizada.forEach((p, idx) => {
                 p.distanciaDoAnterior = calcularDistanciaHaversine(
                     idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
@@ -992,16 +969,21 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
                 );
             });
 
-            // Sincroniza a ordenação manual com a lista base de planeamento
             window.moradasEntregas = [...window.rotaOtimizada];
         }
 
-        // Grava, redesenha as contagens no ecrã e desativa o bounce do mapa Google de imediato
         sincronizarPersistencia();
         renderizarItinerarioOtimizado();
         desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 
         modal.classList.add('hidden');
+
+        // Se o pacote for de inserção recente pós-otimização, abre diretamente o modal de detalhes
+        if (wasUnconfirmed) {
+            setTimeout(() => {
+                abrirModalEdicaoParagem(paragem, true);
+            }, 300);
+        }
     };
 
     btnCancelar.onclick = () => {
@@ -1018,10 +1000,8 @@ function aplicarPrefixoNoCampo(prefixo) {
 
     inputCP.value = `${prefixo}-`;
     
-    // Foca o campo de Código Postal para abrir o teclado imediatamente
     inputCP.focus();
 
-    // Garante que o cursor de escrita fica colocado logo após o hífen
     const comprimentoTexto = inputCP.value.length;
     inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
 }
@@ -1050,7 +1030,6 @@ function configurarFormatacaoCodigoPostal() {
 
     inputCP.addEventListener('input', () => {
         let valor = inputCP.value;
-        // Permite apenas números e hífens
         valor = valor.replace(/[^0-9-]/g, '');
 
         const numerosApenas = valor.replace(/\D/g, '');
@@ -1058,7 +1037,6 @@ function configurarFormatacaoCodigoPostal() {
         if (numerosApenas.length <= 4) {
             valor = numerosApenas;
         } else {
-            // Insere o hífen automaticamente a seguir ao quarto dígito
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
         }
 
@@ -1078,26 +1056,21 @@ function configurarEscutaCodigoPostalParaLimites() {
         const valor = inputCP.value.trim();
         const padraoCP = /^\d{4}-\d{3}$/;
 
-        // Se o campo de Código Postal for limpo pelo utilizador
         if (valor.length === 0 && autocompleteInstancia) {
-            // Repõe o limite geográfico padrão alargado de 15km de Mafra (Foco Suave)
             const centroMafra = { lat: 38.9369, lng: -9.3282 };
             const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
             autocompleteInstancia.setBounds(circuloMafra.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa a parede estrita
+            autocompleteInstancia.setOptions({ strictBounds: false });
             console.log("[PWA] Autocomplete reposto para o limite geral de Mafra (15km).");
             return;
         }
 
-        // Se detetar que o utilizador digitou um Código Postal de 7 dígitos completo (ex: 2640-601)
         if (padraoCP.test(valor)) {
             console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A determinar localidade...`);
 
-            // Procura a localidade (brick) associada localmente sem precisar de fazer pedidos ao servidor
             const { brickName } = resolveBrickForZip(valor, window.drivers);
             
             if (inputMorada) {
-                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra/Sintra
                 const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
                 const nomeConcelhoFormatado = concelhoDetectado.charAt(0) + concelhoDetectado.slice(1).toLowerCase();
 
@@ -1108,18 +1081,16 @@ function configurarEscutaCodigoPostalParaLimites() {
                 inputMorada.value = textoPreenchido;
                 inputMorada.focus();
                 
-                // Coloca o cursor de escrita exatamente no fim, pronto a receber a rua, travessa, beco ou POI
                 const comprimento = inputMorada.value.length;
                 inputMorada.setSelectionRange(comprimento, comprimento);
             }
 
-            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho
             if (autocompleteInstancia) {
                 const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
                 const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
                 const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
                 autocompleteInstancia.setBounds(circuloConcelho.getBounds());
-                autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa restrição e prioriza por texto
+                autocompleteInstancia.setOptions({ strictBounds: false });
                 console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por texto livre.");
             }
         }
@@ -1133,40 +1104,33 @@ function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
-    // Evita a criação duplicada de instâncias no mesmo elemento do DOM! (Previne que o código postal anterior regresse)
     if (inputMorada.dataset.autocompleteBound === "true") {
         return;
     }
 
-    // Se o SDK do Google Maps ainda não terminou de carregar, tenta novamente brevemente
     if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
         setTimeout(inicializarAutocompleteMorada, 500);
         return;
     }
 
     try {
-        // Coordenadas centrais de Mafra, Portugal para limitar a pesquisa automática localmente (Padrão)
         const centroMafra = { lat: 38.9369, lng: -9.3282 };
-        const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 }); // Raio de 15km em redor do centro de Mafra
+        const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
         const limitesMafra = circuloMafra.getBounds();
 
-        // Cria a instância de autocomplete restrita a Portugal, priorizando o concelho de Mafra
         autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
             componentRestrictions: { country: 'pt' },
             fields: ['address_components', 'geometry', 'formatted_address'],
             bounds: limitesMafra,
-            strictBounds: false // false prioriza geograficamente Mafra mas permite resultados próximos em caso de fronteira
+            strictBounds: false
         });
 
-        // Marca o elemento para evitar duplicações de instâncias concorrentes
         inputMorada.dataset.autocompleteBound = "true";
 
-        // Evento disparado quando o utilizador toca numa morada ou estabelecimento sugerido pela Google
         autocompleteInstancia.addListener('place_changed', () => {
             const localSelecionado = autocompleteInstancia.getPlace();
             if (!localSelecionado || !localSelecionado.address_components) return;
 
-            // Extração automática inteligente do Código Postal (se presente no registo do Google)
             const componenteCP = localSelecionado.address_components.find(c => c.types.includes('postal_code'));
             if (componenteCP) {
                 const inputCP = document.getElementById('rota-codigo-postal');
@@ -1190,9 +1154,6 @@ function inicializarAutocompleteMorada() {
 // SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL
 // ==========================================
 
-/**
- * text para a caixa de observações com base das tags selecionadas.
- */
 function textObservacoesAutomatico() {
     const textareaObs = document.getElementById('edit-morada-obs');
     if (!textareaObs) return;
@@ -1201,18 +1162,13 @@ function textObservacoesAutomatico() {
     if (embalagemSelecionada) partes.push(embalagemSelecionada);
     if (origemSelecionada) partes.push(origemSelecionada);
 
-    // Junta as partes com um espaço (ex: "Envelope Amazon")
     textareaObs.value = partes.join(" ");
 }
 
-/**
- * Altera visualmente a cor dos botões (de cinzento para azul) consoante a seleção activa.
- */
 function atualizarEstilosBotoesModal() {
     const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
     const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
 
-    // 1. Pintar botões de Embalagem
     botoesEmbalagem.forEach(btn => {
         const tipo = btn.getAttribute('data-tipo');
         if (embalagemSelecionada === tipo) {
@@ -1222,13 +1178,11 @@ function atualizarEstilosBotoesModal() {
         }
     });
 
-    // 2. Pintar botões de Origem / Fornecedores
     botoesOrigem.forEach(btn => {
         const origem = btn.getAttribute('data-origem');
         if (origemSelecionada === origem) {
             btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
         } else {
-            // Estilo padrão específico para o botão de Fraldas (com o coração vermelho)
             if (origem === 'Fraldas') {
                 btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1";
             } else {
@@ -1238,9 +1192,6 @@ function atualizarEstilosBotoesModal() {
     });
 }
 
-/**
- * Analisa as observações já existentes de um pacote e pré-seleciona os botões do modal de forma inteligente.
- */
 function preencherSelecoesPorTexto(observacao) {
     embalagemSelecionada = "";
     origemSelecionada = "";
@@ -1249,7 +1200,6 @@ function preencherSelecoesPorTexto(observacao) {
 
     const obsUpper = observacao.toUpperCase();
 
-    // Detetar Embalagem no texto
     if (obsUpper.includes("ENVELOPE")) {
         embalagemSelecionada = "Envelope";
     } else if (obsUpper.includes("CAIXA PEQUENA")) {
@@ -1260,7 +1210,6 @@ function preencherSelecoesPorTexto(observacao) {
         embalagemSelecionada = "Pacote";
     }
 
-    // Detetar Fornecedor no texto
     if (obsUpper.includes("AMAZON")) {
         origemSelecionada = "Amazon";
     } else if (obsUpper.includes("ZARA")) {
@@ -1272,9 +1221,6 @@ function preencherSelecoesPorTexto(observacao) {
     }
 }
 
-/**
- * Atribui os escutadores de cliques em todos os botões rápidos do modal de edição.
- */
 function configurarBotoesRapidosModal() {
     const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
     const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
@@ -1284,7 +1230,6 @@ function configurarBotoesRapidosModal() {
             e.preventDefault();
             const tipo = btn.getAttribute('data-tipo');
             
-            // Alterna a seleção: se clicar de novo no mesmo, desseleciona
             if (embalagemSelecionada === tipo) {
                 embalagemSelecionada = "";
             } else {
@@ -1313,7 +1258,6 @@ function configurarBotoesRapidosModal() {
     });
 }
 
-// Para manter retrocompatibilidade com nomes chamados internamente no DOM
 function atualizarStylesBotoesModal() {
     atualizarEstilosBotoesModal();
 }
@@ -1330,21 +1274,17 @@ export function setupRotasLogic() {
     const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
     const statusPartida = document.getElementById('status-partida');
 
-    // Novos elementos do formulário de Código Postal
     const btnAdicionarPostal = document.getElementById('btn-adicionar-postal-rota');
 
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
-    // Novo botão para finalização do turno
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
 
-    // Inicialização da nova lógica de assistência ao teclado para o Código Postal
     configurarEventosPrefixoRapido();
     configurarFormatacaoPostal();
     inicializarAutocompleteMorada();
     
-    // Liga a escuta dinâmica do Código Postal para mudar o raio de sugestões (Foco local em Mafra)
     configurarEscutaCodigoPostalParaLimites();
 
     if (btnPlaneamento && btnConducao) {
@@ -1356,7 +1296,6 @@ export function setupRotasLogic() {
         });
     }
 
-    // Escuta de clique do novo botão de Adicionar Pacote por Código Postal
     if (btnAdicionarPostal) {
         btnAdicionarPostal.addEventListener('click', () => {
             processarAdicaoPorPostal();
@@ -1367,13 +1306,12 @@ export function setupRotasLogic() {
         btnIniciarRota.addEventListener('click', () => {
             const dataSelecionada = dataRotaInput.value;
             if (!dataSelecionada) {
-                alert("Por favor, select uma data para continuar.");
+                alert("Por favor, selecione uma data para continuar.");
                 return;
             }
             const d = new Date(dataSelecionada);
             const dataFormatada = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
             
-            // RESET DO DIÁRIO DE BORDO COMPLETO PARA O NOVO TURNO INICIADO
             window.tripStarted = false;
             window.tripCompleted = false;
             window.odometerStart = 0;
@@ -1421,7 +1359,6 @@ export function setupRotasLogic() {
         });
     }
 
-    // O botão de buscar partida agora instrui o utilizador a usar os mesmos inputs de Código Postal
     if (btnBuscarPartida) {
         btnBuscarPartida.addEventListener('click', () => {
             window.definindoPartidaPorMorada = true;
@@ -1455,7 +1392,6 @@ export function setupRotasLogic() {
         });
     }
 
-    // Escuta ativa do botão tátil de encerramento do Diário de Bordo
     if (btnFinalizarTurno) {
         btnFinalizarTurno.addEventListener('click', () => {
             abrirModalOdometroChegada();
@@ -1463,7 +1399,6 @@ export function setupRotasLogic() {
     }
 }
 
-// Wrapper local para conformidade com a assinatura original
 function configurarFormatacaoPostal() {
     configurarFormatacaoCodigoPostal();
 }
@@ -1495,7 +1430,6 @@ export function sincronizarInterfaceRota() {
 
         renderMoradasAdicionadas();
 
-        // Reinicia o autocomplete caso a caixa de moradas mude de estado visual
         setTimeout(inicializarAutocompleteMorada, 100);
 
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
@@ -1546,7 +1480,7 @@ export function setupModaisEdicao() {
         itemSendoEditado = null;
     });
 
-    btnSalvarEdicao.addEventListener('click', () => {
+    btnSalvarEdicao.addEventListener('click', async () => {
         if (!itemSendoEditado) return;
 
         const editMoradaTexto = document.getElementById('edit-morada-texto');
@@ -1563,35 +1497,95 @@ export function setupModaisEdicao() {
             return;
         }
 
-        let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
-        let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
+        // Ativa feedback visual de carregamento no botão
+        const textoOriginalBotao = btnSalvarEdicao.innerHTML;
+        btnSalvarEdicao.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> A geolocalizar...';
+        btnSalvarEdicao.disabled = true;
 
-        if (itemIndexPre !== -1) {
-            window.moradasEntregas[itemIndexPre].address = novaMorada;
-            window.moradasEntregas[itemIndexPre].observation = novaObs;
-            window.moradasEntregas[itemIndexPre].priority = novaPrioridade;
+        try {
+            // Se a morada foi alterada, executa a re-geocodificação assíncrona automática
+            if (novaMorada !== itemSendoEditado._originalAddress) {
+                const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        postalCode: "", // Geocodificação baseada na string completa
+                        address: novaMorada
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Falha ao validar a nova morada geográfica.");
+                }
+
+                // Atualiza as coordenadas e o endereço oficial resolvido pelo Google Maps
+                itemSendoEditado.lat = data.lat;
+                itemSendoEditado.lng = data.lng;
+                itemSendoEditado.address = data.address;
+
+                // Re-calcula a estante física (Brick) correspondente com base no endereço oficial
+                const postalCodeMatch = data.address.match(/\d{4}-\d{3}/);
+                if (postalCodeMatch) {
+                    const { brickId, brickName } = resolveBrickForZip(postalCodeMatch[0], window.drivers);
+                    itemSendoEditado.brickId = brickId;
+                    itemSendoEditado.brickName = brickName;
+                } else {
+                    const { brickId, brickName } = resolveBrickForZip(novaMorada, window.drivers);
+                    if (brickId) {
+                        itemSendoEditado.brickId = brickId;
+                        itemSendoEditado.brickName = brickName;
+                    }
+                }
+            }
+
+            // Atualiza as observações e prioridade
+            itemSendoEditado.observation = novaObs;
+            itemSendoEditado.priority = novaPrioridade;
+
+            // Sincroniza em ambas as listas de paragens (Planeamento e Otimização)
+            let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
+            let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
+
+            if (itemIndexPre !== -1) {
+                window.moradasEntregas[itemIndexPre] = { ...itemSendoEditado };
+            }
+
+            if (itemIndexPos !== -1) {
+                window.rotaOtimizada[itemIndexPos] = { ...itemSendoEditado };
+
+                // Recalcula as distâncias relativas pós-modificação para fins do diário de bordo/odómetro
+                window.rotaOtimizada.forEach((p, idx) => {
+                    p.distanciaDoAnterior = calcularDistanciaHaversine(
+                        idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
+                        idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
+                        p.lat,
+                        p.lng
+                    );
+                });
+            }
+
+            sincronizarPersistencia();
+            
+            renderMoradasAdicionadas();
+            if (window.rotaOtimizada.length > 0) {
+                renderizarItinerarioOtimizado();
+                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+            }
+
+            const modalEditarParagem = document.getElementById('modal-editar-paragem');
+            if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
+            itemSendoEditado = null;
+
+        } catch (err) {
+            console.error("[PWA] Erro ao gravar edição de paragem:", err);
+            alert(`Erro ao atualizar a paragem: ${err.message}`);
+        } finally {
+            btnSalvarEdicao.innerHTML = textoOriginalBotao;
+            btnSalvarEdicao.disabled = false;
         }
-
-        if (itemIndexPos !== -1) {
-            window.rotaOtimizada[itemIndexPos].address = novaMorada;
-            window.rotaOtimizada[itemIndexPos].observation = novaObs;
-            window.rotaOtimizada[itemIndexPos].priority = novaPrioridade;
-        }
-
-        sincronizarPersistencia();
-        
-        renderMoradasAdicionadas();
-        if (window.rotaOtimizada.length > 0) {
-            renderizarItinerarioOtimizado();
-            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-        }
-
-        const modalEditarParagem = document.getElementById('modal-editar-paragem');
-        if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
-        itemSendoEditado = null;
     });
 
-    // Liga os escutadores de cliques para os botões do modal de edição
     configurarBotoesRapidosModal();
 }
 
@@ -1604,13 +1598,14 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
 
     itemSendoEditado = paragem;
+    itemSendoEditado._originalAddress = paragem.address; // Guarda a morada original para validação de alteração
+
     editMoradaTexto.value = paragem.address;
     editMoradaObs.value = paragem.observation || "";
     if (editMoradaPrioridade) {
         editMoradaPrioridade.checked = !!paragem.priority;
     }
 
-    // Analisa as observações salvas no texto para acender os botões certos ao abrir o modal
     preencherSelecoesPorTexto(paragem.observation || "");
     atualizarStylesBotoesModal();
 
