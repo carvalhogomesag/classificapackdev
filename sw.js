@@ -5,6 +5,7 @@
  *      e dos seletores de Entrega vs. Recolha no planeamento e edição.
  */
 
+
 const CACHE_NAME = 'classificapack-v65';
 
 const ASSETS = [
