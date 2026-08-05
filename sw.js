@@ -1,11 +1,11 @@
 /**
  * sw.js
  * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
- *      Atualizado para a versão v66 para forçar a descarga imediata do index.html atualizado
- *      e das lógicas de Recolha e geocodificação de Código Postal na aplicação.
+ *      Atualizado para a versão v67 para forçar a descarga imediata da correção 
+ *      de abertura automática do modal de observações após adicionar pacotes.
  */
 
-const CACHE_NAME = 'classificapack-v66';
+const CACHE_NAME = 'classificapack-v67';
 
 const ASSETS = [
   './',
