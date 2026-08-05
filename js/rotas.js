@@ -1,14 +1,11 @@
 /**
  * js/rotas.js
- * Versão v65.1 - Com Recolhes Ativadas e Escuta de CP Ajustada
+ * Versão v66.1 - Com Abertura Automática do Modal de Observações Pós-Adição
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
- *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
- *      atribui o Brick correspondente à localidade do pacote e apresenta etiquetas visuais de arrumação física.
- *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
- *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
+ *      Inclui pré-geolocalização inteligente e abre automaticamente o modal de notas/detalhes logo após adicionar um pacote.
+ *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local.
  *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
- *      NOVO: Suporta seletor segmentado tátil de Entrega vs. Recolha com etiquetas roxas vibrantes de arrumação física para motoristas.
- *      MELHORADO: Adapta a resolução de Bricks para centenas e suporta re-atribuição dinâmica inteligente de concelho (Sintra/Mafra).
+ *      NOVO: Suporta seletor segmentado tátil de Entrega vs. Recolha com etiquetas roxas vibrantes de arrumação física.
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
  */
@@ -138,7 +135,6 @@ export function setupVozLogic() {
     });
 }
 
-// Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
     const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
@@ -148,7 +144,6 @@ function isCatchAllLocality(freguesia, localidade) {
     return false;
 }
 
-// Auxiliar para detetar o concelho correspondente ao código postal fornecido
 function obterConcelhoPorCodigoPostal(zip) {
     if (!zip) return "MAFRA";
     const cleanPrefix = zip.replace(/\D/g, '').substring(0, 4);
@@ -158,9 +153,6 @@ function obterConcelhoPorCodigoPostal(zip) {
     return "MAFRA";
 }
 
-// ==========================================
-// RESOLVEDOR DE BRICK COMPATÍVEL INTERNO (ROTAS COM DUPLA PASSAGEM)
-// ==========================================
 function resolveBrickForZip(zip, drivers) {
     if (!zip || !drivers) return { brickId: null, brickName: null };
     const regexZip = /\d{4}-\d{3}/;
@@ -216,9 +208,6 @@ function resolveBrickForZip(zip, drivers) {
     };
 }
 
-// ==========================================
-// ALGORITMO SÍNCRONO LOCAL DE CONTINGÊNCIA (VIZINHO MAIS PRÓXIMO)
-// ==========================================
 function calcularRotaVizinhoMaisProximoLocal() {
     if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
 
@@ -253,7 +242,7 @@ function calcularRotaVizinhoMaisProximoLocal() {
 }
 
 // =========================================================================
-// TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA (GEOCODIFICAÇÃO LOCAL/PROD)
+// TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA (COM ABERTURA AUTOMÁTICA DO MODAL)
 // =========================================================================
 export async function processarAdicaoPorPostal() {
     const inputPostal = document.getElementById('rota-codigo-postal');
@@ -295,8 +284,6 @@ export async function processarAdicaoPorPostal() {
         }
 
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
-
-        // PRIORIDADE #1: Lê o tipo de operação ativa no formulário ("Entrega" ou "Recolha")
         const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
         const novaMorada = {
@@ -309,7 +296,7 @@ export async function processarAdicaoPorPostal() {
             priority: false,
             brickId: brickId,
             brickName: brickName,
-            tipoOperacao: tipoOperacaoVal // Gravação correta do tipo de operação
+            tipoOperacao: tipoOperacaoVal
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -332,17 +319,18 @@ export async function processarAdicaoPorPostal() {
 
                 novaMorada.isNewUnconfirmed = true;
                 window.rotaOtimizada.push(novaMorada);
+            }
 
-                sincronizarPersistencia();
-                renderMoradasAdicionadas();
+            sincronizarPersistencia();
+            renderMoradasAdicionadas();
+            
+            if (window.rotaOtimizada.length > 0) {
                 renderizarItinerarioOtimizado();
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-
-            } else {
-                renderMoradasAdicionadas();
-                sincronizarPersistencia();
-                abrirModalEdicaoParagem(novaMorada, false);
             }
+
+            // CORREÇÃO: Abre automaticamente o modal de detalhes/observações logo após adicionar o pacote
+            abrirModalEdicaoParagem(novaMorada, window.rotaOtimizada.length > 0);
         }
 
         // Limpa os campos e repõe o switcher de operação para o padrão ("Entrega")
@@ -436,7 +424,7 @@ export function renderMoradasAdicionadas() {
 }
 
 // =========================================================================
-// OTIMIZAÇÃO: CONEXÃO À GOOGLE ROUTE OPTIMIZATION API (CÁLCULO REAL POR ESTRADA)
+// OTIMIZAÇÃO: CONEXÃO À GOOGLE ROUTE OPTIMIZATION API
 // =========================================================================
 export async function otimizarItinerarioComVizinhoMaisProximo() {
     if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
@@ -446,9 +434,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
         const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa com ordenação personalizada. Se otimizar de novo, o sistema recalculará todo o percurso e perderá as suas alterações manuais. Deseja continuar?");
-        if (!confirmarRecalculo) {
-            return;
-        }
+        if (!confirmarRecalculo) return;
     }
 
     if (btnOtimizar) {
@@ -483,14 +469,12 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
-                
                 paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
                     paragemOriginal.lat,
                     paragemOriginal.lng
                 );
-                
                 window.rotaOtimizada.push(paragemOriginal);
             });
 
@@ -521,11 +505,10 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
         
         calcularRotaVizinhoMaisProximoLocal();
-        
         window.routingMethodUsed = 'Local';
         localStorage.setItem('cp_routing_method', 'Local');
         
-        alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo para que possa trabalhar!`);
+        alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo!`);
         
         const containerMapa = document.getElementById('container-mapa');
         const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
@@ -549,14 +532,13 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 }
 
 // =========================================================================
-// DESENHAR LISTA DE ENTREGAS OTIMIZADA COM SISTEMA DE SCROLL INTELIGENTE
+// DESENHAR LISTA DE ENTREGAS OTIMIZADA
 // =========================================================================
 export function renderizarItinerarioOtimizado() {
     const listaRotaFinal = document.getElementById('lista-rota-final');
     if (!listaRotaFinal) return;
 
     listaRotaFinal.innerHTML = "";
-    
     const lastNavigatedId = localStorage.getItem('cp_last_navigated_id');
 
     window.rotaOtimizada.forEach((paragem, index) => {
@@ -739,9 +721,7 @@ export function renderEstatisticasRota() {
         totalDist += p.distanciaDoAnterior || 0;
     });
 
-    if (statDistancia) {
-        statDistancia.textContent = `${totalDist.toFixed(2)} km`;
-    }
+    if (statDistancia) statDistancia.textContent = `${totalDist.toFixed(2)} km`;
 
     if (statTempo) {
         if (totalDist === 0) {
@@ -809,7 +789,7 @@ export function renderEstatisticasRota() {
 }
 
 // ==========================================
-// FUNÇÕES DE ABERTURA E VALIDAÇÃO DOS MODAIS DO ODÓMETRO
+// FUNÇÕES DOS MODAIS DO ODÓMETRO
 // ==========================================
 function abrirModalOdometroSaida(callback) {
     const modal = document.getElementById('modal-odometro-saida');
@@ -855,9 +835,7 @@ function abrirModalOdometroSaida(callback) {
         callback();
     };
 
-    btnCancelar.onclick = () => {
-        modal.classList.add('hidden');
-    };
+    btnCancelar.onclick = () => modal.classList.add('hidden');
 }
 
 function abrirModalOdometroChegada() {
@@ -885,7 +863,7 @@ function abrirModalOdometroChegada() {
         const horaVal = inputHora.value.trim();
 
         if (isNaN(kmVal) || kmVal < window.odometerStart) {
-            alert(`Erro de validação: O valor de quilometragem final de regresso não pode ser inferior ao valor de saída (${window.odometerStart} KM).`);
+            alert(`Erro de validação: O valor de quilometragem final não pode ser inferior ao valor de saída (${window.odometerStart} KM).`);
             return;
         }
         if (!horaVal) {
@@ -905,7 +883,6 @@ function abrirModalOdometroChegada() {
         window.rotaOtimizada = [];
         window.dataRotaSelecionada = "";
         window.rotaIniciada = false;
-
         window.tripStarted = false;
         window.tripCompleted = false;
         window.odometerStart = 0;
@@ -918,17 +895,14 @@ function abrirModalOdometroChegada() {
 
         sincronizarPersistencia();
         modal.classList.add('hidden');
-        
         sincronizarInterfaceRota();
     };
 
-    btnCancelar.onclick = () => {
-        modal.classList.add('hidden');
-    };
+    btnCancelar.onclick = () => modal.classList.add('hidden');
 }
 
 // ==========================================
-// FUNÇÃO GLOBAL DE RE-SEQUENCIAÇÃO DE ENTREGA
+// RE-SEQUENCIAÇÃO DE ENTREGA
 // ==========================================
 window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
     const modal = document.getElementById('modal-alterar-sequencia');
@@ -962,9 +936,7 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         paragem.isNewUnconfirmed = false;
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
-        if (originalPre) {
-            originalPre.isNewUnconfirmed = false;
-        }
+        if (originalPre) originalPre.isNewUnconfirmed = false;
 
         if (indexAtual !== novoIndex) {
             const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
@@ -989,27 +961,18 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
         modal.classList.add('hidden');
 
         if (wasUnconfirmed) {
-            setTimeout(() => {
-                abrirModalEdicaoParagem(paragem, true);
-            }, 350);
+            setTimeout(() => abrirModalEdicaoParagem(paragem, true), 350);
         }
     };
 
-    btnCancelar.onclick = () => {
-        modal.classList.add('hidden');
-    };
+    btnCancelar.onclick = () => modal.classList.add('hidden');
 };
 
-// ==========================================
-// AUXILIARES DO PREFIXO RÁPIDO E FORMATAÇÃO DO CÓDIGO POSTAL
-// ==========================================
 function aplicarPrefixoNoCampo(prefixo) {
     const inputCP = document.getElementById('rota-codigo-postal');
     if (!inputCP) return;
-
     inputCP.value = `${prefixo}-`;
     inputCP.focus();
-
     const comprimentoTexto = inputCP.value.length;
     inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
 }
@@ -1037,9 +1000,7 @@ function configurarFormatacaoCodigoPostal() {
     if (!inputCP) return;
 
     inputCP.addEventListener('input', () => {
-        let valor = inputCP.value;
-        valor = valor.replace(/[^0-9-]/g, '');
-
+        let valor = inputCP.value.replace(/[^0-9-]/g, '');
         const numerosApenas = valor.replace(/\D/g, '');
 
         if (numerosApenas.length <= 4) {
@@ -1047,14 +1008,10 @@ function configurarFormatacaoCodigoPostal() {
         } else {
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
         }
-
         inputCP.value = valor.toUpperCase();
     });
 }
 
-// =========================================================================
-// PRIORIDADE #2: ESCUTA DE CÓDIGO POSTAL AJUSTADA (APENAS ENVIA O CP7 LIMPO)
-// =========================================================================
 function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -1072,16 +1029,10 @@ function configurarEscutaCodigoPostalParaLimites() {
             return;
         }
 
-        // Quando o CP de 7 dígitos for atingido, insere APENAS o código postal no campo de morada/pesquisa
         if (padraoCP.test(valor)) {
-            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A injetar apenas o código postal no campo de pesquisa...`);
-
             if (inputMorada) {
-                // ANTES: Preenchia `${valor} ${brickName}, ${concelho}, `
-                // AGORA (Prioridade #2): Preenche apenas o código postal exato para evitar ruído e garantir geocodificações limpas.
                 inputMorada.value = valor;
                 inputMorada.focus();
-                
                 const comprimento = inputMorada.value.length;
                 inputMorada.setSelectionRange(comprimento, comprimento);
             }
@@ -1097,16 +1048,11 @@ function configurarEscutaCodigoPostalParaLimites() {
     });
 }
 
-// =========================================================================
-// INICIALIZAÇÃO DO GOOGLE MAPS AUTOCOMPLETE NO CAMPO DE MORADA
-// =========================================================================
 function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
-    if (inputMorada.dataset.autocompleteBound === "true") {
-        return;
-    }
+    if (inputMorada.dataset.autocompleteBound === "true") return;
 
     if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
         setTimeout(inicializarAutocompleteMorada, 500);
@@ -1150,9 +1096,6 @@ function inicializarAutocompleteMorada() {
     }
 }
 
-// ==========================================
-// SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL
-// ==========================================
 function textObservacoesAutomatico() {
     const textareaObs = document.getElementById('edit-morada-obs');
     if (!textareaObs) return;
@@ -1196,28 +1139,17 @@ function preencherSelecoesPorTexto(observacao) {
     origemSelecionada = "";
 
     if (!observacao) return;
-
     const obsUpper = observacao.toUpperCase();
 
-    if (obsUpper.includes("ENVELOPE")) {
-        embalagemSelecionada = "Envelope";
-    } else if (obsUpper.includes("CAIXA PEQUENA")) {
-        embalagemSelecionada = "Caixa Pequena";
-    } else if (obsUpper.includes("CAIXA GRANDE")) {
-        embalagemSelecionada = "Caixa Grande";
-    } else if (obsUpper.includes("PACOTE")) {
-        embalagemSelecionada = "Pacote";
-    }
+    if (obsUpper.includes("ENVELOPE")) embalagemSelecionada = "Envelope";
+    else if (obsUpper.includes("CAIXA PEQUENA")) embalagemSelecionada = "Caixa Pequena";
+    else if (obsUpper.includes("CAIXA GRANDE")) embalagemSelecionada = "Caixa Grande";
+    else if (obsUpper.includes("PACOTE")) embalagemSelecionada = "Pacote";
 
-    if (obsUpper.includes("AMAZON")) {
-        origemSelecionada = "Amazon";
-    } else if (obsUpper.includes("ZARA")) {
-        origemSelecionada = "Zara";
-    } else if (obsUpper.includes("CHINA") || obsUpper.includes("TEMU") || obsUpper.includes("SHEIN")) {
-        origemSelecionada = "China (Temu/Shein)";
-    } else if (obsUpper.includes("FRALDAS")) {
-        origemSelecionada = "Fraldas";
-    }
+    if (obsUpper.includes("AMAZON")) origemSelecionada = "Amazon";
+    else if (obsUpper.includes("ZARA")) origemSelecionada = "Zara";
+    else if (obsUpper.includes("CHINA") || obsUpper.includes("TEMU") || obsUpper.includes("SHEIN")) origemSelecionada = "China (Temu/Shein)";
+    else if (obsUpper.includes("FRALDAS")) origemSelecionada = "Fraldas";
 }
 
 function configurarBotoesRapidosModal() {
@@ -1245,9 +1177,6 @@ function configurarBotoesRapidosModal() {
     });
 }
 
-// ==========================================
-// CONFIGURAÇÃO DO MENU E CONTROLOS DE TURNOS
-// ==========================================
 export function setupRotasLogic() {
     const btnIniciarRota = document.getElementById('btn-iniciar-rota');
     const dataRotaInput = document.getElementById('data-rota');
@@ -1262,7 +1191,6 @@ export function setupRotasLogic() {
     const btnConducao = document.getElementById('btn-modo-conducao');
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
 
-    // Elementos do seletor tátil (Entrega vs. Recolha)
     const btnTipoEntrega = document.getElementById('btn-tipo-entrega');
     const btnTipoRecolha = document.getElementById('btn-tipo-recolha');
     const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
@@ -1390,9 +1318,6 @@ export function setupRotasLogic() {
     }
 }
 
-// ==========================================
-// SINCRONIZAÇÃO DA INTERFACE DE TURNO
-// ==========================================
 export function sincronizarInterfaceRota() {
     const containerSetupRota = document.getElementById('container-setup-rota');
     const containerPlaneadorRota = document.getElementById('container-planeador-rota');
@@ -1451,9 +1376,6 @@ export function sincronizarInterfaceRota() {
     }
 }
 
-// ==========================================
-// CONFIGURAÇÃO DOS MODAIS DE EDIÇÃO DE PARAGENS
-// ==========================================
 export function setupModaisEdicao() {
     const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
     const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
@@ -1524,7 +1446,7 @@ export function setupModaisEdicao() {
             itemSendoEditado.isNewUnconfirmed = false;
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
-            itemSendoEditado.tipoOperacao = novoTipoOperacao; // Atualização do tipo no objeto editado
+            itemSendoEditado.tipoOperacao = novoTipoOperacao;
 
             let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
             let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
