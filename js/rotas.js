@@ -1,5 +1,6 @@
 /**
  * js/rotas.js
+ * Versão v65.1 - Com Recolhes Ativadas e Escuta de CP Ajustada
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
  *      Inclui pré-geolocalização inteligente para limitar sugestões a um raio de 1km em redor do Código Postal introduzido,
  *      atribui o Brick correspondente à localidade do pacote e apresenta etiquetas visuais de arrumação física.
@@ -295,7 +296,7 @@ export async function processarAdicaoPorPostal() {
 
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
 
-        // NOVO: Lê o tipo de operação ativa no formulário ("Entrega" ou "Recolha")
+        // PRIORIDADE #1: Lê o tipo de operação ativa no formulário ("Entrega" ou "Recolha")
         const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
         const novaMorada = {
@@ -308,7 +309,7 @@ export async function processarAdicaoPorPostal() {
             priority: false,
             brickId: brickId,
             brickName: brickName,
-            tipoOperacao: tipoOperacaoVal // Gravação do tipo no objeto
+            tipoOperacao: tipoOperacaoVal // Gravação correta do tipo de operação
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -329,10 +330,7 @@ export async function processarAdicaoPorPostal() {
                     novaMorada.lng
                 );
 
-                // Define como novo por confirmar (ativa a bolinha laranja saltitante)
                 novaMorada.isNewUnconfirmed = true;
-
-                // Insere como último automaticamente e não abre o modal de sequência logo no arranque
                 window.rotaOtimizada.push(novaMorada);
 
                 sincronizarPersistencia();
@@ -571,7 +569,6 @@ export function renderizarItinerarioOtimizado() {
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
         if (paragem.status === "Falhou") statusColor = "bg-red-500";
 
-        // Se for recolha, a bolinha numérica ganha a cor de recolha (roxa/violeta)
         if (isRecolha && paragem.status === "Pendente") {
             statusColor = "bg-purple-600";
         }
@@ -581,7 +578,6 @@ export function renderizarItinerarioOtimizado() {
         const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
         if (isNewUnconfirmed) {
-            // Card de destaque Laranja Pulsante para nova entrega
             item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-orange-500 bg-orange-50/70 shadow-md animate-pulse ring-4 ring-orange-200";
         } else if (isLastNavigated) {
             if (isPriority) {
@@ -600,7 +596,6 @@ export function renderizarItinerarioOtimizado() {
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
-        // Bolinha de contagem. Fica laranja e a saltar (animate-bounce) se não confirmada. 
         const bolinhaHtml = isNewUnconfirmed 
             ? `<span class="btn-index-badge w-5 h-5 rounded-full bg-orange-500 text-white animate-bounce font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer" title="Clique para ordenar">
                 ${index + 1}
@@ -618,7 +613,6 @@ export function renderizarItinerarioOtimizado() {
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
                         
-                        <!-- EMBLEMAS (BADGES) EXPLICATIVOS DE OPERAÇÃO -->
                         ${isRecolha ? `<span class="bg-purple-100 text-purple-700 border border-purple-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="Operação de Recolha"><i class="fa-solid fa-hand-holding-hand text-purple-500"></i> <span>Recolha</span></span>` : ''}
                         ${isNewUnconfirmed ? `<span class="btn-confirm-seq bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse cursor-pointer"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
                         ${isLastNavigated && !isNewUnconfirmed ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
@@ -670,7 +664,6 @@ export function renderizarItinerarioOtimizado() {
 
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
 
-        // Liga o clique na bolinha laranja ou na etiqueta "Novo" para abrir o modal de ordenação
         if (isNewUnconfirmed) {
             const btnIndex = item.querySelector('.btn-index-badge');
             if (btnIndex) {
@@ -711,7 +704,7 @@ export function renderizarItinerarioOtimizado() {
 }
 
 // ==========================================
-// PAINEL DE ESTATÍSTICAS DA ROTA ATIVA (ESTIMATIVAS E SISTEMA EM USO)
+// PAINEL DE ESTATÍSTICAS DA ROTA ATIVA
 // ==========================================
 export function renderEstatisticasRota() {
     const htmlEl = document.getElementById('estatisticas-rota');
@@ -935,7 +928,7 @@ function abrirModalOdometroChegada() {
 }
 
 // ==========================================
-// FUNÇÃO GLOBAL DE RE-SEQUENCIAÇÃO DE ENTREGA (ACIONADA PELO CLIQUE NO MAPA OU ADIÇÃO DIRETA)
+// FUNÇÃO GLOBAL DE RE-SEQUENCIAÇÃO DE ENTREGA
 // ==========================================
 window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
     const modal = document.getElementById('modal-alterar-sequencia');
@@ -965,12 +958,9 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
         }
 
         const novoIndex = novaPos - 1;
-
         const wasUnconfirmed = !!paragem.isNewUnconfirmed;
 
-        // Limpa o estado pendente aqui (muda a cor do pin para normal e para de saltar!)
         paragem.isNewUnconfirmed = false;
-
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) {
             originalPre.isNewUnconfirmed = false;
@@ -998,7 +988,6 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         modal.classList.add('hidden');
 
-        // Abre o modal de observações logo a seguir, após a bolinha já ter mudado de cor e parado de saltar
         if (wasUnconfirmed) {
             setTimeout(() => {
                 abrirModalEdicaoParagem(paragem, true);
@@ -1012,7 +1001,7 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 };
 
 // ==========================================
-// AUXILIARES DO PREFIXO RÁPIDO E DA FORMATAÇÃO DO CÓDIGO POSTAL
+// AUXILIARES DO PREFIXO RÁPIDO E FORMATAÇÃO DO CÓDIGO POSTAL
 // ==========================================
 function aplicarPrefixoNoCampo(prefixo) {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -1063,9 +1052,9 @@ function configurarFormatacaoCodigoPostal() {
     });
 }
 
-// ==========================================
-// ESCUTA INTELIGENTE DE CÓDIGO POSTAL - AUTO-COMPLEMENTO DE LOCALIDADE E MAFRA (SEM RESTRIÇÃO DE KM)
-// ==========================================
+// =========================================================================
+// PRIORIDADE #2: ESCUTA DE CÓDIGO POSTAL AJUSTADA (APENAS ENVIA O CP7 LIMPO)
+// =========================================================================
 function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -1080,24 +1069,17 @@ function configurarEscutaCodigoPostalParaLimites() {
             const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
             autocompleteInstancia.setBounds(circuloMafra.getBounds());
             autocompleteInstancia.setOptions({ strictBounds: false });
-            console.log("[PWA] Autocomplete reposto para o limite geral de Mafra (15km).");
             return;
         }
 
+        // Quando o CP de 7 dígitos for atingido, insere APENAS o código postal no campo de morada/pesquisa
         if (padraoCP.test(valor)) {
-            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A determinar localidade...`);
+            console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A injetar apenas o código postal no campo de pesquisa...`);
 
-            const { brickName } = resolveBrickForZip(valor, window.drivers);
-            
             if (inputMorada) {
-                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
-                const nomeConcelhoFormatado = concelhoDetectado.charAt(0) + concelhoDetectado.slice(1).toLowerCase();
-
-                const textPreenchido = brickName 
-                    ? `${valor} ${brickName}, ${nomeConcelhoFormatado}, `
-                    : `${valor} ${nomeConcelhoFormatado}, `;
-
-                inputMorada.value = textPreenchido;
+                // ANTES: Preenchia `${valor} ${brickName}, ${concelho}, `
+                // AGORA (Prioridade #2): Preenche apenas o código postal exato para evitar ruído e garantir geocodificações limpas.
+                inputMorada.value = valor;
                 inputMorada.focus();
                 
                 const comprimento = inputMorada.value.length;
@@ -1110,14 +1092,13 @@ function configurarEscutaCodigoPostalParaLimites() {
                 const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
                 autocompleteInstancia.setBounds(circuloConcelho.getBounds());
                 autocompleteInstancia.setOptions({ strictBounds: false });
-                console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por text livre.");
             }
         }
     });
 }
 
 // =========================================================================
-// INICIALIZAÇÃO INTELIGENTE DO GOOGLE MAPS AUTOCOMPLETE NO CAMPO DE MORADA
+// INICIALIZAÇÃO DO GOOGLE MAPS AUTOCOMPLETE NO CAMPO DE MORADA
 // =========================================================================
 function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -1172,7 +1153,6 @@ function inicializarAutocompleteMorada() {
 // ==========================================
 // SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL
 // ==========================================
-
 function textObservacoesAutomatico() {
     const textareaObs = document.getElementById('edit-morada-obs');
     if (!textareaObs) return;
@@ -1248,14 +1228,8 @@ function configurarBotoesRapidosModal() {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             const tipo = btn.getAttribute('data-tipo');
-            
-            if (embalagemSelecionada === tipo) {
-                embalagemSelecionada = "";
-            } else {
-                embalagemSelecionada = tipo;
-            }
-            
-            atualizarStylesBotoesModal();
+            embalagemSelecionada = (embalagemSelecionada === tipo) ? "" : tipo;
+            atualizarEstilosBotoesModal();
             textObservacoesAutomatico();
         });
     });
@@ -1264,21 +1238,11 @@ function configurarBotoesRapidosModal() {
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             const origem = btn.getAttribute('data-origem');
-            
-            if (origemSelecionada === origem) {
-                origemSelecionada = "";
-            } else {
-                origemSelecionada = origem;
-            }
-            
-            atualizarStylesBotoesModal();
+            origemSelecionada = (origemSelecionada === origem) ? "" : origem;
+            atualizarEstilosBotoesModal();
             textObservacoesAutomatico();
         });
     });
-}
-
-function atualizarStylesBotoesModal() {
-    atualizarEstilosBotoesModal();
 }
 
 // ==========================================
@@ -1294,33 +1258,25 @@ export function setupRotasLogic() {
     const statusPartida = document.getElementById('status-partida');
 
     const btnAdicionarPostal = document.getElementById('btn-adicionar-postal-rota');
-
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
-
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
 
-    // Elementos do seletor de tipo de operação
+    // Elementos do seletor tátil (Entrega vs. Recolha)
     const btnTipoEntrega = document.getElementById('btn-tipo-entrega');
     const btnTipoRecolha = document.getElementById('btn-tipo-recolha');
     const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
 
     configurarEventosPrefixoRapido();
-    configurarFormatacaoPostal();
+    configurarFormatacaoCodigoPostal();
     inicializarAutocompleteMorada();
-    
     configurarEscutaCodigoPostalParaLimites();
 
     if (btnPlaneamento && btnConducao) {
-        btnPlaneamento.addEventListener('click', () => {
-            alternarModoRota('planeamento');
-        });
-        btnConducao.addEventListener('click', () => {
-            alternarModoRota('conducao');
-        });
+        btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
+        btnConducao.addEventListener('click', () => alternarModoRota('conducao'));
     }
 
-    // Configura os cliques táteis do switcher segmentado (Entrega vs. Recolha)
     if (btnTipoEntrega && btnTipoRecolha && inputTipoOperacao) {
         btnTipoEntrega.addEventListener('click', () => {
             inputTipoOperacao.value = "Entrega";
@@ -1336,9 +1292,7 @@ export function setupRotasLogic() {
     }
 
     if (btnAdicionarPostal) {
-        btnAdicionarPostal.addEventListener('click', () => {
-            processarAdicaoPorPostal();
-        });
+        btnAdicionarPostal.addEventListener('click', () => processarAdicaoPorPostal());
     }
 
     if (btnIniciarRota && dataRotaInput) {
@@ -1432,18 +1386,12 @@ export function setupRotasLogic() {
     }
 
     if (btnFinalizarTurno) {
-        btnFinalizarTurno.addEventListener('click', () => {
-            abrirModalOdometroChegada();
-        });
+        btnFinalizarTurno.addEventListener('click', () => abrirModalOdometroChegada());
     }
 }
 
-function configurarFormatacaoPostal() {
-    configurarFormatacaoCodigoPostal();
-}
-
 // ==========================================
-// SINCRONIZAÇÃO DA INTERFACE DE CONFIGURAÇÃO DE TURNO
+// SINCRONIZAÇÃO DA INTERFACE DE TURNO
 // ==========================================
 export function sincronizarInterfaceRota() {
     const containerSetupRota = document.getElementById('container-setup-rota');
@@ -1468,7 +1416,6 @@ export function sincronizarInterfaceRota() {
         }
 
         renderMoradasAdicionadas();
-
         setTimeout(inicializarAutocompleteMorada, 100);
 
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
@@ -1505,7 +1452,7 @@ export function sincronizarInterfaceRota() {
 }
 
 // ==========================================
-// CONFIGURAÇÃO DO POP-UP (MODAL) DE EDIÇÃO DE PARAGENS
+// CONFIGURAÇÃO DOS MODAIS DE EDIÇÃO DE PARAGENS
 // ==========================================
 export function setupModaisEdicao() {
     const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
@@ -1525,8 +1472,6 @@ export function setupModaisEdicao() {
         const editMoradaTexto = document.getElementById('edit-morada-texto');
         const editMoradaObs = document.getElementById('edit-morada-obs');
         const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
-        
-        // Elementos do switcher no Modal de Edição (Se existirem no index.html)
         const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
 
         if (!editMoradaTexto || !editMoradaObs) return;
@@ -1550,10 +1495,7 @@ export function setupModaisEdicao() {
                 const response = await fetch(`${API_BASE_URL}/api/geocode`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        postalCode: "",
-                        address: novaMorada
-                    })
+                    body: JSON.stringify({ postalCode: "", address: novaMorada })
                 });
 
                 const data = await response.json();
@@ -1579,13 +1521,10 @@ export function setupModaisEdicao() {
                 }
             }
 
-            // Remove o estado pendente "não confirmado", visto que o utilizador guardou com sucesso as observações
             itemSendoEditado.isNewUnconfirmed = false;
-
-            // Grava os novos valores, incluindo o tipo de operação atualizado do Modal
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
-            itemSendoEditado.tipoOperacao = novoTipoOperacao;
+            itemSendoEditado.tipoOperacao = novoTipoOperacao; // Atualização do tipo no objeto editado
 
             let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
             let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
@@ -1608,7 +1547,6 @@ export function setupModaisEdicao() {
             }
 
             sincronizarPersistencia();
-            
             renderMoradasAdicionadas();
             if (window.rotaOtimizada.length > 0) {
                 renderizarItinerarioOtimizado();
@@ -1628,7 +1566,6 @@ export function setupModaisEdicao() {
         }
     });
 
-    // Configura os cliques do switcher no Modal de Edição (Se existirem no index.html)
     const editTipoEntrega = document.getElementById('edit-tipo-entrega');
     const editTipoRecolha = document.getElementById('edit-tipo-recolha');
     const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
@@ -1667,7 +1604,6 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         editMoradaPrioridade.checked = !!paragem.priority;
     }
 
-    // Sincroniza visualmente o tipo de operação atual da paragem no Modal de Edição
     const tipoOperacao = paragem.tipoOperacao || "Entrega";
     const editTipoEntrega = document.getElementById('edit-tipo-entrega');
     const editTipoRecolha = document.getElementById('edit-tipo-recolha');
@@ -1685,7 +1621,7 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     }
 
     preencherSelecoesPorTexto(paragem.observation || "");
-    atualizarStylesBotoesModal();
+    atualizarEstilosBotoesModal();
 
     modalEditarParagem.classList.remove('hidden');
 

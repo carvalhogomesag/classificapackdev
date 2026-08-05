@@ -1,12 +1,11 @@
 /**
  * sw.js
  * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
- *      Atualizado para a versão v65 para forçar a descarga do cabeçalho corrigido de ícones
- *      e dos seletores de Entrega vs. Recolha no planeamento e edição.
+ *      Atualizado para a versão v66 para forçar a descarga imediata do index.html atualizado
+ *      e das lógicas de Recolha e geocodificação de Código Postal na aplicação.
  */
 
-
-const CACHE_NAME = 'classificapack-v65';
+const CACHE_NAME = 'classificapack-v66';
 
 const ASSETS = [
   './',
@@ -18,8 +17,8 @@ const ASSETS = [
   'js/motoristas.js',
   'js/setores.js',
   'js/geografia-data.js',
-  'js/geografia-mafra.js',   // Cache offline-first
-  'js/geografia-sintra.js',  // Cache offline-first
+  'js/geografia-mafra.js',
+  'js/geografia-sintra.js',
   'js/voz.js',
   'js/triagem.js',
   'js/rotas.js',
@@ -49,6 +48,7 @@ self.addEventListener('activate', (e) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
+            console.log('[Service Worker] A remover cache antiga obsoleta:', key);
             return caches.delete(key);
           }
         })

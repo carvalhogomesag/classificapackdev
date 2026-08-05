@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 03/08/2026, 20:28:39
+Gerado em: 05/08/2026, 22:42:05
 
 =========================================
 ARQUIVO: index.html
@@ -10,7 +10,7 @@ ARQUIVO: index.html
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v58, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v65, barra de navegação inferior, modais globais e os contentores onde os ecrãs parciais são injetados dinamicamente.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático (são injetados assincronamente pelo main.js).
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e o Service Worker (sw.js).
     -->
@@ -25,8 +25,8 @@ ARQUIVO: index.html
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Ícones simples -->
-    <link class="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Ícones simples - CORRIGIDO: rel="stylesheet" adicionado para carregar os ícones -->
+    <link class="stylesheet" rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Tesseract.js para processamento OCR local na câmara do telemóvel -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
@@ -97,14 +97,14 @@ ARQUIVO: index.html
     <!-- Container Principal (Shell) - REVERTIDO PARA A MÁXIMA ESTABILIDADE DE ROLAGEM GERAL -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Selo visual de versão v58 estável no canto direito) -->
+        <!-- Cabeçalho de Identidade (Selo visual de versão v65 estável no canto direito) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative">
             <span>Classifica Pack</span>
             <!-- Botão de Sair de Sessão / Logout para motoristas -->
             <button id="btn-logout" class="hidden absolute left-4 top-4 text-white hover:text-blue-200 text-xs font-bold bg-blue-700/50 px-2 py-1.5 rounded-lg border border-blue-400/30 flex items-center space-x-1">
                 <i class="fa-solid fa-right-from-bracket"></i> <span>Sair</span>
             </button>
-            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v58</span>
+            <span class="absolute right-4 top-5 bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v65</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS (Injetadas assincronamente pelo main.js) 
@@ -124,7 +124,7 @@ ARQUIVO: index.html
                     <p class="text-white text-sm font-semibold tracking-wider uppercase opacity-85 mt-2">Motorista Designado</p>
                     <h2 id="resultado-motorista" class="text-white text-2xl font-bold tracking-wide drop-shadow-md">---</h2>
                     
-                    <!-- Estante (Brick) Selecionada para organize o Pacote -->
+                    <!-- Estante (Brick) Selecionada para organizar o Pacote -->
                     <p class="text-white text-xs font-semibold tracking-wider uppercase opacity-85 mt-2">Arrumar na Estante (Brick)</p>
                     <div class="flex items-center space-x-2 bg-black/25 px-3 py-1 rounded-lg">
                         <i class="fa-solid fa-boxes-stacked text-yellow-300 text-xs"></i>
@@ -180,6 +180,21 @@ ARQUIVO: index.html
                     <div>
                         <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Morada de Entrega</label>
                         <input type="text" id="edit-morada-texto" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50">
+                    </div>
+
+                    <!-- NOVO: TIPO DE SERVIÇO SWITCHER (ENTREGA VS RECOLHA) -->
+                    <div class="space-y-1.5">
+                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Tipo de Serviço</label>
+                        <div class="flex bg-gray-100 p-1 rounded-xl border border-gray-200">
+                            <button type="button" id="btn-servico-entrega" class="flex-1 py-2.5 text-xs font-black rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer focus:outline-none">
+                                <i class="fa-solid fa-truck-ramp-box mr-1"></i> Entrega
+                            </button>
+                            <button type="button" id="btn-servico-recolha" class="flex-1 py-2.5 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer focus:outline-none">
+                                <i class="fa-solid fa-hand-holding-hand mr-1"></i> Recolha
+                            </button>
+                        </div>
+                        <!-- Campo oculto integrado para gravação reativa de edições -->
+                        <input type="hidden" id="edit-tipo-operacao" value="Entrega">
                     </div>
 
                     <!-- Secção 1: Tipo de Embalagem (Grelha Tátil) -->
@@ -252,7 +267,7 @@ ARQUIVO: index.html
             </div>
         </div>
 
-        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA (Global - NOVO: Adicionado identificador de bloqueio de login) -->
+        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA -->
         <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-4xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
             <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-lg"></i>
@@ -422,8 +437,15 @@ ARQUIVO: manifest.json
 ARQUIVO: sw.js
 =========================================
 
-// sw.js (Versão v58)
-const CACHE_NAME = 'classificapack-v58';
+/**
+ * sw.js
+ * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
+ *      Atualizado para a versão v65 para forçar a descarga do cabeçalho corrigido de ícones
+ *      e dos seletores de Entrega vs. Recolha no planeamento e edição.
+ */
+
+
+const CACHE_NAME = 'classificapack-v65';
 
 const ASSETS = [
   './',
@@ -475,6 +497,7 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
+  // Ignora chamadas externas para recursos em nuvem que requerem rede ativa direta
   if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google') || e.request.url.includes('firebase') || e.request.url.includes('firestore')) {
     return;
   }
@@ -922,6 +945,30 @@ function agruparLocalidadesPorCentenas(rawGeography) {
     }
 
     return groupedGeography;
+}
+
+/**
+ * Constrói um endereço livre de parênteses e formatado com o primeiro CP real do Brick.
+ * Formato gerado: "2705-100 Colares, Sintra, Portugal" (altamente compreendido pelo Google).
+ * 
+ * @param {string} nomeBrick - O nome do Brick (ex: "Colares (100-199)")
+ * @param {Array<string>} listaCps - Lista de CPs associados a este Brick
+ * @param {string} freguesia - Nome da freguesia ativa
+ * @param {string} concelho - Nome do concelho ativo (Sintra ou Mafra)
+ * @returns {string} Endereço higienizado pronto para pesquisa
+ */
+export function obterEnderecoHigienizado(nomeBrick, listaCps, freguesia, concelho) {
+    // Remove parênteses e intervalos de texto do nome (ex: "Colares (100-199)" -> "Colares")
+    const localidadeLimpa = nomeBrick.replace(/\s*\(.*?\)\s*/g, '').trim();
+
+    // Se tivermos códigos postais reais na lista, utilizamos o primeiro como representante preciso
+    if (Array.isArray(listaCps) && listaCps.length > 0) {
+        const cpRepresentante = listaCps[0];
+        return `${cpRepresentante} ${localidadeLimpa}, ${concelho}, Portugal`;
+    }
+
+    // Fallback caso a lista de CPs esteja temporariamente vazia
+    return `${localidadeLimpa}, ${freguesia}, ${concelho}, Portugal`;
 }
 
 export const GEOGRAPHY = {
@@ -2725,6 +2772,7 @@ ARQUIVO: js/motoristas.js
  * Faz: Gere o registo, edição, eliminação, listagem e coloração dos motoristas ativos, integrando diretamente as gravações no Cloud Firestore.
  *      NOVO: Suporta múltiplos concelhos de atuação (concelhos: ["MAFRA", "SINTRA"]) por motorista e filtragem reativa no ecrã.
  *      NOVO: Sincroniza automaticamente as checkboxes do formulário de registo com o concelho ativo selecionado no filtro.
+ *      NOVO: Inicializa de forma autónoma e reativa os escutadores da palete de cores de registo.
  * NÃO faz: Não gere a atribuição geográfica direta de Bricks (atribuídos no painel de Bricks).
  * Depende de: ./firebase-init.js (para aceder ao banco de dados Firestore db)
  */
@@ -2733,6 +2781,35 @@ import { db } from './firebase-init.js';
 
 // Concelho que está atualmente selecionado no filtro do ecrã de motoristas ("MAFRA" ou "SINTRA")
 let concelhoMotoristasAtivo = "MAFRA";
+
+// =========================================================================
+// INICIALIZAÇÃO DA PALETE DE CORES (AUTÓNOMA)
+// =========================================================================
+export function inicializarPaleteCores() {
+    const colorPickerContainer = document.getElementById('color-picker-container');
+    if (!colorPickerContainer) return;
+
+    // Evita a duplicação de listeners na palete de cores
+    if (colorPickerContainer.dataset.listenerAtivo === "true") return;
+
+    Array.from(colorPickerContainer.children).forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            
+            // Obtém a cor definida no atributo do botão
+            const cor = btn.getAttribute('data-cor') || btn.style.backgroundColor;
+            window.selectedColor = cor;
+
+            // Destaca visualmente o círculo da cor que foi selecionado
+            Array.from(colorPickerContainer.children).forEach(b => {
+                b.classList.remove('border-black', 'scale-110');
+            });
+            btn.classList.add('border-black', 'scale-110');
+        });
+    });
+
+    colorPickerContainer.dataset.listenerAtivo = "true";
+}
 
 // =========================================================================
 // RENDERIZAÇÃO DA LISTA DE MOTORISTAS ATIVOS
@@ -2801,17 +2878,24 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
     }
 
     const emEdicao = window.driverSendoEditado;
+    
+    // Suporta a cor vinda do argumento ou faz o fallback seguro para a variável global do picker
+    const corFinal = selectedColor || window.selectedColor || "#2563EB";
 
     if (emEdicao) {
         // Atualiza o motorista no Firestore
         db.collection('drivers').doc(emEdicao.id).update({
             name: nome,
-            color: selectedColor,
+            color: corFinal,
             concelhos: concelhos
         }).then(() => {
             console.log("[FIREBASE] Motorista atualizado com sucesso no Firestore.");
             window.cancelarEdicaoDriver();
-            renderCallback();
+            if (typeof renderCallback === 'function') {
+                renderCallback();
+            } else {
+                window.renderizarMotoristasUI();
+            }
         }).catch((err) => {
             console.error("[FIREBASE] Erro ao atualizar motorista:", err);
             alert("Erro de ligação: Não foi possível atualizar o motorista.");
@@ -2822,13 +2906,17 @@ export function handleDriverSubmit(e, drivers, selectedColor, renderCallback) {
         db.collection('drivers').doc(newId).set({ 
             id: newId, 
             name: nome, 
-            color: selectedColor,
+            color: corFinal,
             brickIds: [], // Inicia uma lista de Bricks vazia para nova atribuição
             concelhos: concelhos
         }).then(() => {
             console.log("[FIREBASE] Novo motorista inserido com sucesso no Firestore.");
             window.cancelarEdicaoDriver();
-            renderCallback();
+            if (typeof renderCallback === 'function') {
+                renderCallback();
+            } else {
+                window.renderizarMotoristasUI();
+            }
         }).catch((err) => {
             console.error("[FIREBASE] Erro ao inserir motorista:", err);
             alert("Erro de ligação: Não foi possível registar o motorista.");
@@ -2848,8 +2936,7 @@ window.renderizarMotoristasUI = () => {
             seletor.addEventListener('change', (e) => {
                 concelhoMotoristasAtivo = e.target.value;
 
-                // MELHORADO: Se o gestor não estiver em edição de um motorista específico, 
-                // sincroniza as checkboxes do formulário de registo para poupar cliques.
+                // Se o gestor não estiver em edição, sincroniza as checkboxes com o filtro
                 if (!window.driverSendoEditado) {
                     const mafraCheck = document.getElementById('concelho-mafra');
                     const sintraCheck = document.getElementById('concelho-sintra');
@@ -2863,10 +2950,15 @@ window.renderizarMotoristasUI = () => {
         }
     }
 
+    // Inicializa os cliques do color picker de forma reativa e segura
+    inicializarPaleteCores();
+
     const listaMotoristas = document.getElementById('lista-motoristas');
     if (listaMotoristas) {
+        const driversList = Array.isArray(window.drivers) ? window.drivers : [];
+        
         // Filtra os motoristas ativos com base no concelho selecionado no topo do painel
-        const filteredDrivers = window.drivers.filter(driver => {
+        const filteredDrivers = driversList.filter(driver => {
             const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
             return concelhos.includes(concelhoMotoristasAtivo);
         });
@@ -2909,7 +3001,8 @@ window.editDriver = (driver) => {
     const colorPickerContainer = document.getElementById('color-picker-container');
     if (colorPickerContainer) {
         Array.from(colorPickerContainer.children).forEach(btn => {
-            if (btn.style.backgroundColor === driver.color || btn.style.backgroundColor.replace(/\s/g, "") === driver.color.toLowerCase()) {
+            const btnCor = btn.getAttribute('data-cor') || btn.style.backgroundColor;
+            if (btnCor === driver.color || btnCor.replace(/\s/g, "") === driver.color.toLowerCase()) {
                 btn.classList.add('border-black', 'scale-110');
             } else {
                 btn.classList.remove('border-black', 'scale-110');
@@ -2929,16 +3022,25 @@ window.cancelarEdicaoDriver = () => {
     if (btnSubmit) btnSubmit.textContent = "Adicionar Motorista";
     if (btnCancelar) btnCancelar.classList.add('hidden');
 
-    // MELHORADO: Repoem o estado padrão das checkboxes do formulário com base no filtro ativo no topo
+    // Repõe o estado padrão das checkboxes do formulário com base no filtro ativo no topo
     const mafraCheck = document.getElementById('concelho-mafra');
     const sintraCheck = document.getElementById('concelho-sintra');
     if (mafraCheck) mafraCheck.checked = (concelhoMotoristasAtivo === "MAFRA");
     if (sintraCheck) sintraCheck.checked = (concelhoMotoristasAtivo === "SINTRA");
+    
+    // Reseta visualmente a seleção da palete de cores
+    const colorPickerContainer = document.getElementById('color-picker-container');
+    if (colorPickerContainer) {
+        Array.from(colorPickerContainer.children).forEach(btn => {
+            btn.classList.remove('border-black', 'scale-110');
+        });
+    }
+    window.selectedColor = null;
 };
 
 window.deleteDriver = (id) => {
     if (confirm("Ao apagar este motorista, as suas contagens de pacotes também serão removidas. Confirmar?")) {
-        // Elimina o motorista do Firestore de forma síncrona
+        // Elimina o motorista do Firestore
         db.collection('drivers').doc(id).delete()
             .then(() => {
                 console.log("[FIREBASE] Motorista eliminado no Firestore.");
@@ -3034,7 +3136,7 @@ ARQUIVO: js/rotas.js
  *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local no próprio dispositivo para que o motorista nunca pare.
  *      Implementa proteção de ligação física única no Autocomplete do Google para evitar sobreposição de instâncias de escrita concorrentes.
  *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
- *      NOVO: Implementa alerta de re-otimização e inserção inteligente direta de pacotes em rotas ativas com indicação visual pulsante (por confirmar).
+ *      NOVO: Suporta seletor segmentado tátil de Entrega vs. Recolha com etiquetas roxas vibrantes de arrumação física para motoristas.
  *      MELHORADO: Adapta a resolução de Bricks para centenas e suporta re-atribuição dinâmica inteligente de concelho (Sintra/Mafra).
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
@@ -3042,7 +3144,7 @@ ARQUIVO: js/rotas.js
 
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
-import { GEOGRAPHY } from './geografia-data.js';
+import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
 import { 
     obterEnderecoPorGPSGoogle, 
     calcularDistanciaHaversine, 
@@ -3071,7 +3173,6 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
 // CENTRALIZAÇÃO DA PERSISTÊNCIA DAS ROTAS (SINC DE CLOUD REAL-TIME!)
 // ==========================================
 function sincronizarPersistencia() {
-    // Grava de cache síncrona no LocalStorage local
     saveData(
         window.drivers, 
         [], // intervals obsoletos
@@ -3092,7 +3193,6 @@ function sincronizarPersistencia() {
     localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
     localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
 
-    // NOVO: Se houver um utilizador autenticado, sincroniza reativamente com o seu documento correspondente em 'routes'!
     if (window.currentUserUid) {
         db.collection('routes').doc(window.currentUserUid).set({
             partidaLocalizacao: window.partidaLocalizacao || null,
@@ -3102,7 +3202,6 @@ function sincronizarPersistencia() {
             rotaIniciada: window.rotaIniciada || false,
             routingMethodUsed: window.routingMethodUsed || 'Cloud',
 
-            // Sincroniza dados do Odómetro para a nuvem
             tripStarted: window.tripStarted || false,
             tripCompleted: window.tripCompleted || false,
             odometerStart: window.odometerStart || 0,
@@ -3132,17 +3231,13 @@ export function alternarModoRota(modo) {
 
     if (modo === 'conducao') {
         planningControls.classList.add('hidden');
-        
         btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
         btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
-        
         localStorage.setItem('cp_modo_rota', 'conducao');
     } else {
         planningControls.classList.remove('hidden');
-        
         btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
         btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
-        
         localStorage.setItem('cp_modo_rota', 'planeamento');
     }
 }
@@ -3152,7 +3247,7 @@ export function alternarModoRota(modo) {
 // ==========================================
 export function setupVozLogic() {
     const btnVoz = document.getElementById('btn-voz');
-    const buscaMoradaInput = document.getElementById('rota-morada-completa'); // Aponta agora para a morada opcional
+    const buscaMoradaInput = document.getElementById('rota-morada-completa');
     const micAtivo = document.getElementById('microfone-ativo');
     const micInativo = document.getElementById('microfone-inativo');
 
@@ -3175,8 +3270,6 @@ export function setupVozLogic() {
 // Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
-    
-    // Remove os parênteses de centenas (ex: "Sintra (000-099)" passa a "sintra") para fins de comparação
     const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
     
     if (cleanLoc === cleanFreg) return true;
@@ -3203,7 +3296,6 @@ function resolveBrickForZip(zip, drivers) {
     const match = zip.match(regexZip);
     const normalizedZip = match ? match[0] : zip.trim();
 
-    // Deteta reativamente o concelho com base no código postal
     const concelho = obterConcelhoPorCodigoPostal(normalizedZip);
 
     let matchedFreguesia = null;
@@ -3213,7 +3305,6 @@ function resolveBrickForZip(zip, drivers) {
         return { brickId: null, brickName: null };
     }
 
-    // PASSAGEM 1: Mira laser - Procura apenas nas localidades específicas
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
             if (isCatchAllLocality(freguesia, localidade)) {
@@ -3229,7 +3320,6 @@ function resolveBrickForZip(zip, drivers) {
         if (matchedFreguesia) break;
     }
 
-    // PASSAGEM 2: Fallback - Se não encontrou, procura nas genéricas (catch-all)
     if (!matchedFreguesia) {
         for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
             for (const [localidade, cpList] of Object.entries(localidades)) {
@@ -3305,7 +3395,6 @@ export async function processarAdicaoPorPostal() {
     const postalCodeVal = inputPostal.value.trim();
     const moradaVal = inputMorada ? inputMorada.value.trim() : "";
 
-    // 1. Limpa e valida se o Código Postal tem 7 dígitos numéricos
     const cleanZip = postalCodeVal.replace(/\D/g, '');
     if (cleanZip.length !== 7) {
         alert("Por favor, introduza um Código Postal válido com 7 dígitos (ex: 2655-319).");
@@ -3315,12 +3404,10 @@ export async function processarAdicaoPorPostal() {
 
     const formattedZip = `${cleanZip.substring(0, 4)}-${cleanZip.substring(4, 7)}`;
 
-    // 2. Coloca o botão em estado de carregamento de segurança
     btnAdicionar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A geolocalizar...</span>';
     btnAdicionar.disabled = true;
 
     try {
-        // 3. Consulta o endpoint dinâmico (Local ou Render)
         const response = await fetch(`${API_BASE_URL}/api/geocode`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3336,23 +3423,24 @@ export async function processarAdicaoPorPostal() {
             throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
         }
 
-        // Resolve e associa estante física (Brick) na criação da paragem
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
 
-        // 4. Constrói o objeto de morada mapeada vinda da Google
+        // NOVO: Lê o tipo de operação ativa no formulário ("Entrega" ou "Recolha")
+        const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
+
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
             lat: data.lat,
             lng: data.lng,
-            address: data.address, // Endereço oficial mapeado pela Google
+            address: data.address,
             status: "Pendente",
             observation: "",
             priority: false,
             brickId: brickId,
-            brickName: brickName // Gravação física da estante (Brick) correspondente à localidade
+            brickName: brickName,
+            tipoOperacao: tipoOperacaoVal // Gravação do tipo no objeto
         };
 
-        // 5. Verifica se o clique anterior foi para definir o Ponto de Partida
         if (window.definindoPartidaPorMorada) {
             window.partidaLocalizacao = novaMorada;
             if (statusPartida) statusPartida.innerHTML = `<strong>Partida:</strong> ${novaMorada.address}`;
@@ -3360,12 +3448,9 @@ export async function processarAdicaoPorPostal() {
             sincronizarPersistencia();
             alert("Ponto de Partida configurado com sucesso!");
         } else {
-            // Caso contrário, adiciona como paragem de entrega à lista base de moradas
             window.moradasEntregas.push(novaMorada);
 
-            // NOVO: Verificação de Rota Ativa/Otimizada para Inserção Inteligente Sem Perda de Ordem
             if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
-                // Calcula de forma síncrona a distância Haversine a partir do último ponto atual da rota otimizada
                 const ultimaParagem = window.rotaOtimizada[window.rotaOtimizada.length - 1];
                 novaMorada.distanciaDoAnterior = calcularDistanciaHaversine(
                     ultimaParagem.lat,
@@ -3374,43 +3459,41 @@ export async function processarAdicaoPorPostal() {
                     novaMorada.lng
                 );
 
-                // NOVO: Define esta paragem como um Pacote Novo por Confirmar
+                // Define como novo por confirmar (ativa a bolinha laranja saltitante)
                 novaMorada.isNewUnconfirmed = true;
 
-                // Anexa o novo pacote diretamente ao final da rota otimizada atual
+                // Insere como último automaticamente e não abre o modal de sequência logo no arranque
                 window.rotaOtimizada.push(novaMorada);
 
-                // Grava e desenha imediatamente as atualizações no ecrã e no mapa
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
                 renderizarItinerarioOtimizado();
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 
-                // Abre de forma automática o seletor de sequência para o novo pacote
-                const novoIndex = window.rotaOtimizada.length - 1;
-                setTimeout(() => {
-                    if (typeof window.abrirModalAlterarSequencia === 'function') {
-                        window.abrirModalAlterarSequencia(novoIndex, novaMorada);
-                    }
-                }, 400);
-
             } else {
-                // Lógica de fallback original se a rota ainda não estiver otimizada
                 renderMoradasAdicionadas();
                 sincronizarPersistencia();
                 abrirModalEdicaoParagem(novaMorada, false);
             }
         }
 
-        // Limpa os campos de destino após adicionar com sucesso
+        // Limpa os campos e repõe o switcher de operação para o padrão ("Entrega")
         inputPostal.value = "";
         if (inputMorada) inputMorada.value = "";
+        
+        const btnTipoEntrega = document.getElementById('btn-tipo-entrega');
+        const btnTipoRecolha = document.getElementById('btn-tipo-recolha');
+        const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
+        if (btnTipoEntrega && btnTipoRecolha && inputTipoOperacao) {
+            inputTipoOperacao.value = "Entrega";
+            btnTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+            btnTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 hover:text-gray-700 transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+        }
 
     } catch (err) {
         console.error("Erro na geocodificação:", err);
         alert(`Erro: ${err.message}`);
     } finally {
-        // Devolve o botão ao estado padrão
         btnAdicionar.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Adicionar Pacote</span>';
         btnAdicionar.disabled = false;
     }
@@ -3437,10 +3520,13 @@ export function renderMoradasAdicionadas() {
             item.className = "flex items-center justify-between p-2 bg-gray-50 rounded border text-xs animate-fade-in space-x-2";
         }
 
+        const isRecolha = morada.tipoOperacao === "Recolha";
+
         item.innerHTML = `
             <div class="flex-1 truncate">
                 <strong class="text-gray-500">#${index + 1}</strong> 
                 <span>${morada.address}</span>
+                ${isRecolha ? `<span class="bg-purple-100 text-purple-700 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded border border-purple-200 ml-1.5"><i class="fa-solid fa-hand-holding-hand mr-0.5"></i> Recolha</span>` : ''}
                 ${morada.priority ? `<span class="bg-orange-500 text-white text-[8px] font-bold uppercase px-1 py-0.5 rounded ml-1.5"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                 ${morada.observation ? `<p class="text-[10px] text-blue-500 font-semibold italic mt-0.5 truncate">Nota: ${morada.observation}</p>` : ''}
             </div>
@@ -3453,6 +3539,9 @@ export function renderMoradasAdicionadas() {
         item.querySelector('.btn-edit-morada').onclick = () => abrirModalEdicaoParagem(morada, false);
         
         item.querySelector('.btn-del-morada').onclick = () => {
+            const confirmar = confirm(`Tem a certeza que deseja excluir esta entrega no planeamento?\nMorada: ${morada.address}`);
+            if (!confirmar) return;
+
             window.moradasEntregas = window.moradasEntregas.filter(m => m.id !== morada.id);
             window.rotaOtimizada = window.rotaOtimizada.filter(m => m.id !== morada.id); 
             
@@ -3487,11 +3576,10 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     const btnOtimizar = document.getElementById('btn-otimizar-rota');
 
-    // NOVO: Alerta preventivo contra perda acidental de sequenciação manual personalizada
     if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
         const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa com ordenação personalizada. Se otimizar de novo, o sistema recalculará todo o percurso e perderá as suas alterações manuais. Deseja continuar?");
         if (!confirmarRecalculo) {
-            return; // Aborta e preserva as alterações manuais intactas
+            return;
         }
     }
 
@@ -3501,7 +3589,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
     }
 
     try {
-        // Envia as coordenadas para o endpoint dinâmico (Local ou Render)
         const response = await fetch(`${API_BASE_URL}/api/optimize-route`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -3512,7 +3599,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         });
 
         if (!response.ok) {
-            // Deteta reativamente o código e erro HTTP real do Render para diagnosticar timeout ou chaves
             let errorDetails = `Erro ${response.status} (${response.statusText})`;
             try {
                 const errJson = await response.json();
@@ -3524,14 +3610,12 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         const data = await response.json();
         
         if (data.optimizedIndices) {
-            const indices = data.optimizedIndices; // Array de índices ordenados da Google (ex: [2, 0, 1])
+            const indices = data.optimizedIndices;
             window.rotaOtimizada = [];
 
-            // Reorganiza a rota local na ordem correta devolvida pela Google
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
                 
-                // Atribui uma distância teórica de condução (estimativa local)
                 paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
@@ -3545,7 +3629,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
             window.routingMethodUsed = 'Cloud';
             localStorage.setItem('cp_routing_method', 'Cloud');
         } else {
-            // Se a API não deu erro mas não ordenou, mantém a original
             window.rotaOtimizada = [...window.moradasEntregas];
             window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
             window.routingMethodUsed = 'Local';
@@ -3567,7 +3650,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         alternarModoRota('conducao');
 
     } catch (err) {
-        // Resolvedor de Contingência Local Ativo se o Render falhar, der timeout ou estiver a dormir
         console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
         
         calcularRotaVizinhoMaisProximoLocal();
@@ -3613,17 +3695,24 @@ export function renderizarItinerarioOtimizado() {
         const item = document.createElement('div');
         item.id = `paragem-${paragem.id}`; 
         
+        const isRecolha = paragem.tipoOperacao === "Recolha";
+
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
         if (paragem.status === "Falhou") statusColor = "bg-red-500";
 
+        // Se for recolha, a bolinha numérica ganha a cor de recolha (roxa/violeta)
+        if (isRecolha && paragem.status === "Pendente") {
+            statusColor = "bg-purple-600";
+        }
+
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
-        const isNewUnconfirmed = !!paragem.isNewUnconfirmed; // NOVO: Estado de pendência do novo pacote
+        const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
         if (isNewUnconfirmed) {
-            // NOVO: Card Amarelo Vivo Pulsante para Chamar a Atenção Visual do Motorista
-            item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-yellow-500 bg-yellow-50/70 shadow-md animate-pulse ring-4 ring-yellow-200";
+            // Card de destaque Laranja Pulsante para nova entrega
+            item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-orange-500 bg-orange-50/70 shadow-md animate-pulse ring-4 ring-orange-200";
         } else if (isLastNavigated) {
             if (isPriority) {
                 item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
@@ -3641,21 +3730,30 @@ export function renderizarItinerarioOtimizado() {
         const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
+        // Bolinha de contagem. Fica laranja e a saltar (animate-bounce) se não confirmada. 
+        const bolinhaHtml = isNewUnconfirmed 
+            ? `<span class="btn-index-badge w-5 h-5 rounded-full bg-orange-500 text-white animate-bounce font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer" title="Clique para ordenar">
+                ${index + 1}
+               </span>`
+            : `<span class="btn-index-badge w-5 h-5 rounded-full ${statusColor} text-white font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
+                ${index + 1}
+               </span>`;
+
         item.innerHTML = `
             <div class="flex items-center justify-between space-x-2">
                 <div class="flex-1 truncate">
                     <div class="flex items-center space-x-2 flex-wrap gap-1">
-                        <span class="w-5 h-5 rounded-full ${isNewUnconfirmed ? 'bg-yellow-500 text-black' : statusColor + ' text-white'} font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
-                            ${index + 1}
-                        </span>
+                        ${bolinhaHtml}
                         <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                             A cerca de ${paragem.distanciaDoAnterior.toFixed(2)} km
                         </span>
-                        ${isNewUnconfirmed ? `<span class="bg-yellow-500 text-black text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
+                        
+                        <!-- EMBLEMAS (BADGES) EXPLICATIVOS DE OPERAÇÃO -->
+                        ${isRecolha ? `<span class="bg-purple-100 text-purple-700 border border-purple-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="Operação de Recolha"><i class="fa-solid fa-hand-holding-hand text-purple-500"></i> <span>Recolha</span></span>` : ''}
+                        ${isNewUnconfirmed ? `<span class="btn-confirm-seq bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse cursor-pointer"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
                         ${isLastNavigated && !isNewUnconfirmed ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
                         
-                        <!-- INDICADOR VISUAL: Etiqueta de Estante (Brick) de arrumação na lista de rotas de condução -->
                         ${paragem.brickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="${paragem.brickId ? paragem.brickId.split('|')[0] : ''} - ${paragem.brickName}"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante: ${paragem.brickName}</span></span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
@@ -3686,7 +3784,6 @@ export function renderizarItinerarioOtimizado() {
             </div>
         `;
 
-        // INTERCEÇÃO TÁTIL DA PRIMEIRA MORADA DE NAVEGAÇÃO PARA REGISTO DO ODÓMETRO
         item.querySelector('.btn-navegar').onclick = () => {
             if (index === 0 && (!window.tripStarted || !window.odometerStart || window.odometerStart === 0)) {
                 abrirModalOdometroSaida(() => {
@@ -3702,6 +3799,24 @@ export function renderizarItinerarioOtimizado() {
         };
 
         item.querySelector('.btn-edit-otimizada').onclick = () => abrirModalEdicaoParagem(paragem, true);
+
+        // Liga o clique na bolinha laranja ou na etiqueta "Novo" para abrir o modal de ordenação
+        if (isNewUnconfirmed) {
+            const btnIndex = item.querySelector('.btn-index-badge');
+            if (btnIndex) {
+                btnIndex.onclick = (e) => {
+                    e.stopPropagation();
+                    window.abrirModalAlterarSequencia(index, paragem);
+                };
+            }
+            const btnConfirmSeq = item.querySelector('.btn-confirm-seq');
+            if (btnConfirmSeq) {
+                btnConfirmSeq.onclick = (e) => {
+                    e.stopPropagation();
+                    window.abrirModalAlterarSequencia(index, paragem);
+                };
+            }
+        }
 
         item.querySelectorAll('.btn-status').forEach(btn => {
             btn.onclick = () => {
@@ -3735,12 +3850,10 @@ export function renderEstatisticasRota() {
     const statFalhas = document.getElementById('stat-falhas'); 
     const statPendentes = document.getElementById('stat-pendentes');
 
-    // Elementos visuais para distância, tempo e motor de roteamento
     const statDistancia = document.getElementById('stat-distancia');
     const statTempo = document.getElementById('stat-tempo');
     const statSistema = document.getElementById('stat-sistema');
 
-    // Elementos dinâmicos do Diário de Bordo e do Fecho de Turno
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
     const painelOdometroResumo = document.getElementById('painel-odometro-resumo');
 
@@ -3758,7 +3871,6 @@ export function renderEstatisticasRota() {
     if (statFalhas) statFalhas.textContent = falhadas;
     if (statPendentes) statPendentes.textContent = pendentes;
 
-    // Calcular distância total acumulada (km)
     let totalDist = 0;
     window.rotaOtimizada.forEach(p => {
         totalDist += p.distanciaDoAnterior || 0;
@@ -3768,7 +3880,6 @@ export function renderEstatisticasRota() {
         statDistancia.textContent = `${totalDist.toFixed(2)} km`;
     }
 
-    // Estimar tempo com velocidade média de condução de 40 km/h (urban/rural mix em Mafra)
     if (statTempo) {
         if (totalDist === 0) {
             statTempo.textContent = "0 min";
@@ -3784,7 +3895,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // Mostrar qual o motor de roteamento utilizado de forma visual e reativa
     if (statSistema) {
         const metodo = window.routingMethodUsed || localStorage.getItem('cp_routing_method') || 'Cloud';
         if (metodo === 'Cloud') {
@@ -3796,7 +3906,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // GESTÃO REATIVA DE VISIBILIDADE DO BOTÃO "FINALIZAR TURNO"
     if (btnFinalizarTurno) {
         if (window.tripStarted && !window.tripCompleted) {
             btnFinalizarTurno.classList.remove('hidden');
@@ -3805,7 +3914,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // GESTÃO REATIVA E COMPLEMENTO VISUAL DO DIÁRIO DE BORDO
     if (painelOdometroResumo) {
         if (window.tripStarted) {
             painelOdometroResumo.classList.remove('hidden');
@@ -3844,7 +3952,6 @@ function abrirModalOdometroSaida(callback) {
     const modal = document.getElementById('modal-odometro-saida');
     if (!modal) return;
 
-    // Obtém o horário do dispositivo em formato síncrono para preenchimento
     const agora = new Date();
     const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
     
@@ -3865,7 +3972,6 @@ function abrirModalOdometroSaida(callback) {
         const kmVal = parseFloat(inputKm.value);
         const horaVal = inputHora.value.trim();
 
-        // Validação defensiva absoluta contra quilometragens inferiores de início
         if (isNaN(kmVal) || kmVal < (window.lastOdometer || 0)) {
             alert(`Erro de validação: O valor de quilometragem de partida não pode ser menor do que o último registo final (${window.lastOdometer || 0} KM).`);
             return;
@@ -3879,7 +3985,7 @@ function abrirModalOdometroSaida(callback) {
         window.tripCompleted = false;
         window.odometerStart = kmVal;
         window.odometerStartHour = horaVal;
-        window.lastOdometer = kmVal; // Define o novo limiar benchmark mínimo
+        window.lastOdometer = kmVal;
 
         sincronizarPersistencia();
         modal.classList.add('hidden');
@@ -3903,7 +4009,7 @@ function abrirModalOdometroChegada() {
     const txtMinimo = document.getElementById('odometro-chegada-minimo');
 
     if (inputHora) inputHora.value = horaStr;
-    if (inputKm) inputKm.value = ""; // Fica em branco para introdução tátil do condutor
+    if (inputKm) inputKm.value = "";
     if (txtMinimo) txtMinimo.textContent = `Mínimo de partida: ${window.odometerStart || 0} KM`;
 
     modal.classList.remove('hidden');
@@ -3915,7 +4021,6 @@ function abrirModalOdometroChegada() {
         const kmVal = parseFloat(inputKm.value);
         const horaVal = inputHora.value.trim();
 
-        // Validação defensiva absoluta contra quilometragens inferiores ao ponto de partida
         if (isNaN(kmVal) || kmVal < window.odometerStart) {
             alert(`Erro de validação: O valor de quilometragem final de regresso não pode ser inferior ao valor de saída (${window.odometerStart} KM).`);
             return;
@@ -3925,23 +4030,19 @@ function abrirModalOdometroChegada() {
             return;
         }
 
-        // Exibe resumo final de viagem antes de arquivar o dia
         alert(`Turno Encerrado com Sucesso!\n\nPartida: ${window.odometerStart} KM às ${window.odometerStartHour}\nChegada: ${kmVal} KM às ${horaVal}\nTotal Percorrido: ${(kmVal - window.odometerStart).toFixed(1)} km`);
 
-        // GRAVAÇÃO E ARQUIVO COMPLETO DO TURNO (Finalizar Turno é o único encerramento possível de rota)
         window.tripCompleted = true;
         window.odometerEnd = kmVal;
         window.odometerEndHour = horaVal;
-        window.lastOdometer = kmVal; // Define o novo mínimo incontornável para inícios futuros
+        window.lastOdometer = kmVal;
 
-        // Limpa a rota e paragens ativas do ecrã de entregas, preparando para o turno seguinte
         window.partidaLocalizacao = null;
         window.moradasEntregas = [];
         window.rotaOtimizada = [];
         window.dataRotaSelecionada = "";
         window.rotaIniciada = false;
 
-        // Reseta estados temporários de viagem
         window.tripStarted = false;
         window.tripCompleted = false;
         window.odometerStart = 0;
@@ -3955,7 +4056,6 @@ function abrirModalOdometroChegada() {
         sincronizarPersistencia();
         modal.classList.add('hidden');
         
-        // Recarrega a interface para o ecrã de setup inicial de data
         sincronizarInterfaceRota();
     };
 
@@ -3996,21 +4096,20 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         const novoIndex = novaPos - 1;
 
-        // NOVO: Remove o estado pendente "não confirmado", visto que o motorista confirmou a posição
+        const wasUnconfirmed = !!paragem.isNewUnconfirmed;
+
+        // Limpa o estado pendente aqui (muda a cor do pin para normal e para de saltar!)
         paragem.isNewUnconfirmed = false;
 
-        // Garante a limpeza do estado correspondente na lista de moradas de planeamento
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) {
             originalPre.isNewUnconfirmed = false;
         }
 
         if (indexAtual !== novoIndex) {
-            // Re-ordena o array de entregas de forma reativa e sequencial
             const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
             window.rotaOtimizada.splice(novoIndex, 0, item);
 
-            // Recalcula as distâncias acumuladas entre as paragens sucessivas
             window.rotaOtimizada.forEach((p, idx) => {
                 p.distanciaDoAnterior = calcularDistanciaHaversine(
                     idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
@@ -4020,16 +4119,21 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
                 );
             });
 
-            // Sincroniza a ordenação manual com a lista base de planeamento
             window.moradasEntregas = [...window.rotaOtimizada];
         }
 
-        // Grava, redesenha as contagens no ecrã e desativa o bounce do mapa Google de imediato
         sincronizarPersistencia();
         renderizarItinerarioOtimizado();
         desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 
         modal.classList.add('hidden');
+
+        // Abre o modal de observações logo a seguir, após a bolinha já ter mudado de cor e parado de saltar
+        if (wasUnconfirmed) {
+            setTimeout(() => {
+                abrirModalEdicaoParagem(paragem, true);
+            }, 350);
+        }
     };
 
     btnCancelar.onclick = () => {
@@ -4045,11 +4149,8 @@ function aplicarPrefixoNoCampo(prefixo) {
     if (!inputCP) return;
 
     inputCP.value = `${prefixo}-`;
-    
-    // Foca o campo de Código Postal para abrir o teclado imediatamente
     inputCP.focus();
 
-    // Garante que o cursor de escrita fica colocado logo após o hífen
     const comprimentoTexto = inputCP.value.length;
     inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
 }
@@ -4078,7 +4179,6 @@ function configurarFormatacaoCodigoPostal() {
 
     inputCP.addEventListener('input', () => {
         let valor = inputCP.value;
-        // Permite apenas números e hífens
         valor = valor.replace(/[^0-9-]/g, '');
 
         const numerosApenas = valor.replace(/\D/g, '');
@@ -4086,7 +4186,6 @@ function configurarFormatacaoCodigoPostal() {
         if (numerosApenas.length <= 4) {
             valor = numerosApenas;
         } else {
-            // Insere o hífen automaticamente a seguir ao quarto dígito
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
         }
 
@@ -4106,49 +4205,42 @@ function configurarEscutaCodigoPostalParaLimites() {
         const valor = inputCP.value.trim();
         const padraoCP = /^\d{4}-\d{3}$/;
 
-        // Se o campo de Código Postal for limpo pelo utilizador
         if (valor.length === 0 && autocompleteInstancia) {
-            // Repõe o limite geográfico padrão alargado de 15km de Mafra (Foco Suave)
             const centroMafra = { lat: 38.9369, lng: -9.3282 };
             const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
             autocompleteInstancia.setBounds(circuloMafra.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa a parede estrita
+            autocompleteInstancia.setOptions({ strictBounds: false });
             console.log("[PWA] Autocomplete reposto para o limite geral de Mafra (15km).");
             return;
         }
 
-        // Se detetar que o utilizador digitou um Código Postal de 7 dígitos completo (ex: 2640-601)
         if (padraoCP.test(valor)) {
             console.log(`[PWA] Detetado CP de 7 dígitos completo: ${valor}. A determinar localidade...`);
 
-            // Procura a localidade (brick) associada localmente sem precisar de fazer pedidos ao servidor
             const { brickName } = resolveBrickForZip(valor, window.drivers);
             
             if (inputMorada) {
-                // Monta a string enviando o CP, a localidade real correspondente e a palavra Mafra/Sintra
                 const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
                 const nomeConcelhoFormatado = concelhoDetectado.charAt(0) + concelhoDetectado.slice(1).toLowerCase();
 
-                const textoPreenchido = brickName 
+                const textPreenchido = brickName 
                     ? `${valor} ${brickName}, ${nomeConcelhoFormatado}, `
                     : `${valor} ${nomeConcelhoFormatado}, `;
 
-                inputMorada.value = textoPreenchido;
+                inputMorada.value = textPreenchido;
                 inputMorada.focus();
                 
-                // Coloca o cursor de escrita exatamente no fim, pronto a receber a rua, travessa, beco ou POI
                 const comprimento = inputMorada.value.length;
                 inputMorada.setSelectionRange(comprimento, comprimento);
             }
 
-            // Remove a restrição física de 1km e garante priorização suave e abrangente no concelho
             if (autocompleteInstancia) {
                 const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
                 const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
                 const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
                 autocompleteInstancia.setBounds(circuloConcelho.getBounds());
-                autocompleteInstancia.setOptions({ strictBounds: false }); // Desativa restrição e prioriza por texto
-                console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por texto livre.");
+                autocompleteInstancia.setOptions({ strictBounds: false });
+                console.log("[PWA] Restrição de 1km desativada. Autocomplete reorientado por text livre.");
             }
         }
     });
@@ -4161,40 +4253,33 @@ function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
-    // Evita a criação duplicada de instâncias no mesmo elemento do DOM! (Previne que o código postal anterior regresse)
     if (inputMorada.dataset.autocompleteBound === "true") {
         return;
     }
 
-    // Se o SDK do Google Maps ainda não terminou de carregar, tenta novamente brevemente
     if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
         setTimeout(inicializarAutocompleteMorada, 500);
         return;
     }
 
     try {
-        // Coordenadas centrais de Mafra, Portugal para limitar a pesquisa automática localmente (Padrão)
         const centroMafra = { lat: 38.9369, lng: -9.3282 };
-        const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 }); // Raio de 15km em redor do centro de Mafra
+        const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
         const limitesMafra = circuloMafra.getBounds();
 
-        // Cria a instância de autocomplete restrita a Portugal, priorizando o concelho de Mafra
         autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
             componentRestrictions: { country: 'pt' },
             fields: ['address_components', 'geometry', 'formatted_address'],
             bounds: limitesMafra,
-            strictBounds: false // false prioriza geograficamente Mafra mas permite resultados próximos em caso de fronteira
+            strictBounds: false
         });
 
-        // Marca o elemento para evitar duplicações de instâncias concorrentes
         inputMorada.dataset.autocompleteBound = "true";
 
-        // Evento disparado quando o utilizador toca numa morada ou estabelecimento sugerido pela Google
         autocompleteInstancia.addListener('place_changed', () => {
             const localSelecionado = autocompleteInstancia.getPlace();
             if (!localSelecionado || !localSelecionado.address_components) return;
 
-            // Extração automática inteligente do Código Postal (se presente no registo do Google)
             const componenteCP = localSelecionado.address_components.find(c => c.types.includes('postal_code'));
             if (componenteCP) {
                 const inputCP = document.getElementById('rota-codigo-postal');
@@ -4218,9 +4303,6 @@ function inicializarAutocompleteMorada() {
 // SISTEMA DE BOTÕES TÁTEIS RÁPIDOS PARA O MODAL
 // ==========================================
 
-/**
- * text para a caixa de observações com base das tags selecionadas.
- */
 function textObservacoesAutomatico() {
     const textareaObs = document.getElementById('edit-morada-obs');
     if (!textareaObs) return;
@@ -4229,18 +4311,13 @@ function textObservacoesAutomatico() {
     if (embalagemSelecionada) partes.push(embalagemSelecionada);
     if (origemSelecionada) partes.push(origemSelecionada);
 
-    // Junta as partes com um espaço (ex: "Envelope Amazon")
     textareaObs.value = partes.join(" ");
 }
 
-/**
- * Altera visualmente a cor dos botões (de cinzento para azul) consoante a seleção activa.
- */
 function atualizarEstilosBotoesModal() {
     const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
     const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
 
-    // 1. Pintar botões de Embalagem
     botoesEmbalagem.forEach(btn => {
         const tipo = btn.getAttribute('data-tipo');
         if (embalagemSelecionada === tipo) {
@@ -4250,13 +4327,11 @@ function atualizarEstilosBotoesModal() {
         }
     });
 
-    // 2. Pintar botões de Origem / Fornecedores
     botoesOrigem.forEach(btn => {
         const origem = btn.getAttribute('data-origem');
         if (origemSelecionada === origem) {
             btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
         } else {
-            // Estilo padrão específico para o botão de Fraldas (com o coração vermelho)
             if (origem === 'Fraldas') {
                 btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1";
             } else {
@@ -4266,9 +4341,6 @@ function atualizarEstilosBotoesModal() {
     });
 }
 
-/**
- * Analisa as observações já existentes de um pacote e pré-seleciona os botões do modal de forma inteligente.
- */
 function preencherSelecoesPorTexto(observacao) {
     embalagemSelecionada = "";
     origemSelecionada = "";
@@ -4277,7 +4349,6 @@ function preencherSelecoesPorTexto(observacao) {
 
     const obsUpper = observacao.toUpperCase();
 
-    // Detetar Embalagem no texto
     if (obsUpper.includes("ENVELOPE")) {
         embalagemSelecionada = "Envelope";
     } else if (obsUpper.includes("CAIXA PEQUENA")) {
@@ -4288,7 +4359,6 @@ function preencherSelecoesPorTexto(observacao) {
         embalagemSelecionada = "Pacote";
     }
 
-    // Detetar Fornecedor no texto
     if (obsUpper.includes("AMAZON")) {
         origemSelecionada = "Amazon";
     } else if (obsUpper.includes("ZARA")) {
@@ -4300,9 +4370,6 @@ function preencherSelecoesPorTexto(observacao) {
     }
 }
 
-/**
- * Atribui os escutadores de cliques em todos os botões rápidos do modal de edição.
- */
 function configurarBotoesRapidosModal() {
     const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
     const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
@@ -4312,7 +4379,6 @@ function configurarBotoesRapidosModal() {
             e.preventDefault();
             const tipo = btn.getAttribute('data-tipo');
             
-            // Alterna a seleção: se clicar de novo no mesmo, desseleciona
             if (embalagemSelecionada === tipo) {
                 embalagemSelecionada = "";
             } else {
@@ -4341,7 +4407,6 @@ function configurarBotoesRapidosModal() {
     });
 }
 
-// Para manter retrocompatibilidade com nomes chamados internamente no DOM
 function atualizarStylesBotoesModal() {
     atualizarEstilosBotoesModal();
 }
@@ -4358,21 +4423,22 @@ export function setupRotasLogic() {
     const btnOtimizarRota = document.getElementById('btn-otimizar-rota');
     const statusPartida = document.getElementById('status-partida');
 
-    // Novos elementos do formulário de Código Postal
     const btnAdicionarPostal = document.getElementById('btn-adicionar-postal-rota');
 
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
-    // Novo botão para finalização do turno
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
 
-    // Inicialização da nova lógica de assistência ao teclado para o Código Postal
+    // Elementos do seletor de tipo de operação
+    const btnTipoEntrega = document.getElementById('btn-tipo-entrega');
+    const btnTipoRecolha = document.getElementById('btn-tipo-recolha');
+    const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
+
     configurarEventosPrefixoRapido();
     configurarFormatacaoPostal();
     inicializarAutocompleteMorada();
     
-    // Liga a escuta dinâmica do Código Postal para mudar o raio de sugestões (Foco local em Mafra)
     configurarEscutaCodigoPostalParaLimites();
 
     if (btnPlaneamento && btnConducao) {
@@ -4384,7 +4450,21 @@ export function setupRotasLogic() {
         });
     }
 
-    // Escuta de clique do novo botão de Adicionar Pacote por Código Postal
+    // Configura os cliques táteis do switcher segmentado (Entrega vs. Recolha)
+    if (btnTipoEntrega && btnTipoRecolha && inputTipoOperacao) {
+        btnTipoEntrega.addEventListener('click', () => {
+            inputTipoOperacao.value = "Entrega";
+            btnTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+            btnTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 hover:text-gray-700 transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+        });
+
+        btnTipoRecolha.addEventListener('click', () => {
+            inputTipoOperacao.value = "Recolha";
+            btnTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+            btnTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 hover:text-gray-700 transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none";
+        });
+    }
+
     if (btnAdicionarPostal) {
         btnAdicionarPostal.addEventListener('click', () => {
             processarAdicaoPorPostal();
@@ -4395,13 +4475,12 @@ export function setupRotasLogic() {
         btnIniciarRota.addEventListener('click', () => {
             const dataSelecionada = dataRotaInput.value;
             if (!dataSelecionada) {
-                alert("Por favor, select uma data para continuar.");
+                alert("Por favor, selecione uma data para continuar.");
                 return;
             }
             const d = new Date(dataSelecionada);
             const dataFormatada = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
             
-            // RESET DO DIÁRIO DE BORDO COMPLETO PARA O NOVO TURNO INICIADO
             window.tripStarted = false;
             window.tripCompleted = false;
             window.odometerStart = 0;
@@ -4449,7 +4528,6 @@ export function setupRotasLogic() {
         });
     }
 
-    // O botão de buscar partida agora instrui o utilizador a usar os mesmos inputs de Código Postal
     if (btnBuscarPartida) {
         btnBuscarPartida.addEventListener('click', () => {
             window.definindoPartidaPorMorada = true;
@@ -4483,7 +4561,6 @@ export function setupRotasLogic() {
         });
     }
 
-    // Escuta ativa do botão tátil de encerramento do Diário de Bordo
     if (btnFinalizarTurno) {
         btnFinalizarTurno.addEventListener('click', () => {
             abrirModalOdometroChegada();
@@ -4491,7 +4568,6 @@ export function setupRotasLogic() {
     }
 }
 
-// Wrapper local para conformidade com a assinatura original
 function configurarFormatacaoPostal() {
     configurarFormatacaoCodigoPostal();
 }
@@ -4523,7 +4599,6 @@ export function sincronizarInterfaceRota() {
 
         renderMoradasAdicionadas();
 
-        // Reinicia o autocomplete caso a caixa de moradas mude de estado visual
         setTimeout(inicializarAutocompleteMorada, 100);
 
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
@@ -4574,52 +4649,134 @@ export function setupModaisEdicao() {
         itemSendoEditado = null;
     });
 
-    btnSalvarEdicao.addEventListener('click', () => {
+    btnSalvarEdicao.addEventListener('click', async () => {
         if (!itemSendoEditado) return;
 
         const editMoradaTexto = document.getElementById('edit-morada-texto');
         const editMoradaObs = document.getElementById('edit-morada-obs');
         const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
+        
+        // Elementos do switcher no Modal de Edição (Se existirem no index.html)
+        const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
+
         if (!editMoradaTexto || !editMoradaObs) return;
 
         const novaMorada = editMoradaTexto.value.trim();
         const novaObs = editMoradaObs.value.trim();
         const novaPrioridade = editMoradaPrioridade ? editMoradaPrioridade.checked : false;
+        const novoTipoOperacao = editTipoOperacaoInput ? editTipoOperacaoInput.value : "Entrega";
 
         if (!novaMorada) {
             alert("A morada de entrega não pode ficar em branco.");
             return;
         }
 
-        let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
-        let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
+        const textoOriginalBotao = btnSalvarEdicao.innerHTML;
+        btnSalvarEdicao.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> A geolocalizar...';
+        btnSalvarEdicao.disabled = true;
 
-        if (itemIndexPre !== -1) {
-            window.moradasEntregas[itemIndexPre].address = novaMorada;
-            window.moradasEntregas[itemIndexPre].observation = novaObs;
-            window.moradasEntregas[itemIndexPre].priority = novaPrioridade;
+        try {
+            if (novaMorada !== itemSendoEditado._originalAddress) {
+                const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        postalCode: "",
+                        address: novaMorada
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || "Falha ao validar a nova morada geográfica.");
+                }
+
+                itemSendoEditado.lat = data.lat;
+                itemSendoEditado.lng = data.lng;
+                itemSendoEditado.address = data.address;
+
+                const postalCodeMatch = data.address.match(/\d{4}-\d{3}/);
+                if (postalCodeMatch) {
+                    const { brickId, brickName } = resolveBrickForZip(postalCodeMatch[0], window.drivers);
+                    itemSendoEditado.brickId = brickId;
+                    itemSendoEditado.brickName = brickName;
+                } else {
+                    const { brickId, brickName } = resolveBrickForZip(novaMorada, window.drivers);
+                    if (brickId) {
+                        itemSendoEditado.brickId = brickId;
+                        itemSendoEditado.brickName = brickName;
+                    }
+                }
+            }
+
+            // Remove o estado pendente "não confirmado", visto que o utilizador guardou com sucesso as observações
+            itemSendoEditado.isNewUnconfirmed = false;
+
+            // Grava os novos valores, incluindo o tipo de operação atualizado do Modal
+            itemSendoEditado.observation = novaObs;
+            itemSendoEditado.priority = novaPrioridade;
+            itemSendoEditado.tipoOperacao = novoTipoOperacao;
+
+            let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
+            let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
+
+            if (itemIndexPre !== -1) {
+                window.moradasEntregas[itemIndexPre] = { ...itemSendoEditado };
+            }
+
+            if (itemIndexPos !== -1) {
+                window.rotaOtimizada[itemIndexPos] = { ...itemSendoEditado };
+
+                window.rotaOtimizada.forEach((p, idx) => {
+                    p.distanciaDoAnterior = calcularDistanciaHaversine(
+                        idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
+                        idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
+                        p.lat,
+                        p.lng
+                    );
+                });
+            }
+
+            sincronizarPersistencia();
+            
+            renderMoradasAdicionadas();
+            if (window.rotaOtimizada.length > 0) {
+                renderizarItinerarioOtimizado();
+                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+            }
+
+            const modalEditarParagem = document.getElementById('modal-editar-paragem');
+            if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
+            itemSendoEditado = null;
+
+        } catch (err) {
+            console.error("[PWA] Erro ao gravar edição de paragem:", err);
+            alert(`Erro ao atualizar a paragem: ${err.message}`);
+        } finally {
+            btnSalvarEdicao.innerHTML = textoOriginalBotao;
+            btnSalvarEdicao.disabled = false;
         }
-
-        if (itemIndexPos !== -1) {
-            window.rotaOtimizada[itemIndexPos].address = novaMorada;
-            window.rotaOtimizada[itemIndexPos].observation = novaObs;
-            window.rotaOtimizada[itemIndexPos].priority = novaPrioridade;
-        }
-
-        sincronizarPersistencia();
-        
-        renderMoradasAdicionadas();
-        if (window.rotaOtimizada.length > 0) {
-            renderizarItinerarioOtimizado();
-            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-        }
-
-        const modalEditarParagem = document.getElementById('modal-editar-paragem');
-        if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
-        itemSendoEditado = null;
     });
 
-    // Liga os escutadores de cliques para os botões do modal de edição
+    // Configura os cliques do switcher no Modal de Edição (Se existirem no index.html)
+    const editTipoEntrega = document.getElementById('edit-tipo-entrega');
+    const editTipoRecolha = document.getElementById('edit-tipo-recolha');
+    const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
+
+    if (editTipoEntrega && editTipoRecolha && editTipoOperacaoInput) {
+        editTipoEntrega.addEventListener('click', () => {
+            editTipoOperacaoInput.value = "Entrega";
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        });
+
+        editTipoRecolha.addEventListener('click', () => {
+            editTipoOperacaoInput.value = "Recolha";
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        });
+    }
+
     configurarBotoesRapidosModal();
 }
 
@@ -4632,13 +4789,31 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
     if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
 
     itemSendoEditado = paragem;
+    itemSendoEditado._originalAddress = paragem.address;
+
     editMoradaTexto.value = paragem.address;
     editMoradaObs.value = paragem.observation || "";
     if (editMoradaPrioridade) {
         editMoradaPrioridade.checked = !!paragem.priority;
     }
 
-    // Analisa as observações salvas no texto para acender os botões certos ao abrir o modal
+    // Sincroniza visualmente o tipo de operação atual da paragem no Modal de Edição
+    const tipoOperacao = paragem.tipoOperacao || "Entrega";
+    const editTipoEntrega = document.getElementById('edit-tipo-entrega');
+    const editTipoRecolha = document.getElementById('edit-tipo-recolha');
+    const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
+
+    if (editTipoEntrega && editTipoRecolha && editTipoOperacaoInput) {
+        editTipoOperacaoInput.value = tipoOperacao;
+        if (tipoOperacao === "Recolha") {
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        } else {
+            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all focus:outline-none cursor-pointer";
+            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
+        }
+    }
+
     preencherSelecoesPorTexto(paragem.observation || "");
     atualizarStylesBotoesModal();
 
@@ -4659,23 +4834,17 @@ ARQUIVO: js/setores.js
  * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e Sintra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
  *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
  *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
- *      Desenha e atualiza nuvens de calor síncronas e estáveis no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
- *      NOVO: Limita o diâmetro dos círculos translúcidos de arrumação a exatamente 500 metros de raio.
- *      NOVO: Suporta seletor de Concelho de operação (Mafra vs Sintra) com re-centralização do mapa e filtro inteligente de Bricks.
- *      NOVO: Filtra a lista esquerda de motoristas para apresentar apenas os autorizados no concelho selecionado.
- *      NOVO: Envia as updates dos Bricks em tempo real diretamente para o Firestore.
- *      MELHORADO: Apresenta o código postal ou o intervalo de códigos postais ao lado do nome de cada localidade (Brick) de forma legível.
- *      MELHORADO: Implementa motor de auditoria para aferição de Bricks órfãos e garantia de Saldo Zero de Cobertura.
- *      CORRIGIDO: Elimina círculos obsoletos (espirais/molas) no mapa e corrige travamento do auditor ("A CALCULAR...") em telemóveis.
- *      CORRIGIDO: Remove loop recursivo de geocodificação em massa que causava crash de memória no browser.
+ *      Desenha e atualiza pins coloridos e leves no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
+ *      NOVO: Mapeamento de IDs normalizado (Case-Insensitive) para corrigir falhas de leitura de Bricks já atribuídos.
+ *      NOVO: Mensagem de confirmação tátil antes de atribuir ou retirar qualquer Brick (individual ou em lote).
  * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
  */
 
-import { GEOGRAPHY } from './geografia-data.js';
+import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
 import { saveData } from './storage.js';
 
-// Importa a instância segura do Firestore
+// Importa a instância ativa do Firestore
 import { db } from './firebase-init.js';
 
 // ID do motorista que está atualmente selecionado na interface para atribuição
@@ -4711,6 +4880,15 @@ function salvarCacheCoordenadas() {
     } catch (e) {
         console.warn("[PWA] Erro ao persistir cache local de coordenadas de Bricks:", e);
     }
+}
+
+// =========================================================================
+// AUXILIAR DE COMPATIBILIDADE E ROBUSTEZ: NORMALIZADOR DE IDS (CASE-INSENSITIVE)
+// =========================================================================
+function normalizarBrickId(id) {
+    if (!id || typeof id !== 'string') return "";
+    // Limpa espaços extras e força maiúsculas para que "Sintra" e "SINTRA" coincidam 100%
+    return id.toUpperCase().trim();
 }
 
 // ==========================================
@@ -4765,25 +4943,24 @@ const FREGUESIA_COORDS = {
 };
 
 // ==========================================
-// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (NUVENS DE CALOR)
+// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (DISPERSÃO DE RECURSO)
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
 
-    // 1. Devolve instantaneamente se já estiver na cache local do dispositivo
     if (brickCoordsCache[brickId]) {
         return brickCoordsCache[brickId];
     }
 
-    // 2. Fallback síncrono ultra-rápido (centroide de freguesia com desvio inteligente) para evitar lag
     const defaultCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9376, lng: -9.3276 };
-    const base = FREGUESIA_COORDS[freguesia] || defaultCoords;
+    const base = FREGUESIA_COORDS[normalizarBrickId(freguesia)] || FREGUESIA_COORDS[freguesia] || defaultCoords;
     let hash = 0;
     for (let i = 0; i < localidade.length; i++) {
         hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
     }
-    const latOffset = ((hash % 100) / 10000) - 0.005;
-    const lngOffset = (((hash >> 8) % 100) / 10000) - 0.005;
+    
+    const latOffset = (((hash % 100) - 50) / 4000);
+    const lngOffset = ((((hash >> 8) % 100) - 50) / 4000);
 
     return {
         lat: base.lat + latOffset,
@@ -4796,17 +4973,16 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 // ==========================================
 function geocodificarBrickSobProcura(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
-    if (brickCoordsCache[brickId]) return; // Evita gastos se já estiver na cache
+    if (brickCoordsCache[brickId]) return;
 
     if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
         const geocoder = new google.maps.Geocoder();
-        const cleanFregName = freguesia.replace(/\s+MFR$/i, "").replace(/\s+\(U\.F\.\)$/i, "");
-        const concelhoName = concelhoAtivo === "SINTRA" ? "Sintra" : "Mafra";
         
-        // CORRIGIDO: Limpa os parênteses (ex: "Algueirão (000-099)" passa a "Algueirão") 
-        // antes de enviar para o Google, para que a pesquisa não falhe.
-        const cleanLocalidade = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "");
-        const queryAddress = `${cleanLocalidade}, ${cleanFregName}, ${concelhoName}, Portugal`;
+        const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freguesia]) 
+            ? GEOGRAPHY[concelhoAtivo][freguesia][localidade] || [] 
+            : [];
+            
+        const queryAddress = obterEnderecoHigienizado(localidade, cpList, freguesia, concelhoAtivo);
 
         geocoder.geocode({ address: queryAddress }, (results, status) => {
             if (status === "OK" && results[0]) {
@@ -4815,16 +4991,12 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
                 brickCoordsCache[brickId] = coordsResolvidas;
                 salvarCacheCoordenadas();
 
-                // Partilha a coordenada resolvida com todos os outros dispositivos via Firestore
                 db.collection('brickCoordinates').doc(brickId).set(coordsResolvidas).catch((err) => {
                     console.warn("[PWA] Falha ao partilhar coordenada de Brick via Firestore:", err);
                 });
 
-                // Redesenha o mapa de forma segura
                 desenharBricksNoMapa();
             } else {
-                // EVITA LOOP INFINITO: Se falhar ou não encontrar resultados, guarda temporariamente
-                // o fallback padrão para que o sistema saiba que "já tentou" este Brick e não repita o pedido.
                 console.warn(`[PWA] Não foi possível geocodificar "${queryAddress}". Caching fallback.`);
                 const fallbackCoords = obterCoordenadaPrecisaBrick(freguesia, localidade);
                 brickCoordsCache[brickId] = fallbackCoords;
@@ -4852,12 +5024,10 @@ function inicializarMapaBricksDashboard() {
             fullscreenControl: false
         });
 
-        // Inicializa o balão partilhado de Hover
         dashboardInfoWindow = new google.maps.InfoWindow({
-            disableAutoPan: true // Evita oscilação do mapa ao passar o rato rapidamente
+            disableAutoPan: true
         });
 
-        // Sincroniza a cache partilhada de coordenadas (Firestore) uma única vez por sessão
         carregarCacheCoordenadasFirestore().then(() => desenharBricksNoMapa());
     } else {
         dashboardMap.setCenter(centerCoords);
@@ -4868,17 +5038,15 @@ function inicializarMapaBricksDashboard() {
 }
 
 // ==========================================
-// DESENHAR NUVENS DE COR DE CADA MOTORISTA NO MAPA GERAL
+// DESENHAR OS PINS GEOGRÁFICOS DE CADA MOTORISTA NO MAPA GERAL
 // ==========================================
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
 
-    // Fecha o balão se estiver aberto para evitar órfãos em re-desenhos
     if (dashboardInfoWindow) {
         dashboardInfoWindow.close();
     }
 
-    // Limpa desenhos e marcas antigas do mapa de forma síncrona
     dashboardOverlays.forEach(overlay => overlay.setMap(null));
     dashboardOverlays = [];
 
@@ -4887,15 +5055,12 @@ function desenharBricksNoMapa() {
     const bounds = new google.maps.LatLngBounds();
     let totalPontosDesenhados = 0;
 
-    // Mapeamento síncrono e de acordo com o concelho selecionado
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
             if (id && typeof id === 'string' && id.includes('|')) {
                 const [freg, loc] = id.split('|');
 
-                // FILTRO DE SEGURANÇA ABSOLUTO: Só desenha se for um Brick válido e atual do concelho selecionado.
-                // Isto ignora imediatamente os Bricks antigos obsoletos e elimina as molas/espirais do mapa!
                 if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
                     return; 
                 }
@@ -4904,21 +5069,25 @@ function desenharBricksNoMapa() {
                 bounds.extend(coords);
                 totalPontosDesenhados++;
 
-                // Círculo Translúcido de Atribuição (Raio limitado a exatamente 500 metros)
-                const circle = new google.maps.Circle({
-                    strokeColor: drv.color,
-                    strokeOpacity: 0.6,
-                    strokeWeight: 1,
-                    fillColor: drv.color,
-                    fillOpacity: 0.2, // Visual nebuloso ultra-agradável
-                    map: dashboardMap,
-                    center: coords,
-                    radius: 500
-                });
-                dashboardOverlays.push(circle);
+                const pinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
 
-                // Ouvinte de passagem de rato (Hover) sobre o círculo para mostrar balão explicativo instantâneo
-                circle.addListener('mouseover', () => {
+                const marker = new google.maps.Marker({
+                    position: coords,
+                    map: dashboardMap,
+                    icon: {
+                        path: pinSvgPath,
+                        fillColor: drv.color,
+                        fillOpacity: 1.0,
+                        strokeWeight: 1,
+                        strokeColor: "#FFFFFF",
+                        scale: 1.2,
+                        anchor: new google.maps.Point(12, 22)
+                    },
+                    title: `${freg} - ${loc} (${drv.name})`
+                });
+                dashboardOverlays.push(marker);
+
+                marker.addListener('mouseover', () => {
                     if (dashboardInfoWindow) {
                         dashboardInfoWindow.setContent(`
                             <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 2px 4px; line-height: 1.4;">
@@ -4930,36 +5099,19 @@ function desenharBricksNoMapa() {
                             </div>
                         `);
                         dashboardInfoWindow.setPosition(coords);
-                        dashboardInfoWindow.open(dashboardMap);
+                        dashboardInfoWindow.open(dashboardMap, marker);
                     }
                 });
 
-                circle.addListener('mouseout', () => {
+                marker.addListener('mouseout', () => {
                     if (dashboardInfoWindow) {
                         dashboardInfoWindow.close();
                     }
                 });
-
-                // Pequeno ponto de ancoragem no centro da nuvem
-                const marker = new google.maps.Marker({
-                    position: coords,
-                    map: dashboardMap,
-                    icon: {
-                        path: google.maps.SymbolPath.CIRCLE,
-                        scale: 4,
-                        fillColor: drv.color,
-                        fillOpacity: 0.9,
-                        strokeWeight: 1,
-                        strokeColor: "#FFFFFF"
-                    },
-                    title: `${freg} - ${loc} (${drv.name})`
-                });
-                dashboardOverlays.push(marker);
             }
         });
     });
 
-    // Ajusta o zoom do mapa apenas se houver pontos válidos, adaptando-se a qualquer ecrã
     if (totalPontosDesenhados > 0) {
         dashboardMap.fitBounds(bounds);
 
@@ -4982,7 +5134,6 @@ export function renderDriversForAttribution() {
 
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
 
-    // Mostra apenas os motoristas habilitados a atuar no concelho de operação selecionado no topo.
     const filteredDrivers = driversArr.filter(driver => {
         const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
         return concelhos.includes(concelhoAtivo);
@@ -5001,7 +5152,6 @@ export function renderDriversForAttribution() {
         const btn = document.createElement('button');
         btn.type = "button";
         
-        // Estilo visual destacado se for o motorista atualmente ativo
         if (motoristaAtivoId === driver.id) {
             btn.className = "w-full flex items-center justify-between p-3 rounded-lg border-2 text-left bg-blue-50 border-blue-500 shadow-xs transition duration-150";
         } else {
@@ -5020,8 +5170,8 @@ export function renderDriversForAttribution() {
 
         btn.addEventListener('click', () => {
             motoristaAtivoId = driver.id;
-            renderDriversForAttribution(); // Atualiza destaque
-            window.renderizarSetoresUI(); // Atualiza a árvore para as caixas deste motorista
+            renderDriversForAttribution();
+            window.renderizarSetoresUI();
         });
 
         listContainer.appendChild(btn);
@@ -5035,7 +5185,6 @@ function formatarIntervaloCPs(cpList) {
     if (!Array.isArray(cpList) || cpList.length === 0) return "";
     if (cpList.length === 1) return `(${cpList[0]})`;
 
-    // Ordena os códigos postais para obtermos o menor e o maior limite de forma síncrona
     const ordenados = [...cpList].sort((a, b) => a.localeCompare(b));
     const min = ordenados[0];
     const max = ordenados[ordenados.length - 1];
@@ -5059,7 +5208,6 @@ function atualizarAuditoriaBricks() {
 
     if (!elTotal || !elAlocados || !elSaldo) return;
 
-    // 1. Reúne todos os Bricks geográficos que existem no concelho ativo
     const todosBricksDoConcelho = [];
     if (GEOGRAPHY[concelho]) {
         for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
@@ -5069,7 +5217,6 @@ function atualizarAuditoriaBricks() {
         }
     }
 
-    // 2. Mapeia quais Bricks já foram efetivamente alocados a motoristas ativos para este concelho
     const bricksAlocadosSet = new Set();
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
 
@@ -5079,30 +5226,25 @@ function atualizarAuditoriaBricks() {
             if (id && typeof id === 'string' && id.includes('|')) {
                 const [freg, loc] = id.split('|');
                 
-                // CORREÇÃO DE SEGURANÇA CONTRA TYPEERROR: Verifica de forma estritamente segura 
-                // se a freguesia e a localidade existem no concelho ativo antes de ler.
+                // Normaliza a validação contra o concelho ativo para máxima robustez
                 if (GEOGRAPHY[concelho] && GEOGRAPHY[concelho][freg] && GEOGRAPHY[concelho][freg][loc]) {
-                    bricksAlocadosSet.add(id);
+                    bricksAlocadosSet.add(normalizarBrickId(id));
                 }
             }
         });
     });
 
-    // 3. Determina o resíduo (quais Bricks estão órfãos/sem motorista)
-    const bricksOrfaos = todosBricksDoConcelho.filter(id => !bricksAlocadosSet.has(id));
+    const bricksOrfaos = todosBricksDoConcelho.filter(id => !bricksAlocadosSet.has(normalizarBrickId(id)));
 
     const totalCount = todosBricksDoConcelho.length;
     const alocadosCount = bricksAlocadosSet.size;
     const saldoCount = bricksOrfaos.length;
 
-    // Injeta os contadores nos cartões estatísticos do ecrã
     elTotal.textContent = totalCount;
     elAlocados.textContent = alocadosCount;
     elSaldo.textContent = saldoCount;
 
-    // 4. Atualiza reativamente a interface de acordo com o saldo
     if (saldoCount === 0) {
-        // CASO SEGURO: Saldo Zero atingido com sucesso!
         if (elBadgeStatus) {
             elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-green-50 text-green-700 border-green-200 animate-none";
             elBadgeStatus.innerHTML = `<i class="fa-solid fa-circle-check"></i> <span>Saldo Zero (100% Coberto)</span>`;
@@ -5118,7 +5260,6 @@ function atualizarAuditoriaBricks() {
         if (elContainerPendentes) elContainerPendentes.classList.add('hidden');
         if (elListaPendentes) elListaPendentes.innerHTML = "";
     } else {
-        // CASO DE ALERTA: Existem zonas sem motorista responsável
         if (elBadgeStatus) {
             elBadgeStatus.className = "text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-red-50 text-red-700 border-red-200 animate-pulse";
             elBadgeStatus.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Cobertura Incompleta</span>`;
@@ -5132,7 +5273,6 @@ function atualizarAuditoriaBricks() {
             elLabelSaldo.className = "text-[9px] font-bold text-red-500 uppercase";
         }
 
-        // Revela a gaveta vermelha de detalhes e popula com os nomes das zonas em falta
         if (elContainerPendentes) elContainerPendentes.classList.remove('hidden');
         if (elListaPendentes) {
             elListaPendentes.innerHTML = "";
@@ -5163,7 +5303,6 @@ export function renderGeographicTree() {
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
     const activeDriver = driversArr.find(d => d.id === motoristaAtivoId);
 
-    // Se nenhum motorista estiver selecionado na lista esquerda, bloqueia a árvore com aviso amigável
     if (!activeDriver) {
         labelSelected.className = "text-[10px] font-black uppercase bg-red-100 text-red-700 px-2 py-0.5 rounded border border-red-200";
         labelSelected.textContent = "Nenhum Selecionado";
@@ -5176,13 +5315,11 @@ export function renderGeographicTree() {
         return;
     }
 
-    // Identifica o motorista ativo e mostra-o no topo do painel
     labelSelected.className = "text-[10px] font-black uppercase bg-blue-100 text-blue-800 px-2 py-0.5 rounded border border-blue-200";
     labelSelected.textContent = activeDriver.name;
 
     const concelho = concelhoAtivo;
     
-    // Verificação de segurança caso o concelho selecionado não exista na base de dados
     if (!GEOGRAPHY[concelho]) {
         treeContainer.innerHTML = '<p class="text-xs text-red-500 italic text-center py-4">Erro: Concelho não configurado.</p>';
         return;
@@ -5190,13 +5327,14 @@ export function renderGeographicTree() {
 
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    // Mapeia onde está cada localidade para mostrar avisos de exclusividade tátil
+    // Map estruturado e normalizado (Case-Insensitive) para ler instantaneamente o motorista dono de cada localidade
     const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
             if (id && typeof id === 'string') {
-                localidadeParaMotorista.set(id, drv);
+                // Guarda a chave sempre normalizada (Maiúsculas) para eliminar o bug visual do ecrã
+                localidadeParaMotorista.set(normalizarBrickId(id), drv);
             }
         });
     });
@@ -5205,15 +5343,15 @@ export function renderGeographicTree() {
         const localidadesMap = GEOGRAPHY[concelho][freguesiaName];
         const localidadesKeys = Object.keys(localidadesMap).sort();
 
-        // Verifica se todas as localidades desta freguesia pertencem a este motorista
         const allLocs = Object.keys(localidadesMap);
         const ownedLocs = allLocs.filter(locName => {
             const brickId = `${freguesiaName}|${locName}`;
-            return Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
+            const normalizedBid = normalizarBrickId(brickId);
+            return Array.isArray(activeDriver.brickIds) && 
+                activeDriver.brickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
         });
         const isAllOwned = allLocs.length > 0 && ownedLocs.length === allLocs.length;
 
-        // Recupera o estado de expansão desta freguesia
         const isExpanded = freguesiasExpandidas.has(freguesiaName);
 
         const fregDiv = document.createElement('div');
@@ -5231,7 +5369,6 @@ export function renderGeographicTree() {
                     }
                 </button>
                 <div class="flex items-center space-x-1.5">
-                    <!-- Checkbox de seleção rápida de Freguesia inteira -->
                     <input type="checkbox" ${isAllOwned ? 'checked' : ''} class="freg-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-4 h-4 cursor-pointer">
                     <span class="font-bold text-gray-700 text-xs">${freguesiaName}</span>
                 </div>
@@ -5240,24 +5377,26 @@ export function renderGeographicTree() {
         `;
 
         const subContainer = document.createElement('div');
-        // Mantém a visibilidade da pasta de acordo com a memória de expansão
         subContainer.className = `${isExpanded ? '' : 'hidden'} p-2 bg-gray-50/50 border-t border-dashed space-y-2.5 pl-6 animate-fade-in`;
 
         localidadesKeys.forEach(locName => {
             const brickId = `${freguesiaName}|${locName}`;
-            const motoristaDono = localidadeParaMotorista.get(brickId);
+            const normalizedBid = normalizarBrickId(brickId);
+            
+            // Leitura segura baseada na chave normalizada (Case-Insensitive)
+            const motoristaDono = localidadeParaMotorista.get(normalizedBid);
 
-            const isAssignedToActive = Array.isArray(activeDriver.brickIds) && activeDriver.brickIds.includes(brickId);
+            const isAssignedToActive = Array.isArray(activeDriver.brickIds) && 
+                activeDriver.brickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
 
-            // Determina a lista de códigos postais para esta localidade e formata o seu intervalo
             const cpList = localidadesMap[locName] || [];
             const cpTexto = formatarIntervaloCPs(cpList);
 
             const label = document.createElement('label');
 
+            // CORREÇÃO USABILIDADE: Se pertencer a outro motorista, fica trancado de forma visível
             if (motoristaDono && motoristaDono.id !== activeDriver.id) {
-                // Se a localidade já estiver sob a responsabilidade de outro motorista
-                label.className = "flex items-center justify-between p-2 rounded bg-red-50/20 text-gray-400 cursor-not-allowed select-none text-[11px] border border-red-100/10 opacity-70";
+                label.className = "flex items-center justify-between p-2 rounded bg-gray-100/50 text-gray-400 cursor-not-allowed select-none text-[11px] border border-gray-200 opacity-60";
                 label.innerHTML = `
                     <div class="flex items-center space-x-2 truncate pr-2">
                         <i class="fa-solid fa-lock text-red-400 text-[10px] animate-none"></i>
@@ -5270,7 +5409,6 @@ export function renderGeographicTree() {
                     </span>
                 `;
             } else {
-                // Se estiver livre ou já for deste motorista selecionado
                 label.className = "flex items-center justify-between p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 cursor-pointer text-[11px] text-gray-700 transition duration-100";
                 label.innerHTML = `
                     <div class="flex items-center space-x-2 truncate pr-2">
@@ -5284,24 +5422,31 @@ export function renderGeographicTree() {
                     }
                 `;
 
-                // Guarda reativamente a alteração com um simples clique (GRAVAÇÃO DIRETA NO FIRESTORE!)
                 const cb = label.querySelector('.brick-checkbox');
                 cb.addEventListener('change', (e) => {
+                    const checkedState = e.target.checked;
+                    const acao = checkedState ? "atribuir" : "retirar";
+                    
+                    // NOVO: Mensagem de confirmação tátil antes de gravar no banco de dados
+                    const confirmar = confirm(`Tem a certeza que deseja ${acao} o Brick "${locName}" do motorista "${activeDriver.name}"?`);
+                    if (!confirmar) {
+                        e.target.checked = !checkedState; // Reverte a checkbox na UI
+                        return;
+                    }
+
                     if (!Array.isArray(activeDriver.brickIds)) {
                         activeDriver.brickIds = [];
                     }
 
                     let updatedBrickIds = [...activeDriver.brickIds];
-                    if (e.target.checked) {
+                    if (checkedState) {
                         updatedBrickIds.push(brickId);
-                        
-                        // Geocodifica sob procura apenas a localidade interada, evitando sobrecarga
                         geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
-                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
+                        // Faz a filtragem normalizada para garantir a exclusão correta
+                        updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
 
-                    // Grava diretamente no Firestore no documento do motorista correspondente
                     db.collection('drivers').doc(activeDriver.id).update({
                         brickIds: updatedBrickIds
                     }).then(() => {
@@ -5316,40 +5461,47 @@ export function renderGeographicTree() {
             subContainer.appendChild(label);
         });
 
-        // Evento de alteração em lote de toda a Freguesia (GRAVAÇÃO DIRETA NO FIRESTORE!)
         const fregCb = header.querySelector('.freg-checkbox');
         if (fregCb) {
             fregCb.addEventListener('change', (e) => {
+                const checkedState = e.target.checked;
+                const acao = checkedState ? "atribuir em lote" : "retirar em lote";
+                
+                // NOVO: Mensagem de confirmação em lote de segurança
+                const confirmar = confirm(`Tem a certeza que deseja ${acao} todos os Bricks livres da freguesia "${freguesiaName}" para o motorista "${activeDriver.name}"?`);
+                if (!confirmar) {
+                    e.target.checked = !checkedState;
+                    return;
+                }
+
                 if (!Array.isArray(activeDriver.brickIds)) {
                     activeDriver.brickIds = [];
                 }
 
                 let updatedBrickIds = [...activeDriver.brickIds];
-                let delayPacing = 0; // Atraso progressivo para evitar over limit
+                let delayPacing = 0;
 
                 allLocs.forEach(locName => {
                     const brickId = `${freguesiaName}|${locName}`;
-                    const motoristaDono = localidadeParaMotorista.get(brickId);
+                    const normalizedBid = normalizarBrickId(brickId);
+                    const motoristaDono = localidadeParaMotorista.get(normalizedBid);
                     const isOwnedByOther = motoristaDono && motoristaDono.id !== activeDriver.id;
 
-                    if (e.target.checked) {
-                        // Associa em lote apenas as localidades que estão realmente livres
-                        if (!isOwnedByOther && !updatedBrickIds.includes(brickId)) {
+                    if (checkedState) {
+                        const isAlreadyOwned = updatedBrickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
+                        if (!isOwnedByOther && !isAlreadyOwned) {
                             updatedBrickIds.push(brickId);
 
-                            // Geocodifica com compassamento de 300ms entre localidades para respeitar o Google
                             setTimeout(() => {
                                 geocodificarBrickSobProcura(freguesiaName, locName);
                             }, delayPacing);
                             delayPacing += 300;
                         }
                     } else {
-                        // Remove todas as localidades desta freguesia que pertenciam a este motorista
-                        updatedBrickIds = updatedBrickIds.filter(id => id !== brickId);
+                        updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
                 });
 
-                // Envia a lista updated de uma só vez para o Firestore
                 db.collection('drivers').doc(activeDriver.id).update({
                     brickIds: updatedBrickIds
                 }).then(() => {
@@ -5385,44 +5537,30 @@ export function renderGeographicTree() {
 // CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES E BRICKS (WINDOW)
 // =========================================================================
 window.renderizarSetoresUI = () => {
-    // Configura o seletor de concelho (Mafra vs Sintra)
     const seletorConcelho = document.getElementById('select-concelho-setores');
     if (seletorConcelho) {
         seletorConcelho.value = concelhoAtivo;
         if (!seletorConcelho.dataset.listenerAtivo) {
             seletorConcelho.addEventListener('change', (e) => {
                 concelhoAtivo = e.target.value;
-                
-                // Limpa o estado de expansão ao mudar de concelho para evitar árvores inconsistentes
                 freguesiasExpandidas.clear();
-
-                // NOVO & MELHORADO: Limpa o motorista ativo para garantir que não tentamos gerir 
-                // bricks com um motorista não habilitado no novo concelho
                 motoristaAtivoId = null;
 
-                // Recenterabilidade síncrona do mapa
                 if (dashboardMap) {
                     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
                     dashboardMap.setCenter(centerCoords);
                 }
 
-                // Renderização reativa de toda a UI
                 window.renderizarSetoresUI();
             });
             seletorConcelho.dataset.listenerAtivo = "true";
         }
     }
 
-    // Sincroniza a listagem de motoristas no painel de atribuição (filtrada dinamicamente)
     renderDriversForAttribution();
-
-    // Renderiza a árvore do concelho ativo reativa (Mafra ou Sintra)
     renderGeographicTree();
-
-    // Executa as contas do painel de auditoria (Saldo Zero) em tempo real
     atualizarAuditoriaBricks();
 
-    // Inicializa e redesenha o mapa de forma síncrona estável
     setTimeout(inicializarMapaBricksDashboard, 150);
 };
 
@@ -6520,10 +6658,10 @@ ARQUIVO: partials/motoristas.html
         <div>
             <label class="block text-xs font-bold uppercase text-gray-600">Nome do Motorista</label>
             <input type="text" id="nome-motorista" required placeholder="Ex: João Silva" 
-                   class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none">
+                   class="w-full mt-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none text-xs font-semibold">
         </div>
 
-        <!-- NOVO CAMPO: SELEÇÃO DE CONCELHOS DE ATUAÇÃO DO MOTORISTA -->
+        <!-- SELEÇÃO DE CONCELHOS DE ATUAÇÃO DO MOTORISTA -->
         <div>
             <label class="block text-xs font-bold uppercase text-gray-600 mb-1.5">Concelho(s) de Atuação</label>
             <div class="flex items-center space-x-5 bg-gray-50 p-3 rounded-lg border border-gray-150">
@@ -6541,15 +6679,28 @@ ARQUIVO: partials/motoristas.html
         </div>
 
         <div>
-            <label class="block text-xs font-bold uppercase text-gray-600 mb-1">Cor de Identificação</label>
-            <!-- Palete dinâmica de cores criada no main.js -->
-            <div class="grid grid-cols-6 gap-2" id="color-picker-container"></div>
+            <label class="block text-xs font-bold uppercase text-gray-600 mb-1.5">Cor de Identificação</label>
+            <!-- Palete estática otimizada com 12 cores profissionais de alto contraste para o mapa -->
+            <div class="grid grid-cols-6 gap-2.5" id="color-picker-container">
+                <button type="button" data-cor="#EF4444" style="background-color: #EF4444;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#3B82F6" style="background-color: #3B82F6;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#10B981" style="background-color: #10B981;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#F59E0B" style="background-color: #F59E0B;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#8B5CF6" style="background-color: #8B5CF6;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#EC4899" style="background-color: #EC4899;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#14B8A6" style="background-color: #14B8A6;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#6366F1" style="background-color: #6366F1;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#A855F7" style="background-color: #A855F7;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#F97316" style="background-color: #F97316;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#06B6D4" style="background-color: #06B6D4;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+                <button type="button" data-cor="#84CC16" style="background-color: #84CC16;" class="w-full h-8 rounded-full border border-gray-200 transition-all focus:outline-none cursor-pointer"></button>
+            </div>
         </div>
         <div class="flex space-x-2">
-            <button type="button" id="btn-cancelar-motorista" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded shadow">
+            <button type="button" id="btn-cancelar-motorista" class="hidden flex-1 bg-gray-100 text-gray-700 font-bold py-2 rounded shadow text-xs transition duration-150">
                 Cancelar
             </button>
-            <button type="submit" id="btn-submit-motorista" class="flex-1 bg-blue-600 text-white font-bold py-2 rounded shadow">
+            <button type="submit" id="btn-submit-motorista" class="flex-1 bg-blue-600 text-white font-bold py-2 rounded shadow text-xs transition duration-150">
                 Adicionar Motorista
             </button>
         </div>
@@ -6688,6 +6839,23 @@ ARQUIVO: partials/rotas.html
                             <i id="microfone-ativo" class="fa-solid fa-microphone-lines hidden text-white animate-pulse"></i>
                         </button>
                     </div>
+                </div>
+
+                <!-- NOVO: SWITCHER SEGMENTADO DE OPERAÇÃO (ENTREGA VS RECOLHA) -->
+                <div class="space-y-1.5">
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Tipo de Operação</label>
+                    <div class="bg-gray-100 p-1 rounded-xl flex space-x-1 shadow-sm border border-gray-200">
+                        <button type="button" id="btn-tipo-entrega" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none">
+                            <i class="fa-solid fa-truck-ramp-box"></i>
+                            <span>Entrega (Padrão)</span>
+                        </button>
+                        <button type="button" id="btn-tipo-recolha" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 hover:text-gray-700 transition-all cursor-pointer flex items-center justify-center space-x-1.5 focus:outline-none">
+                            <i class="fa-solid fa-hand-holding-hand"></i>
+                            <span>Recolha</span>
+                        </button>
+                    </div>
+                    <!-- Input invisível auxiliar para guardar o valor selecionado ("Entrega" por defeito) -->
+                    <input type="hidden" id="rota-tipo-operacao" value="Entrega">
                 </div>
 
                 <!-- Botão de submissão -->
