@@ -1,13 +1,12 @@
 /**
  * js/rotas.js
- * Versão v66.1 - Com Abertura Automática do Modal de Observações Pós-Adição
+ * Versão v67.4 - Com Navegação Inteligente (Google Maps vs Waze) Integrada
  * Faz: Liga o ecrã de rotas ao seu servidor seguro local (porta 3000) ou servidor remoto no Render para processar os índices de ordenação ótimos.
- *      Inclui pré-geolocalização inteligente e abre automaticamente o modal de notas/detalhes logo após adicionar um pacote.
+ *      Inclui pré-geolocalização inteligente, abre automaticamente o modal de notas pós-adição
+ *      e delega a navegação externa para o módulo de preferências (Google Maps / Waze).
  *      Caso o servidor na nuvem esteja offline ou a dormir (timeouts do Render), calcula instantaneamente uma rota síncrona ótima local.
- *      NOVO: Sincroniza bidirecionalmente em tempo real todo o planeamento de rotas e atualizações de entregas na nuvem do Firestore.
- *      NOVO: Suporta seletor segmentado tátil de Entrega vs. Recolha com etiquetas roxas vibrantes de arrumação física.
  * NÃO faz: Não executa cálculos de linha reta locais quando o servidor responde em OK (delegado à API remota da Google).
- * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js (para aceder ao db)
+ * Depende de: ./storage.js, ./voz.js, ./maps.js, ./geografia-data.js, ./firebase-init.js, ./navigation.js
  */
 
 import { saveData } from './storage.js';
@@ -19,6 +18,9 @@ import {
     desenharMapaGoogle, 
     limparMapaVisual 
 } from './maps.js';
+
+// Importa o novo módulo de navegação (Google Maps vs Waze)
+import { abrirNavegacao } from './navigation.js';
 
 // Importa a instância ativa do Firestore
 import { db } from './firebase-init.js';
@@ -242,7 +244,7 @@ function calcularRotaVizinhoMaisProximoLocal() {
 }
 
 // =========================================================================
-// TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA (COM ABERTURA AUTOMÁTICA DO MODAL)
+// TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA
 // =========================================================================
 export async function processarAdicaoPorPostal() {
     const inputPostal = document.getElementById('rota-codigo-postal');
@@ -329,11 +331,9 @@ export async function processarAdicaoPorPostal() {
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
             }
 
-            // CORREÇÃO: Abre automaticamente o modal de detalhes/observações logo após adicionar o pacote
             abrirModalEdicaoParagem(novaMorada, window.rotaOtimizada.length > 0);
         }
 
-        // Limpa os campos e repõe o switcher de operação para o padrão ("Entrega")
         inputPostal.value = "";
         if (inputMorada) inputMorada.value = "";
         
@@ -575,7 +575,6 @@ export function renderizarItinerarioOtimizado() {
             }
         }
 
-        const linkGoogleMaps = `https://www.google.com/maps/dir/?api=1&destination=${paragem.lat},${paragem.lng}&travelmode=driving`;
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
         const bolinhaHtml = isNewUnconfirmed 
@@ -630,17 +629,18 @@ export function renderizarItinerarioOtimizado() {
             </div>
         `;
 
+        // INTEGRAÇÃO DA PREFERÊNCIA INTELIGENTE DE NAVEGAÇÃO (GOOGLE MAPS VS WAZE)
         item.querySelector('.btn-navegar').onclick = () => {
-            if (index === 0 && (!window.tripStarted || !window.odometerStart || window.odometerStart === 0)) {
-                abrirModalOdometroSaida(() => {
-                    localStorage.setItem('cp_last_navigated_id', paragem.id);
-                    renderizarItinerarioOtimizado(); 
-                    window.open(linkGoogleMaps, '_blank');
-                });
-            } else {
+            const acaoNavegar = () => {
                 localStorage.setItem('cp_last_navigated_id', paragem.id);
                 renderizarItinerarioOtimizado(); 
-                window.open(linkGoogleMaps, '_blank');
+                abrirNavegacao(paragem); // Chama o módulo que abre o Waze ou Google Maps
+            };
+
+            if (index === 0 && (!window.tripStarted || !window.odometerStart || window.odometerStart === 0)) {
+                abrirModalOdometroSaida(acaoNavegar);
+            } else {
+                acaoNavegar();
             }
         };
 
