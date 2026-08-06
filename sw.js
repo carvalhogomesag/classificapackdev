@@ -1,11 +1,11 @@
 /**
  * sw.js
  * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
- *      Atualizado para a versão v67 para forçar a descarga imediata da correção 
- *      de abertura automática do modal de observações após adicionar pacotes.
+ *      Atualizado para a versão v67.1 para incluir o novo módulo js/navigation.js 
+ *      na cache offline e forçar a atualização global do sistema.
  */
 
-const CACHE_NAME = 'classificapack-v67';
+const CACHE_NAME = 'classificapack-v67.1';
 
 const ASSETS = [
   './',
@@ -25,6 +25,7 @@ const ASSETS = [
   'js/maps.js',
   'js/pwa.js',
   'js/ui.js',
+  'js/navigation.js', // NOVO MÓDULO ADICIONADO À CACHE OFFLINE
   'partials/triagem.html',
   'partials/motoristas.html',
   'partials/setores.html',
