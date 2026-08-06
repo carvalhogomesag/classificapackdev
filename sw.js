@@ -1,11 +1,10 @@
 /**
  * sw.js
+ * Versão v67.4 - Com suporte offline para o Menu Hambúrguer e Módulo de Navegação
  * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
- *      Atualizado para a versão v67.1 para incluir o novo módulo js/navigation.js 
- *      na cache offline e forçar a atualização global do sistema.
  */
 
-const CACHE_NAME = 'classificapack-v67.1';
+const CACHE_NAME = 'classificapack-v67.4';
 
 const ASSETS = [
   './',
@@ -25,7 +24,8 @@ const ASSETS = [
   'js/maps.js',
   'js/pwa.js',
   'js/ui.js',
-  'js/navigation.js', // NOVO MÓDULO ADICIONADO À CACHE OFFLINE
+  'js/navigation.js',
+  'js/ui-menu.js', // ADICIONADO À CACHE OFFLINE
   'partials/triagem.html',
   'partials/motoristas.html',
   'partials/setores.html',
@@ -49,7 +49,7 @@ self.addEventListener('activate', (e) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('[Service Worker] A remover cache antiga obsoleta:', key);
+            console.log('[Service Worker] A remover cache antiga:', key);
             return caches.delete(key);
           }
         })
@@ -59,7 +59,6 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Ignora chamadas externas para recursos em nuvem que requerem rede ativa direta
   if (e.request.url.includes('maps.googleapis') || e.request.url.includes('google') || e.request.url.includes('firebase') || e.request.url.includes('firestore')) {
     return;
   }
