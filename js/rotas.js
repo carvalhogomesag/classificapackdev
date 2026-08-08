@@ -1,8 +1,8 @@
 /**
  * js/rotas.js
- * Versão v70.3 - Orquestrador Leve com Correção do Switcher de Entrega/Recolha
+ * Versão v70.4 - Orquestrador Leve com Correção do Switcher Principal de Rota
  * Faz: Liga os botões e ecrãs de rotas aos subsistemas isolados de geocodificação, 
- *      otimização de rotas, odómetros, navegação inteligente e switchers de operação.
+ *      otimização de rotas, odómetros, navegação inteligente e switchers principais/modais.
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./firebase-init.js, ./navigation.js, ./odometer.js, ./geocoding.js, ./route-optimizer.js
  */
 
@@ -21,10 +21,6 @@ import { db } from './firebase-init.js';
 
 let itemSendoEditado = null; 
 let autocompleteInstancia = null;
-
-// Variáveis de estado temporárias do modal de edição
-let embalagemSelecionada = "";
-let origemSelecionada = "";
 
 // =========================================================================
 // DETETOR INTELIGENTE DE AMBIENTE (LOCAL VS PRODUÇÃO)
@@ -158,7 +154,9 @@ export async function processarAdicaoPorPostal() {
         if (!response.ok) throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
 
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
-        const tipoOperacaoVal = document.getElementById('edit-tipo-operacao')?.value || document.getElementById('rota-tipo-operacao')?.value || "Entrega";
+        
+        // Lê do campo oculto principal do ecrã de rotas
+        const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
@@ -204,6 +202,11 @@ export async function processarAdicaoPorPostal() {
 
         inputPostal.value = "";
         if (inputMorada) inputMorada.value = "";
+        
+        // Reseta o switcher principal para Entrega após adicionar com sucesso
+        const btnEntregaPrin = document.getElementById('tipo-entrega');
+        if (btnEntregaPrin) btnEntregaPrin.click();
+
     } catch (err) {
         console.error("Erro na geocodificação:", err);
         alert(`Erro: ${err.message}`);
@@ -315,9 +318,40 @@ function setupPrefixosRapidosLogic() {
 }
 
 // ==========================================
-// GESTÃO DO SWITCHER DE TIPO DE OPERAÇÃO (ENTREGA / RECOLHA)
+// GESTÃO DO SWITCHER PRINCIPAL DE TIPO DE OPERAÇÃO (ENTREGA / RECOLHA)
 // ==========================================
-function setupSwitcherTipoOperacao() {
+function setupTipoOperacaoLogic() {
+    const btnEntrega = document.getElementById('tipo-entrega');
+    const btnRecolha = document.getElementById('tipo-recolha');
+    const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
+
+    if (!btnEntrega || !btnRecolha || !inputTipoOperacao) return;
+
+    if (btnEntrega.dataset.tipoBound === "true") return;
+    btnEntrega.dataset.tipoBound = "true";
+    btnRecolha.dataset.tipoBound = "true";
+
+    const selecionarTipo = (tipo) => {
+        inputTipoOperacao.value = tipo;
+        if (tipo === "Recolha") {
+            btnRecolha.className = "flex-1 py-2.5 text-xs font-black rounded-lg text-center bg-purple-600 text-white shadow transition-all cursor-pointer focus:outline-none";
+            btnEntrega.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer focus:outline-none";
+        } else {
+            btnEntrega.className = "flex-1 py-2.5 text-xs font-black rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer focus:outline-none";
+            btnRecolha.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer focus:outline-none";
+        }
+    };
+
+    btnEntrega.addEventListener('click', () => selecionarTipo("Entrega"));
+    btnRecolha.addEventListener('click', () => selecionarTipo("Recolha"));
+    
+    selecionarTipo("Entrega");
+}
+
+// ==========================================
+// GESTÃO DO SWITCHER DO MODAL DE EDIÇÃO
+// ==========================================
+function setupSwitcherTipoOperacaoModal() {
     const btnEntrega = document.getElementById('edit-tipo-entrega');
     const btnRecolha = document.getElementById('edit-tipo-recolha');
     const inputTipoOperacao = document.getElementById('edit-tipo-operacao');
@@ -364,6 +398,7 @@ export function setupRotasLogic() {
     autocompleteInstancia = inicializarAutocompleteMorada('rota-morada-completa', API_BASE_URL);
     configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
     setupPrefixosRapidosLogic();
+    setupTipoOperacaoLogic();
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
@@ -479,7 +514,8 @@ export function sincronizarInterfaceRota() {
             autocompleteInstancia = inicializarAutocompleteMorada('rota-morada-completa', API_BASE_URL);
             configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
             setupPrefixosRapidosLogic();
-            setupSwitcherTipoOperacao();
+            setupTipoOperacaoLogic();
+            setupSwitcherTipoOperacaoModal();
         }, 100);
         alternarModoRota(localStorage.getItem('cp_modo_rota') || 'planeamento');
 
@@ -506,7 +542,7 @@ export function setupModaisEdicao() {
 
     if (!btnCancelarEdicao || !btnSalvarEdicao) return;
 
-    setupSwitcherTipoOperacao();
+    setupSwitcherTipoOperacaoModal();
 
     btnCancelarEdicao.addEventListener('click', () => {
         document.getElementById('modal-editar-paragem')?.classList.add('hidden');
@@ -613,7 +649,6 @@ export function abrirModalEdicaoParagem(paragem) {
     editMoradaObs.value = paragem.observation || "";
     if (editMoradaPrioridade) editMoradaPrioridade.checked = !!paragem.priority;
 
-    // Atualiza o estado visual e o valor interno do switcher com base na paragem selecionada
     const tipoAtual = paragem.tipoOperacao || "Entrega";
     if (editTipoOperacaoInput && typeof editTipoOperacaoInput._definirTipoUI === 'function') {
         editTipoOperacaoInput._definirTipoUI(tipoAtual);
