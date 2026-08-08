@@ -1,5 +1,6 @@
 /**
  * js/route-optimizer.js
+ * Versão v69.1 - Com exportação correta da otimização de rotas
  * Faz: Gere exclusivamente os cálculos de otimização de rotas (Google Cloud Route Optimization API 
  *      e algoritmo de contingência local do vizinho mais próximo), bem como a renderização 
  *      do itinerário otimizado e estatísticas de viagem.
@@ -39,6 +40,101 @@ export function calcularRotaVizinhoMaisProximoLocal() {
     }
 
     window.rotaOtimizada = optimized;
+}
+
+// =========================================================================
+// OTIMIZAÇÃO: CONEXÃO À GOOGLE ROUTE OPTIMIZATION API (OU CONTINGÊNCIA LOCAL)
+// =========================================================================
+export async function otimizarItinerarioComVizinhoMaisProximo(apiBaseUrl, sincronizarPersistenciaCb, sincronizarInterfaceRotaCb) {
+    if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
+    if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
+
+    const btnOtimizar = document.getElementById('btn-otimizar-rota');
+
+    if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+        if (!confirm("Atenção: Já possui uma rota ativa com ordenação personalizada. Se otimizar de novo, perderá as alterações manuais. Deseja continuar?")) return;
+    }
+
+    if (btnOtimizar) {
+        btnOtimizar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A calcular rota ótima...</span>';
+        btnOtimizar.disabled = true;
+    }
+
+    try {
+        const response = await fetch(`${apiBaseUrl}/api/optimize-route`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pontoPartida: window.partidaLocalizacao, paragens: window.moradasEntregas })
+        });
+
+        if (!response.ok) {
+            let errorDetails = `Erro ${response.status} (${response.statusText})`;
+            try {
+                const errJson = await response.json();
+                if (errJson.error) errorDetails += ` - ${errJson.error}`;
+            } catch(e) {}
+            throw new Error(errorDetails);
+        }
+
+        const data = await response.json();
+        
+        if (data.optimizedIndices) {
+            window.rotaOtimizada = [];
+            data.optimizedIndices.forEach((indexOriginal) => {
+                const paragemOriginal = window.moradasEntregas[indexOriginal];
+                paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
+                    window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
+                    window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
+                    paragemOriginal.lat, paragemOriginal.lng
+                );
+                window.rotaOtimizada.push(paragemOriginal);
+            });
+            window.routingMethodUsed = 'Cloud';
+            localStorage.setItem('cp_routing_method', 'Cloud');
+        } else {
+            window.rotaOtimizada = [...window.moradasEntregas];
+            window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
+            window.routingMethodUsed = 'Local';
+            localStorage.setItem('cp_routing_method', 'Local');
+        }
+
+        document.getElementById('container-mapa')?.classList.remove('hidden');
+        document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
+
+        renderizarItinerarioOtimizado();
+        if (typeof sincronizarPersistenciaCb === 'function') sincronizarPersistenciaCb();
+        
+        setTimeout(() => {
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }, 300);
+
+        if (typeof sincronizarInterfaceRotaCb === 'function') sincronizarInterfaceRotaCb();
+
+    } catch (err) {
+        console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
+        
+        calcularRotaVizinhoMaisProximoLocal();
+        window.routingMethodUsed = 'Local';
+        localStorage.setItem('cp_routing_method', 'Local');
+        
+        alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo!`);
+        
+        document.getElementById('container-mapa')?.classList.remove('hidden');
+        document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
+
+        renderizarItinerarioOtimizado();
+        if (typeof sincronizarPersistenciaCb === 'function') sincronizarPersistenciaCb();
+        
+        setTimeout(() => {
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }, 300);
+
+    } finally {
+        if (btnOtimizar) {
+            btnOtimizar.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>';
+            btnOtimizar.disabled = false;
+        }
+    }
 }
 
 // ==========================================
