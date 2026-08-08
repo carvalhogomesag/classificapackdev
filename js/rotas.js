@@ -273,25 +273,56 @@ export function renderMoradasAdicionadas() {
 
 // ==========================================
 // CONFIGURAÇÃO DOS PREFIXOS RÁPIDOS
+// CORRIGIDO: esta função tinha sido reescrita apenas para o novo padrão de botões
+// (.btn-prefixo-rapido com atributo data-prefixo), mas o ecrã atual de Rotas ainda
+// usa o painel antigo de entrada manual (#prefixo-manual + #btn-inserir-prefixo).
+// Como nenhum botão .btn-prefixo-rapido existe no HTML, a função saía logo no
+// início e nunca ligava nada ao clique — por isso a injeção tinha parado de
+// funcionar. Agora suporta os dois padrões, ficando à prova de futuras mudanças
+// visuais nesta funcionalidade.
 // ==========================================
 function setupPrefixosRapidosLogic() {
-    // Procura botões ou elementos com a classe de prefixo rápido no DOM
-    const botoesPrefixo = document.querySelectorAll('.btn-prefixo-rapido');
     const inputPostal = document.getElementById('rota-codigo-postal');
+    if (!inputPostal) return;
 
-    if (!inputPostal || botoesPrefixo.length === 0) return;
+    // Função auxiliar: injeta "PREFIXO-" no campo de Código Postal e foca o campo
+    // com o cursor já posicionado a seguir ao hífen, pronto a escrever os 3 dígitos finais.
+    function injetarPrefixo(prefixoVal) {
+        const digitos = (prefixoVal || '').replace(/\D/g, '');
+        if (digitos.length !== 4) return false;
 
+        inputPostal.value = `${digitos}-`;
+        inputPostal.focus();
+        inputPostal.setSelectionRange(inputPostal.value.length, inputPostal.value.length);
+        inputPostal.dispatchEvent(new Event('input', { bubbles: true }));
+        inputPostal.dispatchEvent(new CustomEvent('prefixo-aplicado', { bubbles: true }));
+        return true;
+    }
+
+    // Padrão novo: um ou vários botões pré-definidos com data-prefixo (se existirem no ecrã)
+    const botoesPrefixo = document.querySelectorAll('.btn-prefixo-rapido');
     botoesPrefixo.forEach(btn => {
+        if (btn.dataset.prefixoBound) return; // evita ligar o mesmo botão duas vezes
+        btn.dataset.prefixoBound = "true";
         btn.addEventListener('click', () => {
-            const prefixoVal = btn.getAttribute('data-prefixo') || btn.textContent.trim();
-            if (prefixoVal) {
-                inputPostal.value = prefixoVal;
-                // Dispara os eventos standard e o customizado para disparar a ponte de geocoding
-                inputPostal.dispatchEvent(new Event('input', { bubbles: true }));
-                inputPostal.dispatchEvent(new CustomEvent('prefixo-aplicado', { bubbles: true }));
-            }
+            injetarPrefixo(btn.getAttribute('data-prefixo') || btn.textContent.trim());
         });
     });
+
+    // Padrão atual do ecrã: campo de entrada manual + botão "Inserir CP-"
+    const inputPrefixoManual = document.getElementById('prefixo-manual');
+    const btnInserirPrefixo = document.getElementById('btn-inserir-prefixo');
+
+    if (inputPrefixoManual && btnInserirPrefixo && !btnInserirPrefixo.dataset.prefixoBound) {
+        btnInserirPrefixo.dataset.prefixoBound = "true";
+        btnInserirPrefixo.addEventListener('click', () => {
+            const sucesso = injetarPrefixo(inputPrefixoManual.value);
+            if (!sucesso) {
+                alert("Por favor, introduza um prefixo de Código Postal com exatamente 4 números.");
+                inputPrefixoManual.focus();
+            }
+        });
+    }
 }
 
 // ==========================================
@@ -563,3 +594,4 @@ export function abrirModalEdicaoParagem(paragem) {
         editMoradaObs.select();
     }, 150);
 }
+

@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 08/08/2026, 22:03:29
+Gerado em: 08/08/2026, 23:19:10
 
 =========================================
 ARQUIVO: index.html
@@ -10,7 +10,7 @@ ARQUIVO: index.html
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v69.1, botão de menu hambúrguer global, barra de navegação inferior e modais.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v70.2, botão de menu hambúrguer global, barra de navegação inferior e modais.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático.
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e Service Worker.
     -->
@@ -95,7 +95,7 @@ ARQUIVO: index.html
     <!-- Container Principal (Shell) -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v69.1) -->
+        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v70.2) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex items-center justify-between">
             <!-- Botão do Menu Hambúrguer -->
             <button id="btn-abrir-menu" class="text-white hover:text-blue-200 text-base font-bold bg-blue-700/50 w-9 h-9 rounded-lg border border-blue-400/30 flex items-center justify-center transition-all cursor-pointer">
@@ -104,7 +104,7 @@ ARQUIVO: index.html
             
             <span class="absolute left-1/2 transform -translate-x-1/2">Classifica Pack</span>
             
-            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v69.2</span>
+            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v70.2</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS -->
@@ -399,7 +399,10 @@ ARQUIVO: index.html
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js').catch(err => console.error('Erro SW:', err));
+                navigator.serviceWorker.register('sw.js').then(reg => {
+                    // Força a verificação de atualizações do Service Worker de imediato
+                    reg.update();
+                }).catch(err => console.error('Erro SW:', err));
             });
         }
     </script>
@@ -438,11 +441,11 @@ ARQUIVO: sw.js
 
 /**
  * sw.js
- * Versão v69.2 - Atualização com Correção de Geocodificação e Autocomplete de CP
+ * Versão v70.2 - Força limpeza de cache antigo e ativação imediata
  * Faz: Controla o cache offline-first de todos os recursos estruturais e módulos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v69.2';
+const CACHE_NAME = 'classificapack-v70.2';
 
 const ASSETS = [
   './',
@@ -465,7 +468,7 @@ const ASSETS = [
   'js/navigation.js',      // Módulo de navegação (Google Maps / Waze)
   'js/odometer.js',        // Módulo de turnos e quilometragem
   'js/ui-menu.js',         // Módulo do menu hambúrguer e definições
-  'js/geocoding.js',       // Módulo de geocodificação e autocomplete (v69.2)
+  'js/geocoding.js',       // Módulo de geocodificação e autocomplete (v70.2)
   'js/route-optimizer.js', // Módulo de otimização e itinerários
   'partials/triagem.html',
   'partials/motoristas.html',
@@ -884,7 +887,7 @@ ARQUIVO: js/geocoding.js
 
 /**
  * js/geocoding.js
- * Versão v69.2 - Com injeção fluida de Código Postal no Autocomplete
+ * Versão v70.1 - Correção da variável localidade e melhoria na injeção de prefixo rápido
  * Faz: Gere exclusivamente as operações de geocodificação de códigos postais e moradas,
  *      a integração com o Autocomplete do Google Places e a resolução de Bricks associados.
  * Depende de: ./geografia-data.js, ./maps.js
@@ -962,9 +965,35 @@ export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputCP) return;
 
-    inputCP.addEventListener('input', async () => {
+    const injetarCPNoAutocomplete = (valor) => {
+        if (inputMorada) {
+            // Se o valor inserido for apenas um prefixo (ex: 4 dígitos como "2640"), 
+            // formatamos ou passamos diretamente para o campo de morada disparar o Google Places.
+            inputMorada.value = valor;
+            inputMorada.focus();
+            inputMorada.setSelectionRange(inputMorada.value.length, inputMorada.value.length);
+            
+            inputMorada.dispatchEvent(new Event('input', { bubbles: true }));
+            inputMorada.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            const keyboardEvent = new KeyboardEvent('keyup', { bubbles: true, key: 'a' });
+            inputMorada.dispatchEvent(keyboardEvent);
+        }
+
+        if (autocompleteInstancia) {
+            const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
+            const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
+            const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
+            autocompleteInstancia.setBounds(circuloConcelho.getBounds());
+            autocompleteInstancia.setOptions({ strictBounds: false });
+        }
+    };
+
+    // Escuta tanto inputs completos quanto prefixos rápidos (ex: 4 ou 7 dígitos)
+    inputCP.addEventListener('input', () => {
         const valor = inputCP.value.trim();
-        const padraoCP = /^\d{4}-\d{3}$/;
+        const padraoCPCompleto = /^\d{4}-\d{3}$/;
+        const padraoPrefix = /^\d{4}$/;
 
         if (valor.length === 0 && autocompleteInstancia) {
             const centroMafra = { lat: 38.9369, lng: -9.3282 };
@@ -974,23 +1003,16 @@ export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
             return;
         }
 
-        // Quando o CP de 7 dígitos for atingido, injeta APENAS o código postal no campo de pesquisa do Maps
-        if (padraoCP.test(valor)) {
-            if (inputMorada) {
-                inputMorada.value = valor;
-                inputMorada.focus();
-                inputMorada.setSelectionRange(inputMorada.value.length, inputMorada.value.length);
-                // Dispara o evento input para o Google Places detetar a alteração
-                inputMorada.dispatchEvent(new Event('focus', { bubbles: true }));
-            }
+        // Se atingiu 7 dígitos (ex: 2640-401) ou 4 dígitos de prefixo rápido (ex: 2640)
+        if (padraoCPCompleto.test(valor) || padraoPrefix.test(valor)) {
+            injetarCPNoAutocomplete(valor);
+        }
+    });
 
-            if (autocompleteInstancia) {
-                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
-                const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
-                const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
-                autocompleteInstancia.setBounds(circuloConcelho.getBounds());
-                autocompleteInstancia.setOptions({ strictBounds: false });
-            }
+    inputCP.addEventListener('prefixo-aplicado', () => {
+        const valor = inputCP.value.trim();
+        if (valor.length > 0) {
+            injetarCPNoAutocomplete(valor);
         }
     });
 }
@@ -3415,7 +3437,7 @@ ARQUIVO: js/rotas.js
 
 /**
  * js/rotas.js
- * Versão v69 - Totalmente Componentizada (Orquestrador Leve)
+ * Versão v70 - Totalmente Componentizada (Orquestrador Leve)
  * Faz: Liga os botões e ecrãs de rotas aos subsistemas isolados de geocodificação, 
  *      otimização de rotas, odómetros e navegação inteligente.
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./firebase-init.js, ./navigation.js, ./odometer.js, ./geocoding.js, ./route-optimizer.js
@@ -3687,6 +3709,29 @@ export function renderMoradasAdicionadas() {
 }
 
 // ==========================================
+// CONFIGURAÇÃO DOS PREFIXOS RÁPIDOS
+// ==========================================
+function setupPrefixosRapidosLogic() {
+    // Procura botões ou elementos com a classe de prefixo rápido no DOM
+    const botoesPrefixo = document.querySelectorAll('.btn-prefixo-rapido');
+    const inputPostal = document.getElementById('rota-codigo-postal');
+
+    if (!inputPostal || botoesPrefixo.length === 0) return;
+
+    botoesPrefixo.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const prefixoVal = btn.getAttribute('data-prefixo') || btn.textContent.trim();
+            if (prefixoVal) {
+                inputPostal.value = prefixoVal;
+                // Dispara os eventos standard e o customizado para disparar a ponte de geocoding
+                inputPostal.dispatchEvent(new Event('input', { bubbles: true }));
+                inputPostal.dispatchEvent(new CustomEvent('prefixo-aplicado', { bubbles: true }));
+            }
+        });
+    });
+}
+
+// ==========================================
 // INTERFACE E GESTÃO DE TURNOS (ORQUESTRADOR)
 // ==========================================
 export function setupRotasLogic() {
@@ -3701,8 +3746,9 @@ export function setupRotasLogic() {
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
-    configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
     autocompleteInstancia = inicializarAutocompleteMorada('rota-morada-completa', API_BASE_URL);
+    configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
+    setupPrefixosRapidosLogic();
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
@@ -3816,6 +3862,8 @@ export function sincronizarInterfaceRota() {
         renderMoradasAdicionadas();
         setTimeout(() => {
             autocompleteInstancia = inicializarAutocompleteMorada('rota-morada-completa', API_BASE_URL);
+            configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
+            setupPrefixosRapidosLogic();
         }, 100);
         alternarModoRota(localStorage.getItem('cp_modo_rota') || 'planeamento');
 
