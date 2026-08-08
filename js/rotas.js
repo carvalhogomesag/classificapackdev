@@ -1,8 +1,8 @@
 /**
  * js/rotas.js
- * Versão v70 - Totalmente Componentizada (Orquestrador Leve)
+ * Versão v70.3 - Orquestrador Leve com Correção do Switcher de Entrega/Recolha
  * Faz: Liga os botões e ecrãs de rotas aos subsistemas isolados de geocodificação, 
- *      otimização de rotas, odómetros e navegação inteligente.
+ *      otimização de rotas, odómetros, navegação inteligente e switchers de operação.
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./firebase-init.js, ./navigation.js, ./odometer.js, ./geocoding.js, ./route-optimizer.js
  */
 
@@ -158,7 +158,7 @@ export async function processarAdicaoPorPostal() {
         if (!response.ok) throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
 
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
-        const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
+        const tipoOperacaoVal = document.getElementById('edit-tipo-operacao')?.value || document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
@@ -273,20 +273,11 @@ export function renderMoradasAdicionadas() {
 
 // ==========================================
 // CONFIGURAÇÃO DOS PREFIXOS RÁPIDOS
-// CORRIGIDO: esta função tinha sido reescrita apenas para o novo padrão de botões
-// (.btn-prefixo-rapido com atributo data-prefixo), mas o ecrã atual de Rotas ainda
-// usa o painel antigo de entrada manual (#prefixo-manual + #btn-inserir-prefixo).
-// Como nenhum botão .btn-prefixo-rapido existe no HTML, a função saía logo no
-// início e nunca ligava nada ao clique — por isso a injeção tinha parado de
-// funcionar. Agora suporta os dois padrões, ficando à prova de futuras mudanças
-// visuais nesta funcionalidade.
 // ==========================================
 function setupPrefixosRapidosLogic() {
     const inputPostal = document.getElementById('rota-codigo-postal');
     if (!inputPostal) return;
 
-    // Função auxiliar: injeta "PREFIXO-" no campo de Código Postal e foca o campo
-    // com o cursor já posicionado a seguir ao hífen, pronto a escrever os 3 dígitos finais.
     function injetarPrefixo(prefixoVal) {
         const digitos = (prefixoVal || '').replace(/\D/g, '');
         if (digitos.length !== 4) return false;
@@ -299,17 +290,15 @@ function setupPrefixosRapidosLogic() {
         return true;
     }
 
-    // Padrão novo: um ou vários botões pré-definidos com data-prefixo (se existirem no ecrã)
     const botoesPrefixo = document.querySelectorAll('.btn-prefixo-rapido');
     botoesPrefixo.forEach(btn => {
-        if (btn.dataset.prefixoBound) return; // evita ligar o mesmo botão duas vezes
+        if (btn.dataset.prefixoBound) return;
         btn.dataset.prefixoBound = "true";
         btn.addEventListener('click', () => {
             injetarPrefixo(btn.getAttribute('data-prefixo') || btn.textContent.trim());
         });
     });
 
-    // Padrão atual do ecrã: campo de entrada manual + botão "Inserir CP-"
     const inputPrefixoManual = document.getElementById('prefixo-manual');
     const btnInserirPrefixo = document.getElementById('btn-inserir-prefixo');
 
@@ -323,6 +312,38 @@ function setupPrefixosRapidosLogic() {
             }
         });
     }
+}
+
+// ==========================================
+// GESTÃO DO SWITCHER DE TIPO DE OPERAÇÃO (ENTREGA / RECOLHA)
+// ==========================================
+function setupSwitcherTipoOperacao() {
+    const btnEntrega = document.getElementById('edit-tipo-entrega');
+    const btnRecolha = document.getElementById('edit-tipo-recolha');
+    const inputTipoOperacao = document.getElementById('edit-tipo-operacao');
+
+    if (!btnEntrega || !btnRecolha || !inputTipoOperacao) return;
+
+    if (btnEntrega.dataset.switcherBound === "true") return;
+    btnEntrega.dataset.switcherBound = "true";
+    btnRecolha.dataset.switcherBound = "true";
+
+    const definirTipo = (tipo) => {
+        if (tipo === "Recolha") {
+            inputTipoOperacao.value = "Recolha";
+            btnRecolha.className = "flex-1 py-2.5 text-xs font-black rounded-lg text-center bg-purple-600 text-white shadow transition-all cursor-pointer focus:outline-none";
+            btnEntrega.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer focus:outline-none";
+        } else {
+            inputTipoOperacao.value = "Entrega";
+            btnEntrega.className = "flex-1 py-2.5 text-xs font-black rounded-lg text-center bg-blue-600 text-white shadow transition-all cursor-pointer focus:outline-none";
+            btnRecolha.className = "flex-1 py-2.5 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer focus:outline-none";
+        }
+    };
+
+    btnEntrega.addEventListener('click', () => definirTipo("Entrega"));
+    btnRecolha.addEventListener('click', () => definirTipo("Recolha"));
+
+    inputTipoOperacao._definirTipoUI = definirTipo;
 }
 
 // ==========================================
@@ -458,6 +479,7 @@ export function sincronizarInterfaceRota() {
             autocompleteInstancia = inicializarAutocompleteMorada('rota-morada-completa', API_BASE_URL);
             configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
             setupPrefixosRapidosLogic();
+            setupSwitcherTipoOperacao();
         }, 100);
         alternarModoRota(localStorage.getItem('cp_modo_rota') || 'planeamento');
 
@@ -483,6 +505,8 @@ export function setupModaisEdicao() {
     const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
 
     if (!btnCancelarEdicao || !btnSalvarEdicao) return;
+
+    setupSwitcherTipoOperacao();
 
     btnCancelarEdicao.addEventListener('click', () => {
         document.getElementById('modal-editar-paragem')?.classList.add('hidden');
@@ -578,6 +602,7 @@ export function abrirModalEdicaoParagem(paragem) {
     const editMoradaTexto = document.getElementById('edit-morada-texto');
     const editMoradaObs = document.getElementById('edit-morada-obs');
     const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
+    const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
 
     if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
 
@@ -588,10 +613,15 @@ export function abrirModalEdicaoParagem(paragem) {
     editMoradaObs.value = paragem.observation || "";
     if (editMoradaPrioridade) editMoradaPrioridade.checked = !!paragem.priority;
 
+    // Atualiza o estado visual e o valor interno do switcher com base na paragem selecionada
+    const tipoAtual = paragem.tipoOperacao || "Entrega";
+    if (editTipoOperacaoInput && typeof editTipoOperacaoInput._definirTipoUI === 'function') {
+        editTipoOperacaoInput._definirTipoUI(tipoAtual);
+    }
+
     modalEditarParagem.classList.remove('hidden');
     setTimeout(() => {
         editMoradaObs.focus();
         editMoradaObs.select();
     }, 150);
 }
-
