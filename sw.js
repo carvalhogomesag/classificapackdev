@@ -1,10 +1,10 @@
 /**
  * sw.js
- * Versão v69 - PWA Offline-First Totalmente Componentizado
+ * Versão v69.2 - Atualização com Correção de Geocodificação e Autocomplete de CP
  * Faz: Controla o cache offline-first de todos os recursos estruturais e módulos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v69';
+const CACHE_NAME = 'classificapack-v69.2';
 
 const ASSETS = [
   './',
@@ -27,7 +27,7 @@ const ASSETS = [
   'js/navigation.js',      // Módulo de navegação (Google Maps / Waze)
   'js/odometer.js',        // Módulo de turnos e quilometragem
   'js/ui-menu.js',         // Módulo do menu hambúrguer e definições
-  'js/geocoding.js',       // Módulo de geocodificação e autocomplete
+  'js/geocoding.js',       // Módulo de geocodificação e autocomplete (v69.2)
   'js/route-optimizer.js', // Módulo de otimização e itinerários
   'partials/triagem.html',
   'partials/motoristas.html',

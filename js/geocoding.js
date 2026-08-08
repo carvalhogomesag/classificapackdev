@@ -1,5 +1,6 @@
 /**
  * js/geocoding.js
+ * Versão v69.2 - Com injeção fluida de Código Postal no Autocomplete
  * Faz: Gere exclusivamente as operações de geocodificação de códigos postais e moradas,
  *      a integração com o Autocomplete do Google Places e a resolução de Bricks associados.
  * Depende de: ./geografia-data.js, ./maps.js
@@ -8,7 +9,6 @@
 import { GEOGRAPHY } from './geografia-data.js';
 import { calcularDistanciaHaversine, desenharMapaGoogle, limparMapaVisual } from './maps.js';
 
-// Auxiliar para detetar se uma localidade é a capital genérica (catch-all) de uma freguesia
 function isCatchAllLocality(freguesia, localidade) {
     const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
     const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
@@ -18,7 +18,6 @@ function isCatchAllLocality(freguesia, localidade) {
     return false;
 }
 
-// Auxiliar para detetar o concelho correspondente ao código postal fornecido
 function obterConcelhoPorCodigoPostal(zip) {
     if (!zip) return "MAFRA";
     const cleanPrefix = zip.replace(/\D/g, '').substring(0, 4);
@@ -28,7 +27,6 @@ function obterConcelhoPorCodigoPostal(zip) {
     return "MAFRA";
 }
 
-// Resolvedor de Brick compatível interno
 export function resolveBrickForZip(zip, drivers) {
     if (!zip || !drivers) return { brickId: null, brickName: null };
     const regexZip = /\d{4}-\d{3}/;
@@ -75,7 +73,6 @@ export function resolveBrickForZip(zip, drivers) {
     };
 }
 
-// Configuração da escuta de código postal para limites e inputs
 export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
     const inputCP = document.getElementById('rota-codigo-postal');
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -93,11 +90,14 @@ export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
             return;
         }
 
+        // Quando o CP de 7 dígitos for atingido, injeta APENAS o código postal no campo de pesquisa do Maps
         if (padraoCP.test(valor)) {
             if (inputMorada) {
                 inputMorada.value = valor;
                 inputMorada.focus();
                 inputMorada.setSelectionRange(inputMorada.value.length, inputMorada.value.length);
+                // Dispara o evento input para o Google Places detetar a alteração
+                inputMorada.dispatchEvent(new Event('focus', { bubbles: true }));
             }
 
             if (autocompleteInstancia) {
@@ -111,7 +111,6 @@ export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
     });
 }
 
-// Inicializador do Autocomplete de moradas do Google Places
 export function inicializarAutocompleteMorada(inputMoradaId, apiBaseUrl, onPlaceSelected) {
     const inputMorada = document.getElementById(inputMoradaId);
     if (!inputMorada) return null;
