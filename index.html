@@ -3,7 +3,7 @@
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v70.2, botão de menu hambúrguer global, barra de navegação inferior e modais.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v70.3, botão de menu hambúrguer global, barra de navegação inferior e modais.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático.
       Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e Service Worker.
     -->
@@ -88,7 +88,7 @@
     <!-- Container Principal (Shell) -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v70.2) -->
+        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v70.3) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex items-center justify-between">
             <!-- Botão do Menu Hambúrguer -->
             <button id="btn-abrir-menu" class="text-white hover:text-blue-200 text-base font-bold bg-blue-700/50 w-9 h-9 rounded-lg border border-blue-400/30 flex items-center justify-center transition-all cursor-pointer">
@@ -97,7 +97,7 @@
             
             <span class="absolute left-1/2 transform -translate-x-1/2">Classifica Pack</span>
             
-            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v70.2</span>
+            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v70.3</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS -->
@@ -393,7 +393,6 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 navigator.serviceWorker.register('sw.js').then(reg => {
-                    // Força a verificação de atualizações do Service Worker de imediato
                     reg.update();
                 }).catch(err => console.error('Erro SW:', err));
             });

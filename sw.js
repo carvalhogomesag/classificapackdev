@@ -1,10 +1,10 @@
 /**
  * sw.js
- * Versão v70.2 - Força limpeza de cache antigo e ativação imediata
+ * Versão v70.3 - Atualização com suporte ao switcher e limpeza de cache
  * Faz: Controla o cache offline-first de todos os recursos estruturais e módulos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v70.2';
+const CACHE_NAME = 'classificapack-v70.3';
 
 const ASSETS = [
   './',
@@ -27,7 +27,7 @@ const ASSETS = [
   'js/navigation.js',      // Módulo de navegação (Google Maps / Waze)
   'js/odometer.js',        // Módulo de turnos e quilometragem
   'js/ui-menu.js',         // Módulo do menu hambúrguer e definições
-  'js/geocoding.js',       // Módulo de geocodificação e autocomplete (v70.2)
+  'js/geocoding.js',       // Módulo de geocodificação e autocomplete (v70.3)
   'js/route-optimizer.js', // Módulo de otimização e itinerários
   'partials/triagem.html',
   'partials/motoristas.html',
