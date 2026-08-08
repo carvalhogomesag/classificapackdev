@@ -78,54 +78,70 @@ export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputCP) return;
 
-    const injetarCPNoAutocomplete = (valor) => {
-        if (inputMorada) {
-            // Se o valor inserido for apenas um prefixo (ex: 4 dígitos como "2640"), 
-            // formatamos ou passamos diretamente para o campo de morada disparar o Google Places.
-            inputMorada.value = valor;
-            inputMorada.focus();
-            inputMorada.setSelectionRange(inputMorada.value.length, inputMorada.value.length);
-            
-            inputMorada.dispatchEvent(new Event('input', { bubbles: true }));
-            inputMorada.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            const keyboardEvent = new KeyboardEvent('keyup', { bubbles: true, key: 'a' });
-            inputMorada.dispatchEvent(keyboardEvent);
-        }
+    // CORRIGIDO: evita ligar os mesmos listeners várias vezes se esta função for
+    // chamada de novo (ex: sempre que se volta à aba Rotas), o que duplicava as
+    // pesquisas disparadas no Google Maps a cada visita repetida ao ecrã.
+    if (inputCP.dataset.limitesBound === "true") return;
+    inputCP.dataset.limitesBound = "true";
 
-        if (autocompleteInstancia) {
-            const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
-            const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
-            const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
-            autocompleteInstancia.setBounds(circuloConcelho.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false });
-        }
+    // Restringe apenas a área de busca do Autocomplete ao concelho detetado pelo
+    // prefixo — pode correr logo que se tenha só o prefixo (4 dígitos), sem
+    // precisar do código completo. Não mexe no texto do campo de pesquisa.
+    const restringirBoundsAoConcelho = (valor) => {
+        if (!autocompleteInstancia) return;
+        const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
+        const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
+        const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
+        autocompleteInstancia.setBounds(circuloConcelho.getBounds());
+        autocompleteInstancia.setOptions({ strictBounds: false });
     };
+
+    // CORRIGIDO: só empurra o texto para o campo de pesquisa do Google Maps quando
+    // o Código Postal estiver COMPLETO (7 dígitos) — nunca com o prefixo sozinho,
+    // que é exatamente o fluxo pedido: prefixo preenche "Nova Paragem", e só ao
+    // completar os 3 dígitos finais é que o sistema joga no campo de pesquisa.
+    const injetarCodigoCompletoNaMorada = (valor) => {
+        if (!inputMorada) return;
+        inputMorada.value = valor;
+        inputMorada.focus();
+        inputMorada.setSelectionRange(inputMorada.value.length, inputMorada.value.length);
+
+        inputMorada.dispatchEvent(new Event('input', { bubbles: true }));
+        inputMorada.dispatchEvent(new Event('change', { bubbles: true }));
+
+        const keyboardEvent = new KeyboardEvent('keyup', { bubbles: true, key: 'a' });
+        inputMorada.dispatchEvent(keyboardEvent);
+    };
+
+    const padraoCPCompleto = /^\d{4}-\d{3}$/;
+    const padraoPrefix = /^\d{4}$/;
 
     // Escuta tanto inputs completos quanto prefixos rápidos (ex: 4 ou 7 dígitos)
     inputCP.addEventListener('input', () => {
         const valor = inputCP.value.trim();
-        const padraoCPCompleto = /^\d{4}-\d{3}$/;
-        const padraoPrefix = /^\d{4}$/;
 
-        if (valor.length === 0 && autocompleteInstancia) {
-            const centroMafra = { lat: 38.9369, lng: -9.3282 };
-            const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
-            autocompleteInstancia.setBounds(circuloMafra.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false });
+        if (valor.length === 0) {
+            restringirBoundsAoConcelho(''); // volta ao raio alargado por defeito
             return;
         }
 
-        // Se atingiu 7 dígitos (ex: 2640-401) ou 4 dígitos de prefixo rápido (ex: 2640)
-        if (padraoCPCompleto.test(valor) || padraoPrefix.test(valor)) {
-            injetarCPNoAutocomplete(valor);
+        if (padraoCPCompleto.test(valor)) {
+            // Código completo: restringe a área E empurra o texto para a pesquisa
+            restringirBoundsAoConcelho(valor);
+            injetarCodigoCompletoNaMorada(valor);
+        } else if (padraoPrefix.test(valor)) {
+            // Só o prefixo (sem hífen): já restringe a área, mas ainda não pesquisa
+            restringirBoundsAoConcelho(valor);
         }
     });
 
     inputCP.addEventListener('prefixo-aplicado', () => {
+        // Disparado assim que um prefixo de 4 dígitos é inserido (ex: "2640-").
+        // Só restringe a área de busca aqui — a pesquisa em si só acontece quando
+        // o Código Postal ficar completo, tratado no listener de 'input' acima.
         const valor = inputCP.value.trim();
         if (valor.length > 0) {
-            injetarCPNoAutocomplete(valor);
+            restringirBoundsAoConcelho(valor);
         }
     });
 }
@@ -183,3 +199,4 @@ export function inicializarAutocompleteMorada(inputMoradaId, apiBaseUrl, onPlace
         return null;
     }
 }
+
