@@ -8,7 +8,7 @@
 
 import { saveData } from './storage.js';
 import { criarReconhecimentoVoz } from './voz.js';
-import { desenharMapaGoogle, limparMapaVisual } from './maps.js';
+import { desenharMapaGoogle, limparMapaVisual, obterEnderecoPorGPSGoogle } from './maps.js';
 
 // Importa os módulos isolados e especializados
 import { abrirNavegacao } from './navigation.js';
