@@ -1,10 +1,10 @@
 /**
  * sw.js
- * Versão v67.4 - Com suporte offline para o Menu Hambúrguer e Módulo de Navegação
- * Faz: Controla o cache offline-first de todos os recursos estruturais da aplicação.
+ * Versão v69 - PWA Offline-First Totalmente Componentizado
+ * Faz: Controla o cache offline-first de todos os recursos estruturais e módulos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v67.4';
+const CACHE_NAME = 'classificapack-v69';
 
 const ASSETS = [
   './',
@@ -24,8 +24,11 @@ const ASSETS = [
   'js/maps.js',
   'js/pwa.js',
   'js/ui.js',
-  'js/navigation.js',
-  'js/ui-menu.js', // ADICIONADO À CACHE OFFLINE
+  'js/navigation.js',      // Módulo de navegação (Google Maps / Waze)
+  'js/odometer.js',        // Módulo de turnos e quilometragem
+  'js/ui-menu.js',         // Módulo do menu hambúrguer e definições
+  'js/geocoding.js',       // Módulo de geocodificação e autocomplete
+  'js/route-optimizer.js', // Módulo de otimização e itinerários
   'partials/triagem.html',
   'partials/motoristas.html',
   'partials/setores.html',
@@ -49,7 +52,7 @@ self.addEventListener('activate', (e) => {
       return Promise.all(
         keys.map((key) => {
           if (key !== CACHE_NAME) {
-            console.log('[Service Worker] A remover cache antiga:', key);
+            console.log('[Service Worker] A remover cache antiga obsoleta:', key);
             return caches.delete(key);
           }
         })
