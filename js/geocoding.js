@@ -1,6 +1,6 @@
 /**
  * js/geocoding.js
- * Versão v69.2 - Com injeção fluida de Código Postal no Autocomplete
+ * Versão v70 - Com injeção fluida e forçada de Código Postal no Autocomplete
  * Faz: Gere exclusivamente as operações de geocodificação de códigos postais e moradas,
  *      a integração com o Autocomplete do Google Places e a resolução de Bricks associados.
  * Depende de: ./geografia-data.js, ./maps.js
@@ -69,7 +69,7 @@ export function resolveBrickForZip(zip, drivers) {
 
     return { 
         brickId: `${matchedFreguesia}|${matchedLocalidade}`, 
-        brickName: matchedLocalidade 
+        brickName: localidade 
     };
 }
 
@@ -78,7 +78,33 @@ export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputCP) return;
 
-    inputCP.addEventListener('input', async () => {
+    // Função auxiliar robusta para injetar o valor e forçar o Google Places a reagir
+    const injetarCPNoAutocomplete = (valor) => {
+        if (inputMorada) {
+            inputMorada.value = valor;
+            inputMorada.focus();
+            inputMorada.setSelectionRange(inputMorada.value.length, inputMorada.value.length);
+            
+            // Dispara múltiplos eventos para garantir que o listener do Google Maps e frameworks UI detetam a mudança
+            inputMorada.dispatchEvent(new Event('input', { bubbles: true }));
+            inputMorada.dispatchEvent(new Event('change', { bubbles: true }));
+            
+            // Simula o evento de tecla para acordar o painel dropdown de sugestões do Google Places
+            const keyboardEvent = new KeyboardEvent('keyup', { bubbles: true, key: 'a' });
+            inputMorada.dispatchEvent(keyboardEvent);
+        }
+
+        if (autocompleteInstancia) {
+            const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
+            const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
+            const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
+            autocompleteInstancia.setBounds(circuloConcelho.getBounds());
+            autocompleteInstancia.setOptions({ strictBounds: false });
+        }
+    };
+
+    // Escuta alterações manuais ou por prefixo rápido no input de Código Postal
+    inputCP.addEventListener('input', () => {
         const valor = inputCP.value.trim();
         const padraoCP = /^\d{4}-\d{3}$/;
 
@@ -90,23 +116,16 @@ export function configurarEscutaCodigoPostalParaLimites(autocompleteInstancia) {
             return;
         }
 
-        // Quando o CP de 7 dígitos for atingido, injeta APENAS o código postal no campo de pesquisa do Maps
         if (padraoCP.test(valor)) {
-            if (inputMorada) {
-                inputMorada.value = valor;
-                inputMorada.focus();
-                inputMorada.setSelectionRange(inputMorada.value.length, inputMorada.value.length);
-                // Dispara o evento input para o Google Places detetar a alteração
-                inputMorada.dispatchEvent(new Event('focus', { bubbles: true }));
-            }
+            injetarCPNoAutocomplete(valor);
+        }
+    });
 
-            if (autocompleteInstancia) {
-                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
-                const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
-                const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
-                autocompleteInstancia.setBounds(circuloConcelho.getBounds());
-                autocompleteInstancia.setOptions({ strictBounds: false });
-            }
+    // Evento customizado opcional caso os botões de Prefixo Rápido disparem um gatilho direto
+    inputCP.addEventListener('prefixo-aplicado', () => {
+        const valor = inputCP.value.trim();
+        if (valor.length > 0) {
+            injetarCPNoAutocomplete(valor);
         }
     });
 }
