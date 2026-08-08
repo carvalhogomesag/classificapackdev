@@ -1,6 +1,6 @@
 /**
  * js/rotas.js
- * Versão v69 - Totalmente Componentizada (Orquestrador Leve)
+ * Versão v70 - Totalmente Componentizada (Orquestrador Leve)
  * Faz: Liga os botões e ecrãs de rotas aos subsistemas isolados de geocodificação, 
  *      otimização de rotas, odómetros e navegação inteligente.
  * Depende de: ./storage.js, ./voz.js, ./maps.js, ./firebase-init.js, ./navigation.js, ./odometer.js, ./geocoding.js, ./route-optimizer.js
@@ -272,6 +272,29 @@ export function renderMoradasAdicionadas() {
 }
 
 // ==========================================
+// CONFIGURAÇÃO DOS PREFIXOS RÁPIDOS
+// ==========================================
+function setupPrefixosRapidosLogic() {
+    // Procura botões ou elementos com a classe de prefixo rápido no DOM
+    const botoesPrefixo = document.querySelectorAll('.btn-prefixo-rapido');
+    const inputPostal = document.getElementById('rota-codigo-postal');
+
+    if (!inputPostal || botoesPrefixo.length === 0) return;
+
+    botoesPrefixo.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const prefixoVal = btn.getAttribute('data-prefixo') || btn.textContent.trim();
+            if (prefixoVal) {
+                inputPostal.value = prefixoVal;
+                // Dispara os eventos standard e o customizado para disparar a ponte de geocoding
+                inputPostal.dispatchEvent(new Event('input', { bubbles: true }));
+                inputPostal.dispatchEvent(new CustomEvent('prefixo-aplicado', { bubbles: true }));
+            }
+        });
+    });
+}
+
+// ==========================================
 // INTERFACE E GESTÃO DE TURNOS (ORQUESTRADOR)
 // ==========================================
 export function setupRotasLogic() {
@@ -286,8 +309,9 @@ export function setupRotasLogic() {
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
 
-    configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
     autocompleteInstancia = inicializarAutocompleteMorada('rota-morada-completa', API_BASE_URL);
+    configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
+    setupPrefixosRapidosLogic();
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
@@ -401,6 +425,8 @@ export function sincronizarInterfaceRota() {
         renderMoradasAdicionadas();
         setTimeout(() => {
             autocompleteInstancia = inicializarAutocompleteMorada('rota-morada-completa', API_BASE_URL);
+            configurarEscutaCodigoPostalParaLimites(autocompleteInstancia);
+            setupPrefixosRapidosLogic();
         }, 100);
         alternarModoRota(localStorage.getItem('cp_modo_rota') || 'planeamento');
 
