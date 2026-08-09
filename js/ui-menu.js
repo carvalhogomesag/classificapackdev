@@ -1,12 +1,27 @@
 /**
  * js/ui-menu.js
+ * Versão v70.6 - Com Gestão de Prefixo Padrão de Código Postal
  * Faz: Gere a abertura/fecho do menu lateral (hambúrguer), a seleção de preferência
- *      de navegação (Google Maps vs Waze), exibe o email do utilizador ativo
- *      e gere o botão de fecho de sessão (logout) global.
+ *      de navegação (Google Maps vs Waze), guarda o prefixo padrão de 4 dígitos,
+ *      exibe o email do utilizador ativo e gere o fecho de sessão (logout) global.
  * Depende de: ./navigation.js, ./firebase-init.js
  */
 
 import { obterNavegadorPreferido, definirNavegadorPreferido } from './navigation.js';
+
+// Retorna o prefixo padrão guardado (ou '2640' por omissão)
+export function obterPrefixoPadrao() {
+    return localStorage.getItem('cp_default_prefix') || '2640';
+}
+
+// Guarda o prefixo padrão sanitizado (4 dígitos)
+export function definirPrefixoPadrao(prefix) {
+    const cleanPrefix = (prefix || '').replace(/\D/g, '').substring(0, 4);
+    const finalPrefix = cleanPrefix.length === 4 ? cleanPrefix : '2640';
+    localStorage.setItem('cp_default_prefix', finalPrefix);
+    console.log(`[MENU] Prefixo padrão guardado: ${finalPrefix}`);
+    return finalPrefix;
+}
 
 export function setupMenuLateral() {
     const btnAbrir = document.getElementById('btn-abrir-menu');
@@ -15,6 +30,7 @@ export function setupMenuLateral() {
     const conteudo = document.getElementById('menu-lateral-conteudo');
     const userEmailSpan = document.getElementById('menu-user-email');
     const btnLogout = document.getElementById('menu-btn-logout');
+    const inputPrefixoPadrao = document.getElementById('pref-prefixo-padrao');
 
     if (!btnAbrir || !overlay || !conteudo) return;
 
@@ -32,6 +48,11 @@ export function setupMenuLateral() {
             userEmailSpan.textContent = firebase.auth().currentUser.email || "Utilizador Autenticado";
         } else if (userEmailSpan) {
             userEmailSpan.textContent = "Sessão Ativa";
+        }
+
+        // Carrega as preferências guardadas para os campos do menu
+        if (inputPrefixoPadrao) {
+            inputPrefixoPadrao.value = obterPrefixoPadrao();
         }
 
         atualizarEstilosBotoesNavegador();
@@ -54,6 +75,26 @@ export function setupMenuLateral() {
             fecharMenu();
         }
     });
+
+    // Configuração do input de Prefixo Padrão no Menu
+    if (inputPrefixoPadrao) {
+        inputPrefixoPadrao.value = obterPrefixoPadrao();
+
+        inputPrefixoPadrao.addEventListener('input', (e) => {
+            let val = e.target.value.replace(/\D/g, '').substring(0, 4);
+            e.target.value = val;
+
+            if (val.length === 4) {
+                definirPrefixoPadrao(val);
+                
+                // Atualiza dinamicamente o campo de inserção rápida na página de rotas
+                const inputRotasPrefixo = document.getElementById('prefixo-manual');
+                if (inputRotasPrefixo) {
+                    inputRotasPrefixo.value = val;
+                }
+            }
+        });
+    }
 
     // Configuração dos botões de preferência de navegador (Google Maps vs Waze)
     const botoesNav = document.querySelectorAll('.pref-nav-btn');

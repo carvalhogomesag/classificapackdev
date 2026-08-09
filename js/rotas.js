@@ -1,8 +1,9 @@
 /**
  * js/rotas.js
- * Versão v70.7 - Adição Rápida na Última Posição com Destaque Laranja/Borda Preta e Bounce
- * Faz: Gere a adição de entregas/recolhas diretamente no fim da rota ativa com destaque visual
- *      saltitante (bounce) até confirmação manual de posição, sincronizando em tempo real com o Firestore.
+ * Versão v70.8 - Com Leitura Automática do Prefixo Padrão das Definições
+ * Faz: Lê o prefixo padrão configurado no menu lateral (ex: 2640 ou 2705) e preenche-o
+ *      automaticamente ao abrir a página, mantendo a adição na última posição, pino laranja saltitante
+ *      e sincronização em tempo real com o Firestore.
  */
 
 import { saveData } from './storage.js';
@@ -17,6 +18,9 @@ import {
 
 // Importa o módulo de navegação (Google Maps vs Waze)
 import { abrirNavegacao } from './navigation.js';
+
+// Importa a função do prefixo padrão das definições
+import { obterPrefixoPadrao } from './ui-menu.js';
 
 // Importa a instância ativa do Firestore
 import { db } from './firebase-init.js';
@@ -285,7 +289,7 @@ export async function processarAdicaoPorPostal() {
             brickId: brickId,
             brickName: brickName,
             tipoOperacao: tipoOperacaoVal,
-            isNewUnconfirmed: true // MARCA COMO NOVA AÇÃO NÃO CONFIRMADA (LARANJA + BORDA PRETA + BOUNCE)
+            isNewUnconfirmed: true
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -298,7 +302,6 @@ export async function processarAdicaoPorPostal() {
         } else {
             window.moradasEntregas.push(novaMorada);
 
-            // SE A ROTA JÁ TIVER AÇÕES, ADICIONA DIRETAMENTE NO FIM (ÚLTIMA POSIÇÃO)
             if (!window.rotaOtimizada) window.rotaOtimizada = [];
 
             let pontoAnterior = window.partidaLocalizacao;
@@ -313,20 +316,17 @@ export async function processarAdicaoPorPostal() {
                 novaMorada.lng
             ) : 0;
 
-            // INSERE DIRETAMENTE NO FIM DA ROTA OTIMIZADA
             window.rotaOtimizada.push(novaMorada);
 
             sincronizarPersistencia();
             renderMoradasAdicionadas();
 
-            // EXIBE OS CONTENTORES DO MAPA E DA ROTA
             document.getElementById('container-mapa')?.classList.remove('hidden');
             document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
 
             renderizarItinerarioOtimizado();
             desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 
-            // MIDA AUTOMATICAMENTE PARA O MODO CONDUÇÃO PARA O MOTORISTA VER A NOVA PARAGEM NO FIM
             alternarModoRota('conducao');
         }
 
@@ -462,7 +462,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
-                paragemOriginal.isNewUnconfirmed = false; // CONFIRMA TODAS AS POSIÇÕES AO OTIMIZAR
+                paragemOriginal.isNewUnconfirmed = false;
                 paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
@@ -526,7 +526,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 }
 
 // =========================================================================
-// FUNÇÃO DE CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO
+// CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO
 // =========================================================================
 window.confirmarPosicaoParagem = (paragemId) => {
     const paragem = window.rotaOtimizada.find(p => p.id === paragemId);
@@ -566,9 +566,7 @@ export function renderizarItinerarioOtimizado() {
         const isPriority = !!paragem.priority;
         const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
-        // ESTILIZAÇÃO DO CARTÃO COM BASE NO ESTADO
         if (isNewUnconfirmed) {
-            // CARTÃO LARANJA COM BORDA PRETA ESPESSA E Destaque
             item.className = "p-3 rounded-xl flex flex-col space-y-2.5 border-2 border-black bg-orange-50 shadow-lg ring-4 ring-orange-200 animate-pulse";
         } else if (isLastNavigated) {
             item.className = isPriority 
@@ -582,7 +580,6 @@ export function renderizarItinerarioOtimizado() {
 
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
-        // BOLINHA LARANJA COM BORDA PRETA E EFEITO SALTITANTE (BOUNCE)
         const bolinhaHtml = isNewUnconfirmed 
             ? `<span class="btn-index-badge w-6 h-6 rounded-full bg-orange-500 text-white border-2 border-black font-black text-xs flex items-center justify-center flex-shrink-0 animate-bounce cursor-pointer shadow-md" title="Clique para alterar ou confirmar posição">
                 ${index + 1}
@@ -937,7 +934,6 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
 
         const novoIndex = novaPos - 1;
 
-        // CONFIRMA A POSIÇÃO E REMOVE A ANIMAÇÃO SALTITANTE E COR LARANJA
         paragem.isNewUnconfirmed = false;
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) originalPre.isNewUnconfirmed = false;
@@ -980,6 +976,11 @@ function aplicarPrefixoNoCampo(prefixo) {
 function configurarEventosPrefixoRapido() {
     const btnManual = document.getElementById('btn-inserir-prefixo');
     const inputPrefixoManual = document.getElementById('prefixo-manual');
+
+    // PREENCHE AUTOMATICAMENTE COM O PREFIXO PADRÃO DAS DEFINIÇÕES AO CARREGAR
+    if (inputPrefixoManual) {
+        inputPrefixoManual.value = obterPrefixoPadrao();
+    }
 
     if (btnManual && inputPrefixoManual) {
         btnManual.addEventListener('click', (e) => {
@@ -1324,8 +1325,14 @@ export function sincronizarInterfaceRota() {
     const displayDataRota = document.getElementById('display-data-rota');
     const statusPartida = document.getElementById('status-partida');
     const dataRotaInput = document.getElementById('data-rota');
+    const inputPrefixoManual = document.getElementById('prefixo-manual');
 
     if (!containerSetupRota || !containerPlaneadorRota) return;
+
+    // ASSEGURA O PREENCHIMENTO DO PREFIXO PADRÃO
+    if (inputPrefixoManual) {
+        inputPrefixoManual.value = obterPrefixoPadrao();
+    }
 
     if (window.rotaIniciada) {
         containerSetupRota.classList.add('hidden');
@@ -1438,7 +1445,6 @@ export function setupModaisEdicao() {
                 }
             }
 
-            // GUARDAR ALTERAÇÕES TAMBÉM CONFIRMA A POSIÇÃO E REMOVE A ANIMAÇÃO SALTITANTE
             itemSendoEditado.isNewUnconfirmed = false;
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;

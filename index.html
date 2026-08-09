@@ -97,7 +97,7 @@
             
             <span class="absolute left-1/2 transform -translate-x-1/2">Classifica Pack</span>
             
-            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v70.7</span>
+            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v70.8</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS -->
@@ -122,7 +122,7 @@
 
                 <!-- Opções do Menu -->
                 <div class="flex-1 p-4 space-y-4 overflow-y-auto">
-                    <!-- Secção: Preferências do Motorista -->
+                    <!-- Secção: Preferências do Navegador -->
                     <div class="space-y-2">
                         <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Navegador Preferido</label>
                         <div class="grid grid-cols-2 gap-2">
@@ -140,8 +140,20 @@
 
                     <hr class="border-gray-100">
 
+                    <!-- Secção: Prefixo Padrão de Código Postal -->
+                    <div class="space-y-2">
+                        <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Prefixo Padrão (4 Dígitos)</label>
+                        <div class="flex items-center space-x-2">
+                            <input type="text" id="pref-prefixo-padrao" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ex: 2640" 
+                                class="w-full p-3 border border-gray-200 rounded-xl text-sm font-bold text-center outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition-all">
+                        </div>
+                        <p class="text-[11px] text-gray-400 italic">Este prefixo será preenchido automaticamente ao abrir o aplicativo.</p>
+                    </div>
+
+                    <hr class="border-gray-100">
+
                     <!-- Secção: Informação de Sessão -->
-                    <div class="space-y-2 pt-2">
+                    <div class="space-y-2 pt-1">
                         <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Conta Ativa</label>
                         <div class="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-center space-x-3">
                             <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
