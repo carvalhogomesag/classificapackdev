@@ -1,8 +1,7 @@
 /**
  * js/rotas.js
- * Versão v70.9 - Fluxo de Planeamento, Odómetro e Rota Otimizada Totalmente Corrigidos
- * Faz: Lê o prefixo padrão, preenche automaticamente, gere inserções no planeamento sem saltar para condução,
- *      ativa o modo condução com mapa após otimização e controla os odómetros de saída/chegada.
+ * Versão v70.9 - Com Componente de Geografia Isolado
+ * Faz: Gestão da aba de rotas, importando a resolução geográfica do módulo 'rotas-geografia.js'.
  */
 
 import { saveData } from './storage.js';
@@ -23,6 +22,9 @@ import { obterPrefixoPadrao } from './ui-menu.js';
 
 // Importa a instância ativa do Firestore
 import { db } from './firebase-init.js';
+
+// COMPONENTE 1: Importa utilitários de resolução geográfica isolados
+import { isCatchAllLocality, obterConcelhoPorCodigoPostal, resolveBrickForZip } from './rotas-geografia.js';
 
 let itemSendoEditado = null; 
 let autocompleteInstancia = null;
@@ -135,70 +137,6 @@ export function setupVozLogic() {
             buscaMoradaInput.focus();
         }
     });
-}
-
-function isCatchAllLocality(freguesia, localidade) {
-    const cleanFreg = freguesia.replace(/\s+MFR$/i, "").toLowerCase();
-    const cleanLoc = localidade.replace(/\s*\(\d{3}-\d{3}\)$/, "").toLowerCase();
-    
-    if (cleanLoc === cleanFreg) return true;
-    if (cleanFreg === "são miguel de alcainça" && cleanLoc === "alcainça") return true;
-    return false;
-}
-
-function obterConcelhoPorCodigoPostal(zip) {
-    if (!zip) return "MAFRA";
-    const cleanPrefix = zip.replace(/\D/g, '').substring(0, 4);
-    if (cleanPrefix === "2705" || cleanPrefix === "2710" || cleanPrefix === "2715" || cleanPrefix === "2725") {
-        return "SINTRA";
-    }
-    return "MAFRA";
-}
-
-function resolveBrickForZip(zip, drivers) {
-    if (!zip || !drivers) return { brickId: null, brickName: null };
-    const regexZip = /\d{4}-\d{3}/;
-    const match = zip.match(regexZip);
-    const normalizedZip = match ? match[0] : zip.trim();
-
-    const concelho = obterConcelhoPorCodigoPostal(normalizedZip);
-
-    let matchedFreguesia = null;
-    let matchedLocalidade = null;
-
-    if (!GEOGRAPHY[concelho]) return { brickId: null, brickName: null };
-
-    for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
-        for (const [localidade, cpList] of Object.entries(localidades)) {
-            if (isCatchAllLocality(freguesia, localidade)) continue;
-            if (cpList.includes(normalizedZip)) {
-                matchedFreguesia = freguesia;
-                matchedLocalidade = localidade;
-                break;
-            }
-        }
-        if (matchedFreguesia) break;
-    }
-
-    if (!matchedFreguesia) {
-        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
-            for (const [localidade, cpList] of Object.entries(localidades)) {
-                if (isCatchAllLocality(freguesia, localidade) && cpList.includes(normalizedZip)) {
-                    matchedFreguesia = freguesia;
-                    matchedLocalidade = localidade;
-                    break;
-                }
-            }
-            if (matchedFreguesia) break;
-        }
-    }
-
-    if (!matchedFreguesia) return { brickId: null, brickName: null };
-
-    return { 
-        brickId: `${matchedFreguesia}|${matchedLocalidade}`, 
-        brickName: matchedLocalidade 
-    };
 }
 
 function calcularRotaVizinhoMaisProximoLocal() {
@@ -338,7 +276,7 @@ export async function processarAdicaoPorPostal() {
                 alternarModoRota('conducao');
             } else {
                 // FASE INICIAL DE PLANEAMENTO (SEM OTIMIZAÇÃO AINDA):
-                // Apenas atualiza as Moradas Mapeadas e MANTÉM no modo Planeamento!
+                // Apenas atualiza a lista de Moradas Mapeadas e MANTÉM no modo Planeamento!
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
                 alternarModoRota('planeamento');
@@ -471,7 +409,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
         const data = await response.json();
         
-        window.isRouteOptimized = true; // MARCA A ROTA COMO OTIMIZADA
+        window.isRouteOptimized = true;
 
         if (data.optimizedIndices) {
             const indices = data.optimizedIndices;
@@ -775,7 +713,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // Controlo de visibilidade dos botões do odómetro
     if (btnIniciarSaidaKm) {
         if (!window.tripStarted) {
             btnIniciarSaidaKm.classList.remove('hidden');
@@ -1280,7 +1217,7 @@ export function setupRotasLogic() {
 
             window.dataRotaSelecionada = dataFormatada;
             window.rotaIniciada = true;
-            window.isRouteOptimized = false; // Garante que o novo turno inicia limpo sem estar otimizado
+            window.isRouteOptimized = false;
             window.rotaOtimizada = [];
 
             localStorage.setItem('cp_modo_rota', 'planeamento');
