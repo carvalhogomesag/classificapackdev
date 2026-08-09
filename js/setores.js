@@ -1,13 +1,9 @@
 /**
  * setores.js
- * Faz: Controla o ecrã de Atribuição de Bricks, desenhando a árvore geográfica interativa de Mafra e Sintra e associando diretamente cada localidade (Brick) ao motorista selecionado de forma persistente.
- *      Preserva o estado de expansão das Freguesias e permite a seleção em lote de todos os Bricks de uma freguesia de uma só vez.
- *      Implementa avisos visuais de exclusividade táteis com cadeado vermelho e baixa opacidade em Bricks de outros motoristas.
- *      Desenha e atualiza pins coloridos e leves no mapa geral do gestor com georreferenciação sob procura, cache local e balões explicativos (Hover).
- *      NOVO: Mapeamento de IDs normalizado (Case-Insensitive) para corrigir falhas de leitura de Bricks já atribuídos.
- *      NOVO: Mensagem de confirmação tátil antes de atribuir ou retirar qualquer Brick (individual ou em lote).
- * NÃO faz: Não gere o registo direto de motoristas (motoristas.js) nem as coordenadas geográficas (maps.js).
- * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js (para aceder ao db)
+ * Versão v70.9.1 - Com Atualização Otimista Imediata de Bricks
+ * Faz: Controla o ecrã de Atribuição de Bricks com atualização otimista na memória RAM local,
+ *      eliminando o atraso de 2-3 segundos ao atribuir/retirar localidades aos motoristas.
+ * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js
  */
 
 import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
@@ -28,12 +24,11 @@ let freguesiasExpandidas = new Set();
 // Instâncias internas seguras do mapa do gestor e balão de informação
 let dashboardMap = null;
 let dashboardOverlays = [];
-let dashboardInfoWindow = null; // Instância única partilhada para balão de hover
+let dashboardInfoWindow = null;
 
-// Cache local em memória RAM das coordenadas já geocodificadas para evitar chamadas redundantes ao Google
+// Cache local em memória RAM das coordenadas já geocodificadas
 let brickCoordsCache = {};
 
-// Carrega as coordenadas anteriormente guardadas do armazenamento persistente ao arrancar
 try {
     const cached = localStorage.getItem('cp_brick_coords');
     if (cached) {
@@ -52,11 +47,10 @@ function salvarCacheCoordenadas() {
 }
 
 // =========================================================================
-// AUXILIAR DE COMPATIBILIDADE E ROBUSTEZ: NORMALIZADOR DE IDS (CASE-INSENSITIVE)
+// AUXILIAR DE COMPATIBILIDADE E ROBUSTEZ: NORMALIZADOR DE IDS
 // =========================================================================
 function normalizarBrickId(id) {
     if (!id || typeof id !== 'string') return "";
-    // Limpa espaços extras e força maiúsculas para que "Sintra" e "SINTRA" coincidam 100%
     return id.toUpperCase().trim();
 }
 
@@ -82,7 +76,7 @@ async function carregarCacheCoordenadasFirestore() {
     }
 }
 
-// Coordenadas centrais aproximadas das Freguesias de Mafra e Sintra (funcionam como Fallback temporário)
+// Coordenadas centrais aproximadas das Freguesias de Mafra e Sintra
 const FREGUESIA_COORDS = {
     // ---- CONCELHO DE MAFRA ----
     "AZUEIRA": { lat: 38.9900, lng: -9.2500 },
@@ -112,7 +106,7 @@ const FREGUESIA_COORDS = {
 };
 
 // ==========================================
-// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO (DISPERSÃO DE RECURSO)
+// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -138,7 +132,7 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 }
 
 // ==========================================
-// GEOCÓDIGO SOB PROCURA (ACIONADO EXCLUSIVAMENTE SOB PROCURA/INTERAÇÃO TÁTIL)
+// GEOCÓDIGO SOB PROCURA
 // ==========================================
 function geocodificarBrickSobProcura(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -362,7 +356,7 @@ function formatarIntervaloCPs(cpList) {
 }
 
 // =========================================================================
-// COMPUTAÇÃO EM TEMPO REAL: AUDITORIA DE BRICKS NÃO ALOCADOS (SALDO ZERO)
+// COMPUTAÇÃO EM TEMPO REAL: AUDITORIA DE BRICKS NÃO ALOCADOS
 // =========================================================================
 function atualizarAuditoriaBricks() {
     const concelho = concelhoAtivo;
@@ -394,8 +388,6 @@ function atualizarAuditoriaBricks() {
         bIds.forEach(id => {
             if (id && typeof id === 'string' && id.includes('|')) {
                 const [freg, loc] = id.split('|');
-                
-                // Normaliza a validação contra o concelho ativo para máxima robustez
                 if (GEOGRAPHY[concelho] && GEOGRAPHY[concelho][freg] && GEOGRAPHY[concelho][freg][loc]) {
                     bricksAlocadosSet.add(normalizarBrickId(id));
                 }
@@ -496,13 +488,12 @@ export function renderGeographicTree() {
 
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    // Map estruturado e normalizado (Case-Insensitive) para ler instantaneamente o motorista dono de cada localidade
+    // Map estruturado e normalizado (Case-Insensitive)
     const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
             if (id && typeof id === 'string') {
-                // Guarda a chave sempre normalizada (Maiúsculas) para eliminar o bug visual do ecrã
                 localidadeParaMotorista.set(normalizarBrickId(id), drv);
             }
         });
@@ -552,7 +543,6 @@ export function renderGeographicTree() {
             const brickId = `${freguesiaName}|${locName}`;
             const normalizedBid = normalizarBrickId(brickId);
             
-            // Leitura segura baseada na chave normalizada (Case-Insensitive)
             const motoristaDono = localidadeParaMotorista.get(normalizedBid);
 
             const isAssignedToActive = Array.isArray(activeDriver.brickIds) && 
@@ -563,7 +553,6 @@ export function renderGeographicTree() {
 
             const label = document.createElement('label');
 
-            // CORREÇÃO USABILIDADE: Se pertencer a outro motorista, fica trancado de forma visível
             if (motoristaDono && motoristaDono.id !== activeDriver.id) {
                 label.className = "flex items-center justify-between p-2 rounded bg-gray-100/50 text-gray-400 cursor-not-allowed select-none text-[11px] border border-gray-200 opacity-60";
                 label.innerHTML = `
@@ -596,10 +585,9 @@ export function renderGeographicTree() {
                     const checkedState = e.target.checked;
                     const acao = checkedState ? "atribuir" : "retirar";
                     
-                    // NOVO: Mensagem de confirmação tátil antes de gravar no banco de dados
                     const confirmar = confirm(`Tem a certeza que deseja ${acao} o Brick "${locName}" do motorista "${activeDriver.name}"?`);
                     if (!confirmar) {
-                        e.target.checked = !checkedState; // Reverte a checkbox na UI
+                        e.target.checked = !checkedState;
                         return;
                     }
 
@@ -612,10 +600,20 @@ export function renderGeographicTree() {
                         updatedBrickIds.push(brickId);
                         geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
-                        // Faz a filtragem normalizada para garantir a exclusão correta
                         updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
 
+                    // 1. ATUALIZAÇÃO OTIMISTA IMEDIATA EM MEMÓRIA RAM LOCAL
+                    activeDriver.brickIds = updatedBrickIds;
+                    saveData(window.drivers, [], window.assignments, window.partidaLocalizacao, window.moradasEntregas, window.rotaOtimizada, window.dataRotaSelecionada, window.rotaIniciada);
+
+                    // 2. RE-RENDERIZADO OTIMISTA DA INTERFACE NA HORA
+                    renderDriversForAttribution();
+                    renderGeographicTree();
+                    atualizarAuditoriaBricks();
+                    desenharBricksNoMapa();
+
+                    // 3. ENVIO ASSÍNCRONO PARA O FIRESTORE EM SEGUNDO PLANO
                     db.collection('drivers').doc(activeDriver.id).update({
                         brickIds: updatedBrickIds
                     }).then(() => {
@@ -636,7 +634,6 @@ export function renderGeographicTree() {
                 const checkedState = e.target.checked;
                 const acao = checkedState ? "atribuir em lote" : "retirar em lote";
                 
-                // NOVO: Mensagem de confirmação em lote de segurança
                 const confirmar = confirm(`Tem a certeza que deseja ${acao} todos os Bricks livres da freguesia "${freguesiaName}" para o motorista "${activeDriver.name}"?`);
                 if (!confirmar) {
                     e.target.checked = !checkedState;
@@ -671,6 +668,17 @@ export function renderGeographicTree() {
                     }
                 });
 
+                // 1. ATUALIZAÇÃO OTIMISTA IMEDIATA EM MEMÓRIA RAM LOCAL
+                activeDriver.brickIds = updatedBrickIds;
+                saveData(window.drivers, [], window.assignments, window.partidaLocalizacao, window.moradasEntregas, window.rotaOtimizada, window.dataRotaSelecionada, window.rotaIniciada);
+
+                // 2. RE-RENDERIZADO OTIMISTA DA INTERFACE NA HORA
+                renderDriversForAttribution();
+                renderGeographicTree();
+                atualizarAuditoriaBricks();
+                desenharBricksNoMapa();
+
+                // 3. ENVIO ASSÍNCRONO PARA O FIRESTORE EM SEGUNDO PLANO
                 db.collection('drivers').doc(activeDriver.id).update({
                     brickIds: updatedBrickIds
                 }).then(() => {
