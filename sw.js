@@ -4,7 +4,7 @@
  * Faz: Controla a cache offline de todos os recursos ativos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v70.6';
+const CACHE_NAME = 'classificapack-v70.7';
 
 const ASSETS = [
   './',
