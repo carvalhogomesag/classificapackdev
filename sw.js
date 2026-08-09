@@ -1,10 +1,10 @@
 /**
  * sw.js
- * Versão v70.6 - Atualização sem ficheiros obsoletos da componentização
+ * Versão v70.9 - Com Módulos 'rotas-geografia.js' e 'rotas-odometro.js' Registados
  * Faz: Controla a cache offline de todos os recursos ativos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v71.1';
+const CACHE_NAME = 'classificapack-v70.9';
 
 const ASSETS = [
   './',
@@ -21,11 +21,13 @@ const ASSETS = [
   'js/voz.js',
   'js/triagem.js',
   'js/rotas.js',
+  'js/rotas-geografia.js', // Módulo 1: Geografia
+  'js/rotas-odometro.js',  // Módulo 2: Odómetro
   'js/maps.js',
   'js/pwa.js',
   'js/ui.js',
-  'js/navigation.js',      // Módulo de navegação (Google Maps / Waze)
-  'js/ui-menu.js',         // Módulo do menu hambúrguer e definições
+  'js/navigation.js',
+  'js/ui-menu.js',
   'partials/triagem.html',
   'partials/motoristas.html',
   'partials/setores.html',
@@ -68,5 +70,3 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
-
-

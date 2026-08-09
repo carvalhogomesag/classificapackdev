@@ -1,7 +1,7 @@
 /**
  * js/rotas.js
- * Versão v70.9 - Com Componente de Geografia Isolado
- * Faz: Gestão da aba de rotas, importando a resolução geográfica do módulo 'rotas-geografia.js'.
+ * Versão v70.9 - Com Componentes de Geografia e Odómetro Isolados
+ * Faz: Gestão principal da aba de rotas, reutilizando os módulos 'rotas-geografia.js' e 'rotas-odometro.js'.
  */
 
 import { saveData } from './storage.js';
@@ -26,6 +26,9 @@ import { db } from './firebase-init.js';
 // COMPONENTE 1: Importa utilitários de resolução geográfica isolados
 import { isCatchAllLocality, obterConcelhoPorCodigoPostal, resolveBrickForZip } from './rotas-geografia.js';
 
+// COMPONENTE 2: Importa modais de odómetro isolados
+import { abrirModalOdometroSaida, abrirModalOdometroChegada } from './rotas-odometro.js';
+
 let itemSendoEditado = null; 
 let autocompleteInstancia = null;
 
@@ -42,7 +45,7 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
 // ==========================================
 // PERSISTÊNCIA DAS ROTAS (LOCALSTORAGE + FIRESTORE)
 // ==========================================
-function sincronizarPersistencia() {
+export function sincronizarPersistencia() {
     saveData(
         window.drivers, 
         [], 
@@ -276,7 +279,6 @@ export async function processarAdicaoPorPostal() {
                 alternarModoRota('conducao');
             } else {
                 // FASE INICIAL DE PLANEAMENTO (SEM OTIMIZAÇÃO AINDA):
-                // Apenas atualiza a lista de Moradas Mapeadas e MANTÉM no modo Planeamento!
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
                 alternarModoRota('planeamento');
@@ -758,120 +760,6 @@ export function renderEstatisticasRota() {
             painelOdometroResumo.classList.add('hidden');
         }
     }
-}
-
-// ==========================================
-// MODAIS DO ODÓMETRO (SAÍDA E CHEGADA)
-// ==========================================
-function abrirModalOdometroSaida(callback) {
-    const modal = document.getElementById('modal-odometro-saida');
-    if (!modal) return;
-
-    const agora = new Date();
-    const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-    
-    const inputHora = document.getElementById('odometro-saida-hora');
-    const inputKm = document.getElementById('odometro-saida-km');
-    const txtMinimo = document.getElementById('odometro-saida-minimo');
-
-    if (inputHora) inputHora.value = horaStr;
-    if (inputKm) inputKm.value = window.lastOdometer || "";
-    if (txtMinimo) txtMinimo.textContent = `Mínimo exigido: ${window.lastOdometer || 0} KM`;
-
-    modal.classList.remove('hidden');
-
-    const btnConfirmar = document.getElementById('btn-confirmar-saida-km');
-    const btnCancelar = document.getElementById('btn-cancelar-saida-km');
-
-    btnConfirmar.onclick = () => {
-        const kmVal = parseFloat(inputKm.value);
-        const horaVal = inputHora.value.trim();
-
-        if (isNaN(kmVal) || kmVal < (window.lastOdometer || 0)) {
-            alert(`Erro de validação: O valor de quilometragem de partida não pode ser menor do que o último registo final (${window.lastOdometer || 0} KM).`);
-            return;
-        }
-        if (!horaVal) {
-            alert("Por favor, introduza um horário de partida válido.");
-            return;
-        }
-
-        window.tripStarted = true;
-        window.tripCompleted = false;
-        window.odometerStart = kmVal;
-        window.odometerStartHour = horaVal;
-        window.lastOdometer = kmVal;
-
-        sincronizarPersistencia();
-        modal.classList.add('hidden');
-        if (typeof callback === 'function') callback();
-    };
-
-    btnCancelar.onclick = () => modal.classList.add('hidden');
-}
-
-function abrirModalOdometroChegada() {
-    const modal = document.getElementById('modal-odometro-chegada');
-    if (!modal) return;
-
-    const agora = new Date();
-    const horaStr = `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`;
-    
-    const inputHora = document.getElementById('odometer-chegada-hora') || document.getElementById('odometro-chegada-hora');
-    const inputKm = document.getElementById('odometro-chegada-km');
-    const txtMinimo = document.getElementById('odometro-chegada-minimo');
-
-    if (inputHora) inputHora.value = horaStr;
-    if (inputKm) inputKm.value = "";
-    if (txtMinimo) txtMinimo.textContent = `Mínimo de partida: ${window.odometerStart || 0} KM`;
-
-    modal.classList.remove('hidden');
-
-    const btnConfirmar = document.getElementById('btn-confirmar-chegada-km');
-    const btnCancelar = document.getElementById('btn-cancelar-chegada-km');
-
-    btnConfirmar.onclick = () => {
-        const kmVal = parseFloat(inputKm.value);
-        const horaVal = inputHora ? inputHora.value.trim() : "";
-
-        if (isNaN(kmVal) || kmVal < window.odometerStart) {
-            alert(`Erro de validação: O valor de quilometragem final não pode ser inferior ao valor de saída (${window.odometerStart} KM).`);
-            return;
-        }
-        if (!horaVal) {
-            alert("Por favor, introduza um horário de regresso válido.");
-            return;
-        }
-
-        alert(`Turno Encerrado com Sucesso!\n\nPartida: ${window.odometerStart} KM às ${window.odometerStartHour}\nChegada: ${kmVal} KM às ${horaVal}\nTotal Percorrido: ${(kmVal - window.odometerStart).toFixed(1)} km`);
-
-        window.tripCompleted = true;
-        window.odometerEnd = kmVal;
-        window.odometerEndHour = horaVal;
-        window.lastOdometer = kmVal;
-
-        window.partidaLocalizacao = null;
-        window.moradasEntregas = [];
-        window.rotaOtimizada = [];
-        window.isRouteOptimized = false;
-        window.dataRotaSelecionada = "";
-        window.rotaIniciada = false;
-        window.tripStarted = false;
-        window.tripCompleted = false;
-        window.odometerStart = 0;
-        window.odometerStartHour = "";
-        window.odometerEnd = 0;
-        window.odometerEndHour = "";
-
-        localStorage.removeItem('cp_last_navigated_id');
-        limparMapaVisual();
-
-        sincronizarPersistencia();
-        modal.classList.add('hidden');
-        sincronizarInterfaceRota();
-    };
-
-    btnCancelar.onclick = () => modal.classList.add('hidden');
 }
 
 // ==========================================
