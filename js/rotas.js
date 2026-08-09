@@ -1,9 +1,8 @@
 /**
  * js/rotas.js
- * Versão v70.9 - Fluxo de Planeamento vs Condução Corrigido
- * Faz: Garante que objetos inseridos no planeamento inicial permaneçam apenas nas Moradas Mapeadas.
- *      Apenas transfere para a área de condução após clicar em "Otimizar Sequência de Rota".
- *      Pino laranja saltitante com confirmação de posição aplica-se EXCLUSIVAMENTE a inserções feitas após a rota já estar otimizada.
+ * Versão v70.9 - Fluxo de Planeamento, Odómetro e Rota Otimizada Totalmente Corrigidos
+ * Faz: Lê o prefixo padrão, preenche automaticamente, gere inserções no planeamento sem saltar para condução,
+ *      ativa o modo condução com mapa após otimização e controla os odómetros de saída/chegada.
  */
 
 import { saveData } from './storage.js';
@@ -53,6 +52,7 @@ function sincronizarPersistencia() {
         window.rotaIniciada
     );
 
+    localStorage.setItem('cp_is_route_optimized', JSON.stringify(window.isRouteOptimized || false));
     localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
     localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
     localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted));
@@ -69,6 +69,7 @@ function sincronizarPersistencia() {
             rotaOtimizada: window.rotaOtimizada || [],
             dataRotaSelecionada: window.dataRotaSelecionada || "",
             rotaIniciada: window.rotaIniciada || false,
+            isRouteOptimized: window.isRouteOptimized || false,
             routingMethodUsed: window.routingMethodUsed || 'Cloud',
 
             tripStarted: window.tripStarted || false,
@@ -278,8 +279,8 @@ export async function processarAdicaoPorPostal() {
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
         const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
-        // Verifica se a rota já possui uma otimização ativa
-        const rotaJaOtimizada = Array.isArray(window.rotaOtimizada) && window.rotaOtimizada.length > 0;
+        // Apenas fica marcado como não-confirmado se a rota JÁ TIVER SIDO OTIMIZADA previamente
+        const rotaJaOtimizada = window.isRouteOptimized === true;
 
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
@@ -292,7 +293,7 @@ export async function processarAdicaoPorPostal() {
             brickId: brickId,
             brickName: brickName,
             tipoOperacao: tipoOperacaoVal,
-            isNewUnconfirmed: rotaJaOtimizada // Apenas fica saltitante/pendente se a rota JÁ TIVER SIDO OTIMIZADA!
+            isNewUnconfirmed: rotaJaOtimizada
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -303,12 +304,11 @@ export async function processarAdicaoPorPostal() {
             sincronizarPersistencia();
             alert("Ponto de Partida configurado com sucesso!");
         } else {
-            // Adiciona a morada à lista de planeamento (Moradas Mapeadas)
+            // Adiciona sempre a morada à lista de planeamento (Moradas Mapeadas)
             window.moradasEntregas.push(novaMorada);
 
             if (rotaJaOtimizada) {
                 // SE A ROTA JÁ FOI OTIMIZADA ANTERIORMENTE:
-                // Adiciona a nova paragem ao fim do itinerário de condução e muda para modo condução
                 let pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
 
                 novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
@@ -327,14 +327,21 @@ export async function processarAdicaoPorPostal() {
                 document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
 
                 renderizarItinerarioOtimizado();
-                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+                
+                setTimeout(() => {
+                    if (window.googleMapInstance) {
+                        google.maps.event.trigger(window.googleMapInstance, 'resize');
+                    }
+                    desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+                }, 200);
 
                 alternarModoRota('conducao');
             } else {
                 // FASE INICIAL DE PLANEAMENTO (SEM OTIMIZAÇÃO AINDA):
-                // Apenas atualiza a lista de Moradas Mapeadas e MANTÉM no modo Planeamento!
+                // Apenas atualiza as Moradas Mapeadas e MANTÉM no modo Planeamento!
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
+                alternarModoRota('planeamento');
             }
         }
 
@@ -464,13 +471,15 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
         const data = await response.json();
         
+        window.isRouteOptimized = true; // MARCA A ROTA COMO OTIMIZADA
+
         if (data.optimizedIndices) {
             const indices = data.optimizedIndices;
             window.rotaOtimizada = [];
 
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
-                paragemOriginal.isNewUnconfirmed = false; // Todas as paragens ficam confirmadas na otimização inicial
+                paragemOriginal.isNewUnconfirmed = false;
                 paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
@@ -499,14 +508,18 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         sincronizarPersistencia();
         
         setTimeout(() => {
+            if (window.googleMapInstance) {
+                google.maps.event.trigger(window.googleMapInstance, 'resize');
+            }
             desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-        }, 300);
+        }, 200);
 
         alternarModoRota('conducao');
 
     } catch (err) {
         console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
         
+        window.isRouteOptimized = true;
         calcularRotaVizinhoMaisProximoLocal();
         window.rotaOtimizada.forEach(p => p.isNewUnconfirmed = false);
         window.routingMethodUsed = 'Local';
@@ -521,8 +534,11 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         sincronizarPersistencia();
         
         setTimeout(() => {
+            if (window.googleMapInstance) {
+                google.maps.event.trigger(window.googleMapInstance, 'resize');
+            }
             desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-        }, 300);
+        }, 200);
 
         alternarModoRota('conducao');
     } finally {
@@ -708,6 +724,7 @@ export function renderEstatisticasRota() {
     const statTempo = document.getElementById('stat-tempo');
     const statSistema = document.getElementById('stat-sistema');
 
+    const btnIniciarSaidaKm = document.getElementById('btn-iniciar-saida-km');
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
     const painelOdometroResumo = document.getElementById('painel-odometro-resumo');
 
@@ -755,6 +772,15 @@ export function renderEstatisticasRota() {
         } else {
             statSistema.className = "inline-flex items-center space-x-1.5 px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border bg-amber-50 text-amber-700 border-amber-200 animate-pulse";
             statSistema.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> <span>Contingência Local (Linha Reta)</span>`;
+        }
+    }
+
+    // Controlo de visibilidade dos botões do odómetro
+    if (btnIniciarSaidaKm) {
+        if (!window.tripStarted) {
+            btnIniciarSaidaKm.classList.remove('hidden');
+        } else {
+            btnIniciarSaidaKm.classList.add('hidden');
         }
     }
 
@@ -890,6 +916,7 @@ function abrirModalOdometroChegada() {
         window.partidaLocalizacao = null;
         window.moradasEntregas = [];
         window.rotaOtimizada = [];
+        window.isRouteOptimized = false;
         window.dataRotaSelecionada = "";
         window.rotaIniciada = false;
         window.tripStarted = false;
@@ -1198,6 +1225,8 @@ export function setupRotasLogic() {
     const btnAdicionarPostal = document.getElementById('btn-adicionar-postal-rota');
     const btnPlaneamento = document.getElementById('btn-modo-planeamento');
     const btnConducao = document.getElementById('btn-modo-conducao');
+
+    const btnIniciarSaidaKm = document.getElementById('btn-iniciar-saida-km');
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
 
     const btnTipoEntrega = document.getElementById('btn-tipo-entrega');
@@ -1251,11 +1280,8 @@ export function setupRotasLogic() {
 
             window.dataRotaSelecionada = dataFormatada;
             window.rotaIniciada = true;
-
-            // Se for um novo turno limpo, garante que a otimização anterior é limpa
-            if (!window.moradasEntregas || window.moradasEntregas.length === 0) {
-                window.rotaOtimizada = [];
-            }
+            window.isRouteOptimized = false; // Garante que o novo turno inicia limpo sem estar otimizado
+            window.rotaOtimizada = [];
 
             localStorage.setItem('cp_modo_rota', 'planeamento');
             sincronizarPersistencia();
@@ -1310,6 +1336,7 @@ export function setupRotasLogic() {
             if (confirm("Tem a certeza de que deseja eliminar todas as moradas e recomeçar a rota do zero?")) {
                 window.moradasEntregas = [];
                 window.rotaOtimizada = [];
+                window.isRouteOptimized = false;
                 localStorage.removeItem('cp_last_navigated_id');
                 document.getElementById('container-mapa')?.classList.add('hidden');
                 document.getElementById('container-rota-ordenada')?.classList.add('hidden');
@@ -1328,6 +1355,12 @@ export function setupRotasLogic() {
             if (window.moradasEntregas.length === 0) return alert("Adicione pelo menos uma morada de entrega.");
             otimizarItinerarioComVizinhoMaisProximo();
         });
+    }
+
+    if (btnIniciarSaidaKm) {
+        btnIniciarSaidaKm.addEventListener('click', () => abrirModalOdometroSaida(() => {
+            sincronizarInterfaceRota();
+        }));
     }
 
     if (btnFinalizarTurno) {
@@ -1368,13 +1401,16 @@ export function sincronizarInterfaceRota() {
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
         alternarModoRota(modoSalvo);
 
-        if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+        if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
             document.getElementById('container-mapa')?.classList.remove('hidden');
             document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
             
             renderizarItinerarioOtimizado();
             
             setTimeout(() => {
+                if (window.googleMapInstance) {
+                    google.maps.event.trigger(window.googleMapInstance, 'resize');
+                }
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
             }, 300);
         } else {

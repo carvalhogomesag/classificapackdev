@@ -1,32 +1,26 @@
 /**
  * main.js
- * Faz: Atua como ponto de entrada (bootstrapper) principal da app. Carrega de forma assíncrona os partials HTML, importa e ativa o estado global, e inicializa as escutas de eventos e renderizações de todos os sub-módulos.
- *      NOVO: Escuta as mudanças de utilizador do Firebase Auth, valida permissões no Firestore e gere o overlay do formulário de login de forma segura.
- *      NOVO: Inicia e pára escuta ativa do Firestore onSnapshot ao ligar e desligar sessão.
- *      NOVO: Escuta em tempo real as leituras de triagem da data de hoje para manter contagens globais automáticas.
- *      NOVO: Sincroniza e herda a rota ativa em tempo real para o driver que iniciou sessão.
- *      NOVO: Bloqueia e oculta reativamente a barra de navegação inferior global antes de iniciar sessão na nuvem.
- *      NOVO: Inicializa o painel lateral do Menu Hambúrguer e Definições de Navegador (v67.3).
- * NÃO faz: Não executa diretamente lógica de dados, georreferenciação ou renderizadores de listas (delegação direta aos módulos importados).
+ * Versão v70.9 - Com Sincronização em Nuvem do Indicador de Rota Otimizada
+ * Faz: Atua como ponto de entrada principal da app. Carrega partials, gere autenticação Firebase, sincroniza Firestore e inicia os submódulos.
  * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./ui-menu.js, ./firebase-init.js
  */
 
-import './state.js'; // Garante o arranque do estado global e migração física imediata de dados
+import './state.js'; // Garante o arranque do estado global
 import { saveData } from './storage.js';
 import { setupNavigation, showTab, setupKeypad, setupPrefixLock, updateVisor, aplicarPermissoesPorRole } from './ui.js';
 import { renderDrivers, handleDriverSubmit } from './motoristas.js';
-import './setores.js'; // Ativa e regista o novo motor tátil de Bricks e atribuições
+import './setores.js';
 import { setupTriagemLogic, setupCancelButtons, setupVozTriagemLogic, setupCameraOcrLogic } from './triagem.js';
 import { setupRotasLogic, setupModaisEdicao, setupVozLogic, sincronizarInterfaceRota } from './rotas.js';
 import { setupPWAInstallationLogic } from './pwa.js';
 import { inicializarGoogleAutocompleteTriagem } from './maps.js';
-import { setupMenuLateral } from './ui-menu.js'; // Importa o novo módulo do Menu Hambúrguer
+import { setupMenuLateral } from './ui-menu.js';
 
-// Importa instâncias seguras do Firebase para o arranque de sessão
+// Importa instâncias seguras do Firebase
 import { auth, db } from './firebase-init.js';
 
 // =========================================================================
-// PALETE DE CORES DOS MOTORISTAS (ATUALIZADA: ALTO CONTRASTE)
+// PALETE DE CORES DOS MOTORISTAS (ALTO CONTRASTE)
 // =========================================================================
 const colorPalette = [
     "#E31A1C", // Vermelho Vivo
@@ -53,7 +47,7 @@ let unsubRoute = null;
 // ==========================================
 function escutarDriversEmTempoReal() {
     if (unsubDrivers) {
-        unsubDrivers(); // Evita conexões duplicadas abertas
+        unsubDrivers();
     }
 
     console.log("[FIREBASE] A iniciar escuta em tempo real de motoristas...");
@@ -81,7 +75,7 @@ function escutarDriversEmTempoReal() {
 }
 
 // ==========================================
-// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (TRIAGENS DA DATA DE HOJE!)
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (TRIAGENS DE HOJE)
 // ==========================================
 function escutarAssignmentsEmTempoReal() {
     if (unsubAssignments) {
@@ -112,7 +106,7 @@ function escutarAssignmentsEmTempoReal() {
 }
 
 // ==========================================
-// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (ROTA ATIVA DO DRIVER AUTENTICADO!)
+// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (ROTA ATIVA DO CONDUTOR)
 // ==========================================
 function escutarRotaEmTempoReal(uid) {
     if (unsubRoute) {
@@ -129,6 +123,7 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = data.rotaOtimizada || [];
             window.dataRotaSelecionada = data.dataRotaSelecionada || "";
             window.rotaIniciada = data.rotaIniciada || false;
+            window.isRouteOptimized = data.isRouteOptimized || false; // NOVO: Sincronização do flag de rota otimizada
             window.routingMethodUsed = data.routingMethodUsed || 'Cloud';
             
             window.tripStarted = data.tripStarted || false;
@@ -147,6 +142,7 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = [];
             window.dataRotaSelecionada = "";
             window.rotaIniciada = false;
+            window.isRouteOptimized = false;
             window.routingMethodUsed = 'Cloud';
 
             window.tripStarted = false;
@@ -163,6 +159,7 @@ function escutarRotaEmTempoReal(uid) {
         localStorage.setItem('cp_rota_otimizada', JSON.stringify(window.rotaOtimizada));
         localStorage.setItem('cp_data_rota', JSON.stringify(window.dataRotaSelecionada));
         localStorage.setItem('cp_rota_iniciada', JSON.stringify(window.rotaIniciada));
+        localStorage.setItem('cp_is_route_optimized', JSON.stringify(window.isRouteOptimized));
         localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
 
         localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
@@ -180,7 +177,7 @@ function escutarRotaEmTempoReal(uid) {
 }
 
 // =========================================================================
-// CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS (TEMPLATES HTML)
+// CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS
 // =========================================================================
 async function carregarPartials() {
     const partials = [
@@ -357,7 +354,7 @@ function inicializarMonitorizacaoAuth() {
 
         if (user) {
             window.currentUserUid = user.uid;
-            window.currentUserEmail = user.email; // Grava o email para uso no menu lateral
+            window.currentUserEmail = user.email;
 
             if (navBarraInferior) navBarraInferior.classList.remove('hidden');
 
@@ -414,7 +411,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupTriagemLogic();
     setupCancelButtons(); 
     setupPWAInstallationLogic();
-    setupMenuLateral(); // INICIALIZA O MENU HAMBÚRGUER E CONFIGURAÇÕES
+    setupMenuLateral();
 
     const visorCodigo = document.getElementById('visor-codigo');
     if (visorCodigo) {

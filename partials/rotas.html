@@ -1,6 +1,7 @@
 <!-- 
   partials/rotas.html
-  Faz: Interface estável original de rolagem fluida para gestão de turnos, inserção de paragens e ecrã de navegação.
+  Versão v70.9 - Com Painel de Odómetro Direto e Suporte a Rota Otimizada
+  Faz: Interface do ecrã de Gestão de Turnos, Planeador e Condução com Mapa Google e Painel de Odómetro.
   NÃO faz: Não processa chamadas de rede ou lógicas de rotas (delegado para js/rotas.js).
   Depende de: Tailwind CSS, FontAwesome e Google Maps API carregada globalmente.
 -->
@@ -120,7 +121,7 @@
                     </div>
                 </div>
 
-                <!-- NOVO: SWITCHER SEGMENTADO DE OPERAÇÃO (ENTREGA VS RECOLHA) -->
+                <!-- SWITCHER SEGMENTADO DE OPERAÇÃO (ENTREGA VS RECOLHA) -->
                 <div class="space-y-1.5">
                     <label class="block text-xs font-bold text-gray-600 uppercase">Tipo de Operação</label>
                     <div class="bg-gray-100 p-1 rounded-xl flex space-x-1 shadow-sm border border-gray-200">
@@ -133,7 +134,7 @@
                             <span>Recolha</span>
                         </button>
                     </div>
-                    <!-- Input invisível auxiliar para guardar o valor selecionado ("Entrega" por defeito) -->
+                    <!-- Input invisível auxiliar -->
                     <input type="hidden" id="rota-tipo-operacao" value="Entrega">
                 </div>
 
@@ -205,7 +206,7 @@
                 </div>
             </div>
 
-            <!-- NOVOS DADOS DE PERCURSO: DISTÂNCIA, TEMPO E MOTOR DE CÁLCULO -->
+            <!-- DADOS DE PERCURSO: DISTÂNCIA, TEMPO E MOTOR DE CÁLCULO -->
             <div class="mt-4 pt-3 border-t border-gray-200 grid grid-cols-2 gap-3 text-left font-sans">
                 <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50 flex items-center space-x-2.5">
                     <div class="text-blue-600 text-lg flex-shrink-0">
@@ -236,7 +237,7 @@
             </div>
         </div>
 
-        <!-- NOVO: Painel Informativo de Odómetro (Diário de Bordo) -->
+        <!-- Painel Informativo de Odómetro (Diário de Bordo) -->
         <div id="painel-odometro-resumo" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm space-y-2.5 font-sans animate-fade-in">
             <span class="block text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center space-x-1.5">
                 <i class="fa-solid fa-gauge-high"></i>
@@ -259,7 +260,13 @@
             </div>
         </div>
 
-        <!-- NOVO: Botão de Finalizar Turno -->
+        <!-- Botão de Registar Saída / KM de Partida (Exibido quando o odómetro de saída ainda não foi preenchido) -->
+        <button id="btn-iniciar-saida-km" class="hidden w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
+            <i class="fa-solid fa-gauge-high"></i>
+            <span>Registar KM de Saída (Início de Rota)</span>
+        </button>
+
+        <!-- Botão de Finalizar Turno (Exibido após o odómetro de saída já ter sido registado) -->
         <button id="btn-finalizar-turno" class="hidden w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
             <i class="fa-solid fa-flag-checkered"></i>
             <span>Finalizar Turno (Registar Chegada)</span>

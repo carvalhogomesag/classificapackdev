@@ -1,9 +1,9 @@
 /**
  * state.js
- * Faz: Inicializa e gere o estado global da aplicação em memória (propriedades anexadas ao objeto global 'window').
- *      Removido o conceito de setores; agora os motoristas contêm diretamente a lista de Bricks (Localidades) atribuídos.
- * NÃO faz: Não grava diretamente no LocalStorage do telemóvel/PC (esta persistência física é delegada para o módulo storage.js).
- * Depende de: ./storage.js (para ler os valores guardados de forma segura)
+ * Versão v70.9 - Com Indicador Explícito de Rota Otimizada
+ * Faz: Inicializa e gere o estado global da aplicação em memória.
+ * NÃO faz: Não grava diretamente no LocalStorage do telemóvel/PC.
+ * Depende de: ./storage.js
  */
 
 import { safeJSONParse } from './storage.js';
@@ -14,18 +14,16 @@ import { safeJSONParse } from './storage.js';
 window.drivers = safeJSONParse('cp_drivers', []);
 window.assignments = safeJSONParse('cp_assignments', []);
 
-// NOVO: Guarda o ID exclusivo do utilizador com sessão iniciada na nuvem
+// Guarda o ID exclusivo do utilizador com sessão iniciada na nuvem
 window.currentUserUid = null;
 
 // ==========================================
 // MIGRAÇÃO DE DADOS AUTOMÁTICA
-// Garante que cada motorista possui o array 'brickIds' para guardar as localidades atribuídas
 // ==========================================
 window.drivers.forEach(driver => {
     if (!Array.isArray(driver.brickIds)) {
         driver.brickIds = [];
     }
-    // Removemos propriedades legadas de setores para limpar a estrutura
     delete driver.sectorId;
     delete driver.sectorIds;
 });
@@ -52,6 +50,10 @@ window.moradasEntregas = safeJSONParse('cp_entregas', []);
 window.rotaOtimizada = safeJSONParse('cp_rota_otimizada', []);
 window.dataRotaSelecionada = safeJSONParse('cp_data_rota', "");
 window.rotaIniciada = safeJSONParse('cp_rota_iniciada', false);
+
+// NOVO: Flag explícito que indica se a rota já passou pela Otimização da Google
+window.isRouteOptimized = safeJSONParse('cp_is_route_optimized', false);
+
 window.definindoPartidaPorMorada = false;
 
 // Guarda reativamente o tipo de cálculo utilizado no percurso
