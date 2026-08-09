@@ -1,9 +1,9 @@
 /**
  * js/rotas.js
- * Versão v70.8 - Com Leitura Automática do Prefixo Padrão das Definições
- * Faz: Lê o prefixo padrão configurado no menu lateral (ex: 2640 ou 2705) e preenche-o
- *      automaticamente ao abrir a página, mantendo a adição na última posição, pino laranja saltitante
- *      e sincronização em tempo real com o Firestore.
+ * Versão v70.9 - Fluxo de Planeamento vs Condução Corrigido
+ * Faz: Garante que objetos inseridos no planeamento inicial permaneçam apenas nas Moradas Mapeadas.
+ *      Apenas transfere para a área de condução após clicar em "Otimizar Sequência de Rota".
+ *      Pino laranja saltitante com confirmação de posição aplica-se EXCLUSIVAMENTE a inserções feitas após a rota já estar otimizada.
  */
 
 import { saveData } from './storage.js';
@@ -234,7 +234,7 @@ function calcularRotaVizinhoMaisProximoLocal() {
 }
 
 // =========================================================================
-// ADICIONAR NOVA AÇÃO (ENTREGA OU RECOLHA) DIRETAMENTE NO FIM DA ROTA
+// ADICIONAR NOVA AÇÃO (ENTREGA OU RECOLHA)
 // =========================================================================
 export async function processarAdicaoPorPostal() {
     const inputPostal = document.getElementById('rota-codigo-postal');
@@ -278,6 +278,9 @@ export async function processarAdicaoPorPostal() {
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
         const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
+        // Verifica se a rota já possui uma otimização ativa
+        const rotaJaOtimizada = Array.isArray(window.rotaOtimizada) && window.rotaOtimizada.length > 0;
+
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
             lat: data.lat,
@@ -289,7 +292,7 @@ export async function processarAdicaoPorPostal() {
             brickId: brickId,
             brickName: brickName,
             tipoOperacao: tipoOperacaoVal,
-            isNewUnconfirmed: true
+            isNewUnconfirmed: rotaJaOtimizada // Apenas fica saltitante/pendente se a rota JÁ TIVER SIDO OTIMIZADA!
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -300,34 +303,39 @@ export async function processarAdicaoPorPostal() {
             sincronizarPersistencia();
             alert("Ponto de Partida configurado com sucesso!");
         } else {
+            // Adiciona a morada à lista de planeamento (Moradas Mapeadas)
             window.moradasEntregas.push(novaMorada);
 
-            if (!window.rotaOtimizada) window.rotaOtimizada = [];
+            if (rotaJaOtimizada) {
+                // SE A ROTA JÁ FOI OTIMIZADA ANTERIORMENTE:
+                // Adiciona a nova paragem ao fim do itinerário de condução e muda para modo condução
+                let pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
 
-            let pontoAnterior = window.partidaLocalizacao;
-            if (window.rotaOtimizada.length > 0) {
-                pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
+                novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
+                    pontoAnterior.lat,
+                    pontoAnterior.lng,
+                    novaMorada.lat,
+                    novaMorada.lng
+                ) : 0;
+
+                window.rotaOtimizada.push(novaMorada);
+
+                sincronizarPersistencia();
+                renderMoradasAdicionadas();
+
+                document.getElementById('container-mapa')?.classList.remove('hidden');
+                document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
+
+                renderizarItinerarioOtimizado();
+                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+
+                alternarModoRota('conducao');
+            } else {
+                // FASE INICIAL DE PLANEAMENTO (SEM OTIMIZAÇÃO AINDA):
+                // Apenas atualiza a lista de Moradas Mapeadas e MANTÉM no modo Planeamento!
+                sincronizarPersistencia();
+                renderMoradasAdicionadas();
             }
-
-            novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
-                pontoAnterior.lat,
-                pontoAnterior.lng,
-                novaMorada.lat,
-                novaMorada.lng
-            ) : 0;
-
-            window.rotaOtimizada.push(novaMorada);
-
-            sincronizarPersistencia();
-            renderMoradasAdicionadas();
-
-            document.getElementById('container-mapa')?.classList.remove('hidden');
-            document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
-
-            renderizarItinerarioOtimizado();
-            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-
-            alternarModoRota('conducao');
         }
 
         inputPostal.value = "";
@@ -462,7 +470,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
-                paragemOriginal.isNewUnconfirmed = false;
+                paragemOriginal.isNewUnconfirmed = false; // Todas as paragens ficam confirmadas na otimização inicial
                 paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
@@ -1243,6 +1251,13 @@ export function setupRotasLogic() {
 
             window.dataRotaSelecionada = dataFormatada;
             window.rotaIniciada = true;
+
+            // Se for um novo turno limpo, garante que a otimização anterior é limpa
+            if (!window.moradasEntregas || window.moradasEntregas.length === 0) {
+                window.rotaOtimizada = [];
+            }
+
+            localStorage.setItem('cp_modo_rota', 'planeamento');
             sincronizarPersistencia();
             sincronizarInterfaceRota();
         });
@@ -1301,6 +1316,7 @@ export function setupRotasLogic() {
                 document.getElementById('estatisticas-rota')?.classList.add('hidden');
                 limparMapaVisual();
                 renderMoradasAdicionadas();
+                alternarModoRota('planeamento');
                 sincronizarPersistencia();
             }
         });
@@ -1329,7 +1345,6 @@ export function sincronizarInterfaceRota() {
 
     if (!containerSetupRota || !containerPlaneadorRota) return;
 
-    // ASSEGURA O PREENCHIMENTO DO PREFIXO PADRÃO
     if (inputPrefixoManual) {
         inputPrefixoManual.value = obterPrefixoPadrao();
     }
@@ -1353,7 +1368,7 @@ export function sincronizarInterfaceRota() {
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
         alternarModoRota(modoSalvo);
 
-        if (window.rotaOtimizada.length > 0) {
+        if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
             document.getElementById('container-mapa')?.classList.remove('hidden');
             document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
             
