@@ -1,7 +1,8 @@
 /**
  * js/rotas.js
- * Versão v70.9 - Com Componentes de Geografia e Odómetro Isolados
- * Faz: Gestão principal da aba de rotas, reutilizando os módulos 'rotas-geografia.js' e 'rotas-odometro.js'.
+ * Versão v71.0 - Com Componentes de Geografia, Odómetro, Modais e Inputs Isolados
+ * Faz: Gestão principal da aba de rotas, integrando os componentes 'rotas-geografia.js',
+ *      'rotas-odometro.js', 'rotas-modais.js' e 'rotas-inputs.js'.
  */
 
 import { saveData } from './storage.js';
@@ -17,9 +18,6 @@ import {
 // Importa o módulo de navegação (Google Maps vs Waze)
 import { abrirNavegacao } from './navigation.js';
 
-// Importa a função do prefixo padrão das definições
-import { obterPrefixoPadrao } from './ui-menu.js';
-
 // Importa a instância ativa do Firestore
 import { db } from './firebase-init.js';
 
@@ -29,11 +27,22 @@ import { isCatchAllLocality, obterConcelhoPorCodigoPostal, resolveBrickForZip } 
 // COMPONENTE 2: Importa modais de odómetro isolados
 import { abrirModalOdometroSaida, abrirModalOdometroChegada } from './rotas-odometro.js';
 
-let itemSendoEditado = null; 
-let autocompleteInstancia = null;
+// COMPONENTE 3: Importa modais de edição e alteração de sequência isolados
+import { 
+    setupModaisEdicao, 
+    abrirModalEdicaoParagem, 
+    abrirModalAlterarSequencia, 
+    confirmarPosicaoParagem 
+} from './rotas-modais.js';
 
-let embalagemSelecionada = "";
-let origemSelecionada = "";
+// COMPONENTE 4: Importa formatação de inputs e autocomplete isolados
+import { 
+    aplicarPrefixoNoCampo, 
+    configurarEventosPrefixoRapido, 
+    configurarFormatacaoCodigoPostal, 
+    configurarEscutaCodigoPostalParaLimites, 
+    inicializarAutocompleteMorada 
+} from './rotas-inputs.js';
 
 // =========================================================================
 // DETETOR INTELIGENTE DE AMBIENTE (LOCAL VS PRODUÇÃO)
@@ -490,22 +499,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 }
 
 // =========================================================================
-// CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO
-// =========================================================================
-window.confirmarPosicaoParagem = (paragemId) => {
-    const paragem = window.rotaOtimizada.find(p => p.id === paragemId);
-    if (paragem) {
-        paragem.isNewUnconfirmed = false;
-        const originalPre = window.moradasEntregas.find(m => m.id === paragemId);
-        if (originalPre) originalPre.isNewUnconfirmed = false;
-
-        sincronizarPersistencia();
-        renderizarItinerarioOtimizado();
-        desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-    }
-};
-
-// =========================================================================
 // DESENHAR LISTA DE ENTREGAS OTIMIZADA
 // =========================================================================
 export function renderizarItinerarioOtimizado() {
@@ -623,7 +616,7 @@ export function renderizarItinerarioOtimizado() {
             if (btnIndex) {
                 btnIndex.onclick = (e) => {
                     e.stopPropagation();
-                    window.abrirModalAlterarSequencia(index, paragem);
+                    abrirModalAlterarSequencia(index, paragem);
                 };
             }
         }
@@ -762,282 +755,6 @@ export function renderEstatisticasRota() {
     }
 }
 
-// ==========================================
-// RE-SEQUENCIAÇÃO DE ENTREGA (POSIÇÃO)
-// ==========================================
-window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
-    const modal = document.getElementById('modal-alterar-sequencia');
-    if (!modal) return;
-
-    const txtMorada = document.getElementById('txt-seq-morada');
-    const txtPosAtual = document.getElementById('txt-seq-pos-atual');
-    const inputNovaPos = document.getElementById('input-seq-nova-pos');
-
-    if (txtMorada) txtMorada.textContent = paragem.address;
-    if (txtPosAtual) txtPosAtual.textContent = indexAtual + 1;
-    if (inputNovaPos) {
-        inputNovaPos.value = indexAtual + 1;
-        inputNovaPos.max = window.rotaOtimizada.length;
-    }
-
-    modal.classList.remove('hidden');
-
-    const btnConfirmar = document.getElementById('btn-confirmar-sequencia');
-    const btnCancelar = document.getElementById('btn-cancelar-sequencia');
-
-    btnConfirmar.onclick = () => {
-        const novaPos = parseInt(inputNovaPos.value);
-        if (isNaN(novaPos) || novaPos < 1 || novaPos > window.rotaOtimizada.length) {
-            alert(`Erro: Introduza uma posição válida entre 1 e ${window.rotaOtimizada.length}.`);
-            return;
-        }
-
-        const novoIndex = novaPos - 1;
-
-        paragem.isNewUnconfirmed = false;
-        const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
-        if (originalPre) originalPre.isNewUnconfirmed = false;
-
-        if (indexAtual !== novoIndex) {
-            const item = window.rotaOtimizada.splice(indexAtual, 1)[0];
-            window.rotaOtimizada.splice(novoIndex, 0, item);
-
-            window.rotaOtimizada.forEach((p, idx) => {
-                p.distanciaDoAnterior = calcularDistanciaHaversine(
-                    idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
-                    idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
-                    p.lat,
-                    p.lng
-                );
-            });
-
-            window.moradasEntregas = [...window.rotaOtimizada];
-        }
-
-        sincronizarPersistencia();
-        renderizarItinerarioOtimizado();
-        desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-
-        modal.classList.add('hidden');
-    };
-
-    btnCancelar.onclick = () => modal.classList.add('hidden');
-};
-
-function aplicarPrefixoNoCampo(prefixo) {
-    const inputCP = document.getElementById('rota-codigo-postal');
-    if (!inputCP) return;
-    inputCP.value = `${prefixo}-`;
-    inputCP.focus();
-    const comprimentoTexto = inputCP.value.length;
-    inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
-}
-
-function configurarEventosPrefixoRapido() {
-    const btnManual = document.getElementById('btn-inserir-prefixo');
-    const inputPrefixoManual = document.getElementById('prefixo-manual');
-
-    // PREENCHE AUTOMATICAMENTE COM O PREFIXO PADRÃO DAS DEFINIÇÕES AO CARREGAR
-    if (inputPrefixoManual) {
-        inputPrefixoManual.value = obterPrefixoPadrao();
-    }
-
-    if (btnManual && inputPrefixoManual) {
-        btnManual.addEventListener('click', (e) => {
-            e.preventDefault();
-            const prefixoVal = inputPrefixoManual.value.replace(/\D/g, '');
-            if (prefixoVal.length !== 4) {
-                alert("Por favor, introduza um prefixo de Código Postal com exatamente 4 números.");
-                inputPrefixoManual.focus();
-                return;
-            }
-            aplicarPrefixoNoCampo(prefixoVal);
-        });
-    }
-}
-
-function configurarFormatacaoCodigoPostal() {
-    const inputCP = document.getElementById('rota-codigo-postal');
-    if (!inputCP) return;
-
-    inputCP.addEventListener('input', () => {
-        let valor = inputCP.value.replace(/[^0-9-]/g, '');
-        const numerosApenas = valor.replace(/\D/g, '');
-
-        if (numerosApenas.length <= 4) {
-            valor = numerosApenas;
-        } else {
-            valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
-        }
-        inputCP.value = valor.toUpperCase();
-    });
-}
-
-function configurarEscutaCodigoPostalParaLimites() {
-    const inputCP = document.getElementById('rota-codigo-postal');
-    const inputMorada = document.getElementById('rota-morada-completa');
-    if (!inputCP) return;
-
-    inputCP.addEventListener('input', async () => {
-        const valor = inputCP.value.trim();
-        const padraoCP = /^\d{4}-\d{3}$/;
-
-        if (valor.length === 0 && autocompleteInstancia) {
-            const centroMafra = { lat: 38.9369, lng: -9.3282 };
-            const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
-            autocompleteInstancia.setBounds(circuloMafra.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false });
-            return;
-        }
-
-        if (padraoCP.test(valor)) {
-            if (inputMorada) {
-                inputMorada.value = valor;
-                inputMorada.focus();
-                const comprimento = inputMorada.value.length;
-                inputMorada.setSelectionRange(comprimento, comprimento);
-            }
-
-            if (autocompleteInstancia) {
-                const concelhoDetectado = obterConcelhoPorCodigoPostal(valor);
-                const centroConcelho = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
-                const circuloConcelho = new google.maps.Circle({ center: centroConcelho, radius: 15000 });
-                autocompleteInstancia.setBounds(circuloConcelho.getBounds());
-                autocompleteInstancia.setOptions({ strictBounds: false });
-            }
-        }
-    });
-}
-
-function inicializarAutocompleteMorada() {
-    const inputMorada = document.getElementById('rota-morada-completa');
-    if (!inputMorada) return;
-
-    if (inputMorada.dataset.autocompleteBound === "true") return;
-
-    if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
-        setTimeout(inicializarAutocompleteMorada, 500);
-        return;
-    }
-
-    try {
-        const centroMafra = { lat: 38.9369, lng: -9.3282 };
-        const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 15000 });
-        const limitesMafra = circuloMafra.getBounds();
-
-        autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
-            componentRestrictions: { country: 'pt' },
-            fields: ['address_components', 'geometry', 'formatted_address'],
-            bounds: limitesMafra,
-            strictBounds: false
-        });
-
-        inputMorada.dataset.autocompleteBound = "true";
-
-        autocompleteInstancia.addListener('place_changed', () => {
-            const localSelecionado = autocompleteInstancia.getPlace();
-            if (!localSelecionado || !localSelecionado.address_components) return;
-
-            const componenteCP = localSelecionado.address_components.find(c => c.types.includes('postal_code'));
-            if (componenteCP) {
-                const inputCP = document.getElementById('rota-codigo-postal');
-                if (inputCP) {
-                    const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
-                    if (cpLimpo.length === 7) {
-                        inputCP.value = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
-                    } else if (cpLimpo.length === 4) {
-                        inputCP.value = `${cpLimpo}-`;
-                        inputCP.focus();
-                    }
-                }
-            }
-        });
-    } catch (err) {
-        console.warn("Não foi possível iniciar o Autocomplete do Google Places neste ecrã:", err);
-    }
-}
-
-function textObservacoesAutomatico() {
-    const textareaObs = document.getElementById('edit-morada-obs');
-    if (!textareaObs) return;
-
-    const partes = [];
-    if (embalagemSelecionada) partes.push(embalagemSelecionada);
-    if (origemSelecionada) partes.push(origemSelecionada);
-
-    textareaObs.value = partes.join(" ");
-}
-
-function atualizarEstilosBotoesModal() {
-    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
-    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
-
-    botoesEmbalagem.forEach(btn => {
-        const tipo = btn.getAttribute('data-tipo');
-        if (embalagemSelecionada === tipo) {
-            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
-        } else {
-            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
-        }
-    });
-
-    botoesOrigem.forEach(btn => {
-        const origem = btn.getAttribute('data-origem');
-        if (origemSelecionada === origem) {
-            btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
-        } else {
-            if (origem === 'Fraldas') {
-                btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1";
-            } else {
-                btn.className = "btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
-            }
-        }
-    });
-}
-
-function preencherSelecoesPorTexto(observacao) {
-    embalagemSelecionada = "";
-    origemSelecionada = "";
-
-    if (!observacao) return;
-    const obsUpper = observacao.toUpperCase();
-
-    if (obsUpper.includes("ENVELOPE")) embalagemSelecionada = "Envelope";
-    else if (obsUpper.includes("CAIXA PEQUENA")) embalagemSelecionada = "Caixa Pequena";
-    else if (obsUpper.includes("CAIXA GRANDE")) embalagemSelecionada = "Caixa Grande";
-    else if (obsUpper.includes("PACOTE")) embalagemSelecionada = "Pacote";
-
-    if (obsUpper.includes("AMAZON")) origemSelecionada = "Amazon";
-    else if (obsUpper.includes("ZARA")) origemSelecionada = "Zara";
-    else if (obsUpper.includes("CHINA") || obsUpper.includes("TEMU") || obsUpper.includes("SHEIN")) origemSelecionada = "China (Temu/Shein)";
-    else if (obsUpper.includes("FRALDAS")) origemSelecionada = "Fraldas";
-}
-
-function configurarBotoesRapidosModal() {
-    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
-    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
-
-    botoesEmbalagem.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tipo = btn.getAttribute('data-tipo');
-            embalagemSelecionada = (embalagemSelecionada === tipo) ? "" : tipo;
-            atualizarEstilosBotoesModal();
-            textObservacoesAutomatico();
-        });
-    });
-
-    botoesOrigem.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const origem = btn.getAttribute('data-origem');
-            origemSelecionada = (origemSelecionada === origem) ? "" : origem;
-            atualizarEstilosBotoesModal();
-            textObservacoesAutomatico();
-        });
-    });
-}
-
 export function setupRotasLogic() {
     const btnIniciarRota = document.getElementById('btn-iniciar-rota');
     const dataRotaInput = document.getElementById('data-rota');
@@ -1062,6 +779,7 @@ export function setupRotasLogic() {
     configurarFormatacaoCodigoPostal();
     inicializarAutocompleteMorada();
     configurarEscutaCodigoPostalParaLimites();
+    setupModaisEdicao();
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
@@ -1199,13 +917,8 @@ export function sincronizarInterfaceRota() {
     const displayDataRota = document.getElementById('display-data-rota');
     const statusPartida = document.getElementById('status-partida');
     const dataRotaInput = document.getElementById('data-rota');
-    const inputPrefixoManual = document.getElementById('prefixo-manual');
 
     if (!containerSetupRota || !containerPlaneadorRota) return;
-
-    if (inputPrefixoManual) {
-        inputPrefixoManual.value = obterPrefixoPadrao();
-    }
 
     if (window.rotaIniciada) {
         containerSetupRota.classList.add('hidden');
@@ -1252,181 +965,4 @@ export function sincronizarInterfaceRota() {
             dataRotaInput.value = hoje.toISOString().split('T')[0];
         }
     }
-}
-
-export function setupModaisEdicao() {
-    const btnCancelarEdicao = document.getElementById('btn-cancelar-edicao');
-    const btnSalvarEdicao = document.getElementById('btn-salvar-edicao');
-
-    if (!btnCancelarEdicao || !btnSalvarEdicao) return;
-
-    btnCancelarEdicao.addEventListener('click', () => {
-        const modalEditarParagem = document.getElementById('modal-editar-paragem');
-        if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
-        itemSendoEditado = null;
-    });
-
-    btnSalvarEdicao.addEventListener('click', async () => {
-        if (!itemSendoEditado) return;
-
-        const editMoradaTexto = document.getElementById('edit-morada-texto');
-        const editMoradaObs = document.getElementById('edit-morada-obs');
-        const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
-        const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
-
-        if (!editMoradaTexto || !editMoradaObs) return;
-
-        const novaMorada = editMoradaTexto.value.trim();
-        const novaObs = editMoradaObs.value.trim();
-        const novaPrioridade = editMoradaPrioridade ? editMoradaPrioridade.checked : false;
-        const novoTipoOperacao = editTipoOperacaoInput ? editTipoOperacaoInput.value : "Entrega";
-
-        if (!novaMorada) {
-            alert("A morada de entrega não pode ficar em branco.");
-            return;
-        }
-
-        const textoOriginalBotao = btnSalvarEdicao.innerHTML;
-        btnSalvarEdicao.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> A geolocalizar...';
-        btnSalvarEdicao.disabled = true;
-
-        try {
-            if (novaMorada !== itemSendoEditado._originalAddress) {
-                const response = await fetch(`${API_BASE_URL}/api/geocode`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ postalCode: "", address: novaMorada })
-                });
-
-                const data = await response.json();
-                if (!response.ok) {
-                    throw new Error(data.error || "Falha ao validar a nova morada geográfica.");
-                }
-
-                itemSendoEditado.lat = data.lat;
-                itemSendoEditado.lng = data.lng;
-                itemSendoEditado.address = data.address;
-
-                const postalCodeMatch = data.address.match(/\d{4}-\d{3}/);
-                if (postalCodeMatch) {
-                    const { brickId, brickName } = resolveBrickForZip(postalCodeMatch[0], window.drivers);
-                    itemSendoEditado.brickId = brickId;
-                    itemSendoEditado.brickName = brickName;
-                } else {
-                    const { brickId, brickName } = resolveBrickForZip(novaMorada, window.drivers);
-                    if (brickId) {
-                        itemSendoEditado.brickId = brickId;
-                        itemSendoEditado.brickName = brickName;
-                    }
-                }
-            }
-
-            itemSendoEditado.isNewUnconfirmed = false;
-            itemSendoEditado.observation = novaObs;
-            itemSendoEditado.priority = novaPrioridade;
-            itemSendoEditado.tipoOperacao = novoTipoOperacao;
-
-            let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
-            let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
-
-            if (itemIndexPre !== -1) {
-                window.moradasEntregas[itemIndexPre] = { ...itemSendoEditado };
-            }
-
-            if (itemIndexPos !== -1) {
-                window.rotaOtimizada[itemIndexPos] = { ...itemSendoEditado };
-
-                window.rotaOtimizada.forEach((p, idx) => {
-                    p.distanciaDoAnterior = calcularDistanciaHaversine(
-                        idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
-                        idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
-                        p.lat,
-                        p.lng
-                    );
-                });
-            }
-
-            sincronizarPersistencia();
-            renderMoradasAdicionadas();
-            if (window.rotaOtimizada.length > 0) {
-                renderizarItinerarioOtimizado();
-                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-            }
-
-            const modalEditarParagem = document.getElementById('modal-editar-paragem');
-            if (modalEditarParagem) modalEditarParagem.classList.add('hidden');
-            itemSendoEditado = null;
-
-        } catch (err) {
-            console.error("[PWA] Erro ao gravar edição de paragem:", err);
-            alert(`Erro ao atualizar a paragem: ${err.message}`);
-        } finally {
-            btnSalvarEdicao.innerHTML = textoOriginalBotao;
-            btnSalvarEdicao.disabled = false;
-        }
-    });
-
-    const editTipoEntrega = document.getElementById('edit-tipo-entrega');
-    const editTipoRecolha = document.getElementById('edit-tipo-recolha');
-    const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
-
-    if (editTipoEntrega && editTipoRecolha && editTipoOperacaoInput) {
-        editTipoEntrega.addEventListener('click', () => {
-            editTipoOperacaoInput.value = "Entrega";
-            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all focus:outline-none cursor-pointer";
-            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
-        });
-
-        editTipoRecolha.addEventListener('click', () => {
-            editTipoOperacaoInput.value = "Recolha";
-            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all focus:outline-none cursor-pointer";
-            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
-        });
-    }
-
-    configurarBotoesRapidosModal();
-}
-
-export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
-    const modalEditarParagem = document.getElementById('modal-editar-paragem');
-    const editMoradaTexto = document.getElementById('edit-morada-texto');
-    const editMoradaObs = document.getElementById('edit-morada-obs');
-    const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
-
-    if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
-
-    itemSendoEditado = paragem;
-    itemSendoEditado._originalAddress = paragem.address;
-
-    editMoradaTexto.value = paragem.address;
-    editMoradaObs.value = paragem.observation || "";
-    if (editMoradaPrioridade) {
-        editMoradaPrioridade.checked = !!paragem.priority;
-    }
-
-    const tipoOperacao = paragem.tipoOperacao || "Entrega";
-    const editTipoEntrega = document.getElementById('edit-tipo-entrega');
-    const editTipoRecolha = document.getElementById('edit-tipo-recolha');
-    const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
-
-    if (editTipoEntrega && editTipoRecolha && editTipoOperacaoInput) {
-        editTipoOperacaoInput.value = tipoOperacao;
-        if (tipoOperacao === "Recolha") {
-            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-purple-600 text-white shadow transition-all focus:outline-none cursor-pointer";
-            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
-        } else {
-            editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-blue-600 text-white shadow transition-all focus:outline-none cursor-pointer";
-            editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
-        }
-    }
-
-    preencherSelecoesPorTexto(paragem.observation || "");
-    atualizarEstilosBotoesModal();
-
-    modalEditarParagem.classList.remove('hidden');
-
-    setTimeout(() => {
-        editMoradaObs.focus();
-        editMoradaObs.select();
-    }, 150);
 }

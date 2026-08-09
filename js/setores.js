@@ -1,8 +1,8 @@
 /**
  * setores.js
- * Versão v70.9.1 - Com Atualização Otimista Imediata de Bricks
- * Faz: Controla o ecrã de Atribuição de Bricks com atualização otimista na memória RAM local,
- *      eliminando o atraso de 2-3 segundos ao atribuir/retirar localidades aos motoristas.
+ * Versão v71.0 - Com Balões Informativos (InfoWindow) nos Pinos do Mapa Geral
+ * Faz: Controla o ecrã de Atribuição de Bricks com atualização otimista imediata na memória RAM local,
+ *      e adiciona balões de informação ricos ao clicar em qualquer pino do mapa do gestor.
  * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js
  */
 
@@ -250,27 +250,39 @@ function desenharBricksNoMapa() {
                 });
                 dashboardOverlays.push(marker);
 
-                marker.addListener('mouseover', () => {
+                // BALÃO INFORMATIVO RICO AO CLICAR OU PASSAR O RATO NO PINO DO MAPA GERAL
+                const exibirInfoBrick = () => {
                     if (dashboardInfoWindow) {
+                        const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg]) 
+                            ? GEOGRAPHY[concelhoAtivo][freg][loc] || [] 
+                            : [];
+                        
+                        const cpFormatado = cpList.length > 0 
+                            ? (cpList.length === 1 ? cpList[0] : `${cpList[0]} a ${cpList[cpList.length - 1]}`)
+                            : "";
+
                         dashboardInfoWindow.setContent(`
-                            <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 2px 4px; line-height: 1.4;">
-                                <div style="font-weight: bold; color: #1F2937; margin-bottom: 2px;">${freg} - ${loc}</div>
-                                <div style="display: flex; align-items: center; gap: 4px;">
-                                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background-color: ${drv.color};"></span>
-                                    <span style="color: ${drv.color}; font-weight: bold; font-size: 10px; text-transform: uppercase;">Estante de: ${drv.name}</span>
+                            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 220px;">
+                                <div style="font-weight: 800; color: #1F2937; font-size: 13px; margin-bottom: 2px;">
+                                    📍 ${freg}
+                                </div>
+                                <div style="font-weight: 700; color: #2563EB; font-size: 12px;">
+                                    Brick: ${loc}
+                                </div>
+                                ${cpFormatado ? `<div style="font-size: 10px; font-family: monospace; color: #6B7280; margin-top: 2px;">CPs: ${cpFormatado}</div>` : ''}
+                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px border-dashed #E5E7EB;">
+                                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${drv.color}; flex-shrink: 0;"></span>
+                                    <span style="color: ${drv.color}; font-weight: 800; font-size: 11px; text-transform: uppercase;">Estante de: ${drv.name}</span>
                                 </div>
                             </div>
                         `);
                         dashboardInfoWindow.setPosition(coords);
                         dashboardInfoWindow.open(dashboardMap, marker);
                     }
-                });
+                };
 
-                marker.addListener('mouseout', () => {
-                    if (dashboardInfoWindow) {
-                        dashboardInfoWindow.close();
-                    }
-                });
+                marker.addListener('mouseover', exibirInfoBrick);
+                marker.addListener('click', exibirInfoBrick);
             }
         });
     });
@@ -488,7 +500,7 @@ export function renderGeographicTree() {
 
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    // Map estruturado e normalizado (Case-Insensitive)
+    // Map estruturado e normalizado
     const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];

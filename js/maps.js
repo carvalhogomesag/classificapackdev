@@ -1,10 +1,9 @@
 /**
  * maps.js
- * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos dinamicamente por status, autocompletar e geocodificação).
- *      NOVO: Implementa dispersão geométrica em espiral para múltiplos pacotes no mesmo endereço.
- *      NOVO: Suporta pinos saltitantes (Bounce) de cor âmbar e borda preta para pacotes novos por confirmar.
- * NÃO faz: Não executa a otimização algorítmica de sequência ou turnos (tarefa do rotas.js).
- * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps carregado globalmente).
+ * Versão v71.0 - Com Balões Informativos (InfoWindow) Ricos ao Clicar nos Pinos
+ * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos,
+ *      dispersão em espiral, pino saltitante e balões de informação interativos ao clicar).
+ * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps).
  */
 
 let googleMap = null;
@@ -12,6 +11,7 @@ let googleMarkers = [];
 let googleRoutePolyline = null;
 let autocompleteWidget = null;
 let autocompleteWidgetTriagem = null;
+let googleInfoWindow = null;
 
 /**
  * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha (Rotas)
@@ -27,7 +27,7 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     autocompleteWidget.addListener('place_changed', () => {
         const place = autocompleteWidget.getPlace();
         if (!place.geometry || !place.geometry.location) {
-            alert("Morada não encontrada. Selecione uma option válida da lista da Google.");
+            alert("Morada não encontrada. Selecione uma opção válida da lista da Google.");
             return;
         }
 
@@ -45,7 +45,6 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
 export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
 
-    // Focado em obter os componentes da morada para isolar o Código Postal correspondente
     autocompleteWidgetTriagem = new google.maps.places.Autocomplete(buscaMoradaInput, {
         componentRestrictions: { country: ['pt', 'es'] },
         fields: ['address_components', 'formatted_address']
@@ -61,7 +60,7 @@ export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback)
         let postalCode = "";
         for (const component of place.address_components) {
             if (component.types.includes('postal_code')) {
-                postalCode = component.long_name; // Exemplo: "2655-319"
+                postalCode = component.long_name;
                 break;
             }
         }
@@ -94,7 +93,7 @@ export function obterEnderecoPorGPSGoogle(lat, lng, callback) {
 }
 
 /**
- * Calculates a distância em linha reta entre duas coordenadas geográficas (em km) usando Haversine
+ * Calcula a distância em linha reta entre duas coordenadas geográficas (em km) usando Haversine
  */
 export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
     const R = 6371; 
@@ -105,7 +104,7 @@ export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Desenha a rota otimizada no Mapa da Google com algoritmo de espiral de dispersão e destaque visual
+ * Desenha a rota otimizada no Mapa da Google com algoritmo de espiral de dispersão e balões de informação ao clicar
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -123,16 +122,20 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     limparMapaVisual();
 
+    if (!googleInfoWindow) {
+        googleInfoWindow = new google.maps.InfoWindow();
+    }
+
     const path = [];
     const bounds = new google.maps.LatLngBounds();
     const posicoesOcupadas = [];
 
-    // NOVO ALGORITMO: Espiral de dispersão geométrica para evitar sobreposição no mesmíssimo endereço
+    // Algoritmo de dispersão em espiral para evitar sobreposição de pinos no mesmo endereço
     function evitarSobreposicao(lat, lng) {
         let finalLat = lat;
         let finalLng = lng;
-        const margemDiferenca = 0.0001; // Sensibilidade de proximidade física
-        const deslocamento = 0.0002;   // Distância aproximada de afastamento (~20 metros)
+        const margemDiferenca = 0.0001; 
+        const deslocamento = 0.0002;   
 
         let count = 0;
         while (posicoesOcupadas.some(pos => 
@@ -140,7 +143,6 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             Math.abs(pos.lng - finalLng) < margemDiferenca
         )) {
             count++;
-            // Afasta os marcadores em espiral harmoniosa para que fiquem todos visíveis
             const angle = count * 1.2; 
             const radius = deslocamento * (1 + count * 0.1);
             finalLat = lat + Math.sin(angle) * radius;
@@ -151,7 +153,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
         return new google.maps.LatLng(finalLat, finalLng);
     }
 
-    // Desenhar Ponto de Partida (Vermelho escuro com a letra "P")
+    // Ponto de Partida
     const startPos = evitarSobreposicao(partida.lat, partida.lng);
     path.push(startPos);
     bounds.extend(startPos);
@@ -170,25 +172,37 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             strokeColor: "#FFFFFF"
         }
     });
+
+    partidaMarker.addListener('click', () => {
+        googleInfoWindow.setContent(`
+            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 220px;">
+                <div style="font-weight: 800; color: #DC2626; font-size: 13px; text-transform: uppercase; margin-bottom: 2px;">
+                    🚩 Ponto de Partida
+                </div>
+                <div style="color: #374151; font-weight: 600;">${partida.address}</div>
+            </div>
+        `);
+        googleInfoWindow.open(googleMap, partidaMarker);
+    });
+
     googleMarkers.push(partidaMarker);
 
-    // Desenhar Entregas (Marcadores Coloridos Dinamicamente por Status ou Confirmação)
+    // Paragens / Entregas
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
         bounds.extend(pos);
 
-        // Define a cor e animação do marcador com base no status e pendência de confirmação
-        let pinoColor = "#2563EB"; // Azul por defeito (Pendente)
+        let pinoColor = "#2563EB"; 
         let bounceAnimation = null;
 
         if (p.isNewUnconfirmed) {
-            pinoColor = "#F59E0B"; // Laranja/Amarelo brilhante para destacar novos pacotes por ordenar
-            bounceAnimation = google.maps.Animation.BOUNCE; // Pino fica a dar pequenos saltos no mapa
+            pinoColor = "#F59E0B"; 
+            bounceAnimation = google.maps.Animation.BOUNCE; 
         } else if (p.status === "Entregue") {
-            pinoColor = "#10B981"; // Verde (Sucesso)
+            pinoColor = "#10B981"; 
         } else if (p.status === "Falhou" || p.status === "Failed") {
-            pinoColor = "#EF4444"; // Vermelho (Falha)
+            pinoColor = "#EF4444"; 
         }
 
         const m = new google.maps.Marker({
@@ -196,7 +210,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             map: googleMap,
             label: { 
                 text: (i + 1).toString(), 
-                color: p.isNewUnconfirmed ? "#000000" : "#FFFFFF", // Borda preta se for novo
+                color: p.isNewUnconfirmed ? "#000000" : "#FFFFFF", 
                 fontWeight: "bold" 
             },
             title: p.address,
@@ -207,15 +221,53 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                 fillColor: pinoColor,
                 fillOpacity: 1,
                 strokeWeight: p.isNewUnconfirmed ? 3 : 2,
-                strokeColor: p.isNewUnconfirmed ? "#000000" : "#FFFFFF" // Borda de destaque preta nos novos
+                strokeColor: p.isNewUnconfirmed ? "#000000" : "#FFFFFF"
             }
         });
 
-        // INTERCEÇÃO DE CLIQUE NO MARCADOR PARA ALTERAÇÃO MANUAL DE SEQUÊNCIA
+        // BALÃO INFORMATIVO RICO AO CLICAR NO PINO DA ROTA
         m.addListener('click', () => {
-            if (typeof window.abrirModalAlterarSequencia === 'function') {
-                window.abrirModalAlterarSequencia(i, p);
+            const isRecolha = p.tipoOperacao === "Recolha";
+            const opColor = isRecolha ? "#7C3AED" : "#2563EB";
+            const opLabel = isRecolha ? "Recolha" : "Entrega";
+            
+            let statusBadge = `<span style="background: #DBEAFE; color: #1E40AF; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">Pendente</span>`;
+            if (p.status === "Entregue") {
+                statusBadge = `<span style="background: #D1FAE5; color: #065F46; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✓ Entregue</span>`;
+            } else if (p.status === "Falhou" || p.status === "Failed") {
+                statusBadge = `<span style="background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✗ Falhou</span>`;
             }
+
+            const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
+            const obsText = p.observation ? `<div style="font-size: 10px; color: #4B5563; font-style: italic; background: #FEF3C7; padding: 4px; border-radius: 4px; margin-top: 4px;">💬 ${p.observation}</div>` : '';
+
+            googleInfoWindow.setContent(`
+                <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 240px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
+                        <span style="background: ${pinoColor}; color: #FFFFFF; font-weight: 900; font-size: 11px; padding: 2px 6px; border-radius: 9999px;">
+                            #${i + 1}
+                        </span>
+                        <span style="background: ${opColor}15; color: ${opColor}; font-weight: 800; font-size: 10px; border: 1px solid ${opColor}40; padding: 1px 5px; border-radius: 4px;">
+                            ${opLabel}
+                        </span>
+                        ${statusBadge}
+                    </div>
+                    
+                    <div style="font-weight: 700; color: #1F2937; font-size: 12px; margin-top: 2px;">
+                        ${p.address}
+                    </div>
+
+                    ${brickText}
+                    ${obsText}
+
+                    <div style="margin-top: 8px; display: flex; gap: 4px;">
+                        <button onclick="if(typeof window.abrirModalAlterarSequencia === 'function') window.abrirModalAlterarSequencia(${i}, window.rotaOtimizada[${i}])" style="flex: 1; background: #2563EB; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;">
+                            Alterar Ordem
+                        </button>
+                    </div>
+                </div>
+            `);
+            googleInfoWindow.open(googleMap, m);
         });
 
         googleMarkers.push(m);
@@ -242,10 +294,13 @@ export function limparMapaVisual() {
         googleRoutePolyline.setMap(null);
         googleRoutePolyline = null;
     }
+    if (googleInfoWindow) {
+        googleInfoWindow.close();
+    }
 }
 
 // ==========================================
-// ASSINATURA GLOBAL DO AJUSTADOR DE LIMITES (WINDOW)
+// ASSINATURA GLOBAL DO AJUSTADOR DE LIMITES
 // ==========================================
 window.ajustarLimitesMapaGoogle = () => {
     if (!googleMap || !window.partidaLocalizacao || !window.rotaOtimizada || window.rotaOtimizada.length === 0) return;
