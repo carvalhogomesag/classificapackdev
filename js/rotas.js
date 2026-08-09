@@ -1,8 +1,8 @@
 /**
  * js/rotas.js
- * Versão Restaurada e Completa
- * Faz: Gere integralmente o ecrã de rotas, otimização por nuvem (Google Route Optimization API)
- *      ou contingência local, odómetros de turno, mapas, modais de edição e navegação (Google Maps/Waze).
+ * Versão v70.7 - Adição Rápida na Última Posição com Destaque Laranja/Borda Preta e Bounce
+ * Faz: Gere a adição de entregas/recolhas diretamente no fim da rota ativa com destaque visual
+ *      saltitante (bounce) até confirmação manual de posição, sincronizando em tempo real com o Firestore.
  */
 
 import { saveData } from './storage.js';
@@ -22,9 +22,8 @@ import { abrirNavegacao } from './navigation.js';
 import { db } from './firebase-init.js';
 
 let itemSendoEditado = null; 
-let autocompleteInstancia = null; // Guarda a instância ativa do Google Places Autocomplete
+let autocompleteInstancia = null;
 
-// Variáveis de estado temporárias do modal de edição
 let embalagemSelecionada = "";
 let origemSelecionada = "";
 
@@ -78,7 +77,7 @@ function sincronizarPersistencia() {
 
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
         }).then(() => {
-            console.log("[FIREBASE] Rota do utilizador sincronizada no Firestore.");
+            console.log("[FIREBASE] Rota sincronizada no Firestore com sucesso.");
         }).catch((err) => {
             console.error("[FIREBASE] Erro ao sincronizar rota no Firestore:", err);
         });
@@ -162,16 +161,11 @@ function resolveBrickForZip(zip, drivers) {
     let matchedFreguesia = null;
     let matchedLocalidade = null;
 
-    if (!GEOGRAPHY[concelho]) {
-        return { brickId: null, brickName: null };
-    }
+    if (!GEOGRAPHY[concelho]) return { brickId: null, brickName: null };
 
     for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
         for (const [localidade, cpList] of Object.entries(localidades)) {
-            if (isCatchAllLocality(freguesia, localidade)) {
-                continue;
-            }
-
+            if (isCatchAllLocality(freguesia, localidade)) continue;
             if (cpList.includes(normalizedZip)) {
                 matchedFreguesia = freguesia;
                 matchedLocalidade = localidade;
@@ -184,21 +178,17 @@ function resolveBrickForZip(zip, drivers) {
     if (!matchedFreguesia) {
         for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelho])) {
             for (const [localidade, cpList] of Object.entries(localidades)) {
-                if (isCatchAllLocality(freguesia, localidade)) {
-                    if (cpList.includes(normalizedZip)) {
-                        matchedFreguesia = freguesia;
-                        matchedLocalidade = localidade;
-                        break;
-                    }
+                if (isCatchAllLocality(freguesia, localidade) && cpList.includes(normalizedZip)) {
+                    matchedFreguesia = freguesia;
+                    matchedLocalidade = localidade;
+                    break;
                 }
             }
             if (matchedFreguesia) break;
         }
     }
 
-    if (!matchedFreguesia) {
-        return { brickId: null, brickName: null };
-    }
+    if (!matchedFreguesia) return { brickId: null, brickName: null };
 
     return { 
         brickId: `${matchedFreguesia}|${matchedLocalidade}`, 
@@ -206,9 +196,6 @@ function resolveBrickForZip(zip, drivers) {
     };
 }
 
-// ==========================================
-// CONTINGÊNCIA LOCAL (VIZINHO MAIS PRÓXIMO)
-// ==========================================
 function calcularRotaVizinhoMaisProximoLocal() {
     if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
 
@@ -243,7 +230,7 @@ function calcularRotaVizinhoMaisProximoLocal() {
 }
 
 // =========================================================================
-// TRATAMENTO DE ENVIO DE CÓDIGO POSTAL + MORADA
+// ADICIONAR NOVA AÇÃO (ENTREGA OU RECOLHA) DIRETAMENTE NO FIM DA ROTA
 // =========================================================================
 export async function processarAdicaoPorPostal() {
     const inputPostal = document.getElementById('rota-codigo-postal');
@@ -297,10 +284,12 @@ export async function processarAdicaoPorPostal() {
             priority: false,
             brickId: brickId,
             brickName: brickName,
-            tipoOperacao: tipoOperacaoVal
+            tipoOperacao: tipoOperacaoVal,
+            isNewUnconfirmed: true // MARCA COMO NOVA AÇÃO NÃO CONFIRMADA (LARANJA + BORDA PRETA + BOUNCE)
         };
 
         if (window.definindoPartidaPorMorada) {
+            novaMorada.isNewUnconfirmed = false;
             window.partidaLocalizacao = novaMorada;
             if (statusPartida) statusPartida.innerHTML = `<strong>Partida:</strong> ${novaMorada.address}`;
             window.definindoPartidaPorMorada = false;
@@ -309,28 +298,36 @@ export async function processarAdicaoPorPostal() {
         } else {
             window.moradasEntregas.push(novaMorada);
 
-            if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
-                const ultimaParagem = window.rotaOtimizada[window.rotaOtimizada.length - 1];
-                novaMorada.distanciaDoAnterior = calcularDistanciaHaversine(
-                    ultimaParagem.lat,
-                    ultimaParagem.lng,
-                    novaMorada.lat,
-                    novaMorada.lng
-                );
+            // SE A ROTA JÁ TIVER AÇÕES, ADICIONA DIRETAMENTE NO FIM (ÚLTIMA POSIÇÃO)
+            if (!window.rotaOtimizada) window.rotaOtimizada = [];
 
-                novaMorada.isNewUnconfirmed = true;
-                window.rotaOtimizada.push(novaMorada);
+            let pontoAnterior = window.partidaLocalizacao;
+            if (window.rotaOtimizada.length > 0) {
+                pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
             }
+
+            novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
+                pontoAnterior.lat,
+                pontoAnterior.lng,
+                novaMorada.lat,
+                novaMorada.lng
+            ) : 0;
+
+            // INSERE DIRETAMENTE NO FIM DA ROTA OTIMIZADA
+            window.rotaOtimizada.push(novaMorada);
 
             sincronizarPersistencia();
             renderMoradasAdicionadas();
-            
-            if (window.rotaOtimizada.length > 0) {
-                renderizarItinerarioOtimizado();
-                desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
-            }
 
-            abrirModalEdicaoParagem(novaMorada, window.rotaOtimizada.length > 0);
+            // EXIBE OS CONTENTORES DO MAPA E DA ROTA
+            document.getElementById('container-mapa')?.classList.remove('hidden');
+            document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
+
+            renderizarItinerarioOtimizado();
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+
+            // MIDA AUTOMATICAMENTE PARA O MODO CONDUÇÃO PARA O MOTORISTA VER A NOVA PARAGEM NO FIM
+            alternarModoRota('conducao');
         }
 
         inputPostal.value = "";
@@ -406,12 +403,9 @@ export function renderMoradasAdicionadas() {
                 renderizarItinerarioOtimizado();
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
             } else {
-                const containerMapa = document.getElementById('container-mapa');
-                const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-                const estatisticasRota = document.getElementById('estatisticas-rota');
-                if (containerMapa) containerMapa.classList.add('hidden');
-                if (containerRotaOrdenada) containerRotaOrdenada.classList.add('hidden');
-                if (estatisticasRota) estatisticasRota.classList.add('hidden');
+                document.getElementById('container-mapa')?.classList.add('hidden');
+                document.getElementById('container-rota-ordenada')?.classList.add('hidden');
+                document.getElementById('estatisticas-rota')?.classList.add('hidden');
                 limparMapaVisual();
             }
             
@@ -423,7 +417,7 @@ export function renderMoradasAdicionadas() {
 }
 
 // =========================================================================
-// OTIMIZAÇÃO: CONEXÃO À GOOGLE ROUTE OPTIMIZATION API (CLOUD VS LOCAL)
+// OTIMIZAÇÃO GLOBAL DA ROTA VIA GOOGLE ROUTE OPTIMIZATION API
 // =========================================================================
 export async function otimizarItinerarioComVizinhoMaisProximo() {
     if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
@@ -432,7 +426,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
     const btnOtimizar = document.getElementById('btn-otimizar-rota');
 
     if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
-        const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa com ordenação personalizada. Se otimizar de novo, o sistema recalculará todo o percurso e perderá as suas alterações manuais. Deseja continuar?");
+        const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa. Se otimizar de novo, o sistema recalculará todo o percurso e confirmará todas as posições. Deseja continuar?");
         if (!confirmarRecalculo) return;
     }
 
@@ -468,6 +462,7 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
             indices.forEach((indexOriginal) => {
                 const paragemOriginal = window.moradasEntregas[indexOriginal];
+                paragemOriginal.isNewUnconfirmed = false; // CONFIRMA TODAS AS POSIÇÕES AO OTIMIZAR
                 paragemOriginal.distanciaDoAnterior = calcularDistanciaHaversine(
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[window.rotaOtimizada.length - 1].lat,
                     window.rotaOtimizada.length === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[window.rotaOtimizada.length - 1].lng,
@@ -481,15 +476,16 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
             localStorage.setItem('cp_routing_method', 'Cloud');
         } else {
             window.rotaOtimizada = [...window.moradasEntregas];
-            window.rotaOtimizada.forEach(p => p.distanciaDoAnterior = 0);
+            window.rotaOtimizada.forEach(p => {
+                p.isNewUnconfirmed = false;
+                p.distanciaDoAnterior = 0;
+            });
             window.routingMethodUsed = 'Local';
             localStorage.setItem('cp_routing_method', 'Local');
         }
 
-        const containerMapa = document.getElementById('container-mapa');
-        const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-        if (containerMapa) containerMapa.classList.remove('hidden');
-        if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+        document.getElementById('container-mapa')?.classList.remove('hidden');
+        document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
 
         renderizarItinerarioOtimizado();
         sincronizarPersistencia();
@@ -504,15 +500,14 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
         
         calcularRotaVizinhoMaisProximoLocal();
+        window.rotaOtimizada.forEach(p => p.isNewUnconfirmed = false);
         window.routingMethodUsed = 'Local';
         localStorage.setItem('cp_routing_method', 'Local');
         
         alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo!`);
         
-        const containerMapa = document.getElementById('container-mapa');
-        const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-        if (containerMapa) containerMapa.classList.remove('hidden');
-        if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+        document.getElementById('container-mapa')?.classList.remove('hidden');
+        document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
 
         renderizarItinerarioOtimizado();
         sincronizarPersistencia();
@@ -529,6 +524,22 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         }
     }
 }
+
+// =========================================================================
+// FUNÇÃO DE CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO
+// =========================================================================
+window.confirmarPosicaoParagem = (paragemId) => {
+    const paragem = window.rotaOtimizada.find(p => p.id === paragemId);
+    if (paragem) {
+        paragem.isNewUnconfirmed = false;
+        const originalPre = window.moradasEntregas.find(m => m.id === paragemId);
+        if (originalPre) originalPre.isNewUnconfirmed = false;
+
+        sincronizarPersistencia();
+        renderizarItinerarioOtimizado();
+        desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+    }
+};
 
 // =========================================================================
 // DESENHAR LISTA DE ENTREGAS OTIMIZADA
@@ -549,35 +560,31 @@ export function renderizarItinerarioOtimizado() {
         let statusColor = "bg-blue-600";
         if (paragem.status === "Entregue") statusColor = "bg-green-500";
         if (paragem.status === "Falhou") statusColor = "bg-red-500";
-
-        if (isRecolha && paragem.status === "Pendente") {
-            statusColor = "bg-purple-600";
-        }
+        if (isRecolha && paragem.status === "Pendente") statusColor = "bg-purple-600";
 
         const isLastNavigated = paragem.id === lastNavigatedId;
         const isPriority = !!paragem.priority;
         const isNewUnconfirmed = !!paragem.isNewUnconfirmed;
 
+        // ESTILIZAÇÃO DO CARTÃO COM BASE NO ESTADO
         if (isNewUnconfirmed) {
-            item.className = "p-3 rounded-xl flex flex-col space-y-2 border-2 border-orange-500 bg-orange-50/70 shadow-md animate-pulse ring-4 ring-orange-200";
+            // CARTÃO LARANJA COM BORDA PRETA ESPESSA E Destaque
+            item.className = "p-3 rounded-xl flex flex-col space-y-2.5 border-2 border-black bg-orange-50 shadow-lg ring-4 ring-orange-200 animate-pulse";
         } else if (isLastNavigated) {
-            if (isPriority) {
-                item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200";
-            } else {
-                item.className = "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-blue-500 bg-blue-50/70 shadow-md ring-4 ring-blue-100";
-            }
+            item.className = isPriority 
+                ? "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-orange-500 bg-orange-50/70 shadow-md ring-4 ring-orange-200"
+                : "p-3 rounded-xl flex flex-col space-y-2 animate-fade-in border-2 border-blue-500 bg-blue-50/70 shadow-md ring-4 ring-blue-100";
         } else {
-            if (isPriority) {
-                item.className = "bg-orange-50/30 p-3 rounded-xl border-2 border-orange-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
-            } else {
-                item.className = "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
-            }
+            item.className = isPriority 
+                ? "bg-orange-50/30 p-3 rounded-xl border-2 border-orange-200 shadow-sm flex flex-col space-y-2 animate-fade-in"
+                : "bg-white p-3 rounded-xl border border-gray-200 shadow-sm flex flex-col space-y-2 animate-fade-in";
         }
 
         const primeiraLinhaObs = paragem.observation ? paragem.observation.split('\n')[0] : "";
 
+        // BOLINHA LARANJA COM BORDA PRETA E EFEITO SALTITANTE (BOUNCE)
         const bolinhaHtml = isNewUnconfirmed 
-            ? `<span class="btn-index-badge w-5 h-5 rounded-full bg-orange-500 text-white animate-bounce font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors cursor-pointer" title="Clique para ordenar">
+            ? `<span class="btn-index-badge w-6 h-6 rounded-full bg-orange-500 text-white border-2 border-black font-black text-xs flex items-center justify-center flex-shrink-0 animate-bounce cursor-pointer shadow-md" title="Clique para alterar ou confirmar posição">
                 ${index + 1}
                </span>`
             : `<span class="btn-index-badge w-5 h-5 rounded-full ${statusColor} text-white font-bold text-[10px] flex items-center justify-center flex-shrink-0 transition-colors">
@@ -594,11 +601,17 @@ export function renderizarItinerarioOtimizado() {
                         </span>
                         
                         ${isRecolha ? `<span class="bg-purple-100 text-purple-700 border border-purple-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="Operação de Recolha"><i class="fa-solid fa-hand-holding-hand text-purple-500"></i> <span>Recolha</span></span>` : ''}
-                        ${isNewUnconfirmed ? `<span class="btn-confirm-seq bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse cursor-pointer"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Novo (Por Confirmar)</span>` : ''}
+                        
+                        ${isNewUnconfirmed ? `
+                            <button onclick="window.confirmarPosicaoParagem('${paragem.id}')" class="bg-orange-500 hover:bg-orange-600 text-white font-black text-[9px] uppercase px-2 py-0.5 rounded-lg border-2 border-black shadow flex items-center space-x-1 transition-all">
+                                <i class="fa-solid fa-check"></i>
+                                <span>Confirmar Posição #${index + 1}</span>
+                            </button>
+                        ` : ''}
+
                         ${isLastNavigated && !isNewUnconfirmed ? `<span class="bg-blue-600 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse">A navegar</span>` : ''}
                         ${isPriority ? `<span class="bg-orange-500 text-white text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide animate-pulse"><i class="fa-solid fa-circle-exclamation mr-0.5"></i> Prioritária</span>` : ''}
-                        
-                        ${paragem.brickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1" title="${paragem.brickId ? paragem.brickId.split('|')[0] : ''} - ${paragem.brickName}"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante: ${paragem.brickName}</span></span>` : ''}
+                        ${paragem.brickName ? `<span class="bg-blue-50 text-blue-700 border border-blue-200 text-[8px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide flex items-center space-x-1"><i class="fa-solid fa-boxes-stacked text-blue-500"></i> <span>Estante: ${paragem.brickName}</span></span>` : ''}
                     </div>
                     <p class="text-xs font-semibold text-gray-700 mt-1 truncate" title="${paragem.address}">
                         ${paragem.address}
@@ -628,12 +641,11 @@ export function renderizarItinerarioOtimizado() {
             </div>
         `;
 
-        // INTEGRAÇÃO DA PREFERÊNCIA INTELIGENTE DE NAVEGAÇÃO (GOOGLE MAPS VS WAZE)
         item.querySelector('.btn-navegar').onclick = () => {
             const acaoNavegar = () => {
                 localStorage.setItem('cp_last_navigated_id', paragem.id);
                 renderizarItinerarioOtimizado(); 
-                abrirNavegacao(paragem); // Abre o Waze ou Google Maps conforme a preferência
+                abrirNavegacao(paragem);
             };
 
             if (index === 0 && (!window.tripStarted || !window.odometerStart || window.odometerStart === 0)) {
@@ -649,13 +661,6 @@ export function renderizarItinerarioOtimizado() {
             const btnIndex = item.querySelector('.btn-index-badge');
             if (btnIndex) {
                 btnIndex.onclick = (e) => {
-                    e.stopPropagation();
-                    window.abrirModalAlterarSequencia(index, paragem);
-                };
-            }
-            const btnConfirmSeq = item.querySelector('.btn-confirm-seq');
-            if (btnConfirmSeq) {
-                btnConfirmSeq.onclick = (e) => {
                     e.stopPropagation();
                     window.abrirModalAlterarSequencia(index, paragem);
                 };
@@ -737,7 +742,6 @@ export function renderEstatisticasRota() {
         }
     }
 
-    // INDICADOR VISUAL DO MÉTODO DE ROTEIRIZAÇÃO (CLOUD VS LOCAL)
     if (statSistema) {
         const metodo = window.routingMethodUsed || localStorage.getItem('cp_routing_method') || 'Cloud';
         if (metodo === 'Cloud') {
@@ -932,8 +936,8 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
         }
 
         const novoIndex = novaPos - 1;
-        const wasUnconfirmed = !!paragem.isNewUnconfirmed;
 
+        // CONFIRMA A POSIÇÃO E REMOVE A ANIMAÇÃO SALTITANTE E COR LARANJA
         paragem.isNewUnconfirmed = false;
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) originalPre.isNewUnconfirmed = false;
@@ -959,10 +963,6 @@ window.abrirModalAlterarSequencia = (indexAtual, paragem) => {
         desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
 
         modal.classList.add('hidden');
-
-        if (wasUnconfirmed) {
-            setTimeout(() => abrirModalEdicaoParagem(paragem, true), 350);
-        }
     };
 
     btnCancelar.onclick = () => modal.classList.add('hidden');
@@ -1295,9 +1295,9 @@ export function setupRotasLogic() {
                 window.moradasEntregas = [];
                 window.rotaOtimizada = [];
                 localStorage.removeItem('cp_last_navigated_id');
-                document.getElementById('container-mapa').classList.add('hidden');
-                document.getElementById('container-rota-ordenada').classList.add('hidden');
-                document.getElementById('estatisticas-rota').classList.add('hidden');
+                document.getElementById('container-mapa')?.classList.add('hidden');
+                document.getElementById('container-rota-ordenada')?.classList.add('hidden');
+                document.getElementById('estatisticas-rota')?.classList.add('hidden');
                 limparMapaVisual();
                 renderMoradasAdicionadas();
                 sincronizarPersistencia();
@@ -1347,10 +1347,8 @@ export function sincronizarInterfaceRota() {
         alternarModoRota(modoSalvo);
 
         if (window.rotaOtimizada.length > 0) {
-            const containerMapa = document.getElementById('container-mapa');
-            const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-            if (containerMapa) containerMapa.classList.remove('hidden');
-            if (containerRotaOrdenada) containerRotaOrdenada.classList.remove('hidden');
+            document.getElementById('container-mapa')?.classList.remove('hidden');
+            document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
             
             renderizarItinerarioOtimizado();
             
@@ -1358,12 +1356,9 @@ export function sincronizarInterfaceRota() {
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
             }, 300);
         } else {
-            const containerMapa = document.getElementById('container-mapa');
-            const containerRotaOrdenada = document.getElementById('container-rota-ordenada');
-            const estatisticasRota = document.getElementById('estatisticas-rota');
-            if (containerMapa) containerMapa.classList.add('hidden');
-            if (containerRotaOrdenada) containerRotaOrdenada.classList.add('hidden');
-            if (estatisticasRota) estatisticasRota.classList.add('hidden');
+            document.getElementById('container-mapa')?.classList.add('hidden');
+            document.getElementById('container-rota-ordenada')?.classList.add('hidden');
+            document.getElementById('estatisticas-rota')?.classList.add('hidden');
         }
 
     } else {
@@ -1443,6 +1438,7 @@ export function setupModaisEdicao() {
                 }
             }
 
+            // GUARDAR ALTERAÇÕES TAMBÉM CONFIRMA A POSIÇÃO E REMOVE A ANIMAÇÃO SALTITANTE
             itemSendoEditado.isNewUnconfirmed = false;
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
