@@ -1,10 +1,10 @@
 /**
  * sw.js
- * Versão v71.0 - Com Módulos 'rotas-geografia.js', 'rotas-odometro.js', 'rotas-modais.js' e 'rotas-inputs.js' Registados
+ * Versão v71.0 - Com Módulos 'rotas-geografia.js', 'rotas-odometro.js', 'rotas-modais.js', 'rotas-inputs.js' e 'rotas-ui.js' Registados
  * Faz: Controla a cache offline de todos os recursos ativos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v71.2';
+const CACHE_NAME = 'classificapack-v71.1';
 
 const ASSETS = [
   './',
@@ -25,6 +25,7 @@ const ASSETS = [
   'js/rotas-odometro.js',  // Módulo 2: Odómetro
   'js/rotas-modais.js',    // Módulo 3: Modais de Edição e Sequência
   'js/rotas-inputs.js',    // Módulo 4: Inputs e Google Places Autocomplete
+  'js/rotas-ui.js',        // Módulo 5: Renderização de Listas e Estatísticas da Rota
   'js/maps.js',
   'js/pwa.js',
   'js/ui.js',
