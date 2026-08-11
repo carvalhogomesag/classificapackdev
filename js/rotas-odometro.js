@@ -147,7 +147,7 @@ export function abrirModalOdometroChegada() {
             // 3. Calcular métricas por Brick e de Desempenho
             const relatorioCalculado = calcularMetricasRelatorio(dadosTurno, listaMoradasAtuais);
 
-            // 4. Salvar na coleção 'relatorios_turnos' do Firestore
+            // 4. Salvar na coleção 'relatorios_turnos' do Firestore (com higienização)
             await salvarRelatorioNoFirestore(relatorioCalculado);
 
             // 5. Exibir resumo e confirmação
@@ -158,9 +158,14 @@ export function abrirModalOdometroChegada() {
                 `🛣️ Distância: ${relatorioCalculado.telemetriaTurno.kmPercorridos} KM\n` +
                 `📊 Média: ${relatorioCalculado.metricasEficiencia.eventosPorHora} evt/hora | ${relatorioCalculado.metricasEficiencia.eventosPorKm} evt/KM\n` +
                 `📦 Bricks Atendidos: ${numBricks}\n\n` +
-                `Dados armazenados no backend com sucesso!`
+                `Relatório armazenado com sucesso no backend!`
             );
 
+        } catch (erro) {
+            console.error("Erro ao gerar/salvar relatório de turno:", erro);
+            const msgDetalhada = erro?.message || String(erro);
+            alert(`Atenção: Ocorreu um erro ao gravar o relatório no Firestore:\n\n${msgDetalhada}\n\nO registo do odómetro local foi processado.`);
+        } finally {
             // 6. Reset completo do estado da rota do turno
             window.tripCompleted = true;
             window.odometerEnd = kmVal;
@@ -188,11 +193,6 @@ export function abrirModalOdometroChegada() {
             modal.classList.add('hidden');
             sincronizarInterfaceRota();
 
-        } catch (erro) {
-            console.error("Erro ao gerar/salvar relatório de turno:", erro);
-            alert("Atenção: Ocorreu um erro ao gravar o relatório no Firestore, mas o registo do odómetro local foi processado.");
-            modal.classList.add('hidden');
-        } finally {
             btnConfirmar.disabled = false;
             btnConfirmar.innerText = "Confirmar Chegada";
         }

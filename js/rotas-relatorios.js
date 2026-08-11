@@ -2,6 +2,7 @@
  * ============================================================================
  * CLASSIFICA PACK - MÓDULO DE RELATÓRIOS DE TURNO E DESEMPENHO POR BRICK
  * Ficheiro: js/rotas-relatorios.js
+ * Versão: v71.1 - Higienização estrita de dados para aceitação no Firestore.
  * Função: Agrupa dados da rota finalizada por Brick, calcula métricas de
  *         eficiência (Eventos/Hora, Eventos/KM) e persiste no Firestore.
  * ============================================================================
@@ -37,16 +38,19 @@ export function agruparObjetosPorBrick(listaMoradas = []) {
 
   listaMoradas.forEach(item => {
     // Resolver o Brick a partir do Código Postal 7 dígitos (CP7)
-    const cp = item.codigoPostal || item.zipCode || item.cp || '';
-    const brickInfo = resolveBrickForZip(cp);
+    const cp = item.codigoPostal || item.zipCode || item.cp || item.address || '';
+    const postalMatch = String(cp).match(/\d{4}-\d{3}/);
+    const cpFormatado = postalMatch ? postalMatch[0] : String(cp);
+
+    const brickInfo = resolveBrickForZip(cpFormatado);
     const brickId = brickInfo?.brickId || item.brickId || 'BRICK_DESCONHECIDO';
-    const brickNome = brickInfo?.nome || item.brickNome || item.freguesia || 'Sem Brick Definido';
+    const brickNome = brickInfo?.brickName || brickInfo?.nome || item.brickName || item.brickNome || item.freguesia || 'Sem Brick Definido';
 
     if (!relatorioBricks[brickId]) {
       relatorioBricks[brickId] = {
-        brickId: brickId,
-        nomeBrick: brickNome,
-        concelho: item.concelho || 'Não Especificado',
+        brickId: String(brickId),
+        nomeBrick: String(brickNome),
+        concelho: String(item.concelho || 'Não Especificado'),
         totalAlocados: 0,
         entregasConcluidas: 0,
         recolhasConcluidas: 0,
@@ -57,8 +61,8 @@ export function agruparObjetosPorBrick(listaMoradas = []) {
 
     relatorioBricks[brickId].totalAlocados += 1;
 
-    const status = (item.status || '').toLowerCase();
-    const tipo = (item.tipo || 'entrega').toLowerCase();
+    const status = String(item.status || '').toLowerCase();
+    const tipo = String(item.tipoOperacao || item.tipo || 'entrega').toLowerCase();
 
     if (status === 'concluido' || status === 'entregue' || status === 'sucesso') {
       if (tipo === 'recolha') {
@@ -129,9 +133,9 @@ export function calcularMetricasRelatorio(dadosTurno, listaMoradas = []) {
   return {
     dataRelatorio: dataAtualISO,
     dataHoraCriacao: new Date().toISOString(),
-    driverId: dadosTurno.driverId || 'MOTORISTA_NAO_IDENTIFICADO',
-    driverName: dadosTurno.driverName || 'Motorista',
-    concelho: dadosTurno.concelho || 'Mafra/Sintra',
+    driverId: String(dadosTurno.driverId || 'MOTORISTA_NAO_IDENTIFICADO'),
+    driverName: String(dadosTurno.driverName || 'Motorista'),
+    concelho: String(dadosTurno.concelho || 'Mafra/Sintra'),
     telemetriaTurno: {
       horaInicio: horaInicioDate.toISOString(),
       horaFim: horaFimDate.toISOString(),
@@ -163,6 +167,7 @@ export function calcularMetricasRelatorio(dadosTurno, listaMoradas = []) {
 
 /**
  * Salva o relatório de encerramento de turno diretamente na coleção 'relatorios_turnos' do Firestore.
+ * Higieniza o objeto convertendo qualquer 'undefined' para null para garantir compatibilidade estrita.
  * @param {Object} relatorioFinal - Objeto com os dados do relatório formatado
  * @returns {Promise<string>} ID do documento gerado no Firestore
  */
@@ -171,8 +176,13 @@ export async function salvarRelatorioNoFirestore(relatorioFinal) {
     throw new Error("Instância do Firebase Firestore (window.db) não encontrada.");
   }
 
+  // HIGIENIZAÇÃO RÍGIDA: Elimina completamente 'undefined' incompatíveis com o Firestore JS SDK
+  const payloadSanitizado = JSON.parse(
+    JSON.stringify(relatorioFinal, (key, value) => (value === undefined ? null : value))
+  );
+
   try {
-    const docRef = await window.db.collection('relatorios_turnos').add(relatorioFinal);
+    const docRef = await window.db.collection('relatorios_turnos').add(payloadSanitizado);
     console.log("✅ Relatório de Turno salvo com sucesso no Firestore. ID:", docRef.id);
     return docRef.id;
   } catch (error) {
