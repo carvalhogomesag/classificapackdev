@@ -2,13 +2,14 @@
  * ============================================================================
  * CLASSIFICA PACK - MÓDULO DE RELATÓRIOS DE TURNO E DESEMPENHO POR BRICK
  * Ficheiro: js/rotas-relatorios.js
- * Versão: v71.1 - Higienização estrita de dados para aceitação no Firestore.
+ * Versão: v71.2 - Importação direta e segura do Firestore (firebase-init.js).
  * Função: Agrupa dados da rota finalizada por Brick, calcula métricas de
  *         eficiência (Eventos/Hora, Eventos/KM) e persiste no Firestore.
  * ============================================================================
  */
 
 import { resolveBrickForZip } from './rotas-geografia.js';
+import { db } from './firebase-init.js';
 
 /**
  * Valida se existem encomendas/recolhas pendentes na rota atual.
@@ -167,13 +168,16 @@ export function calcularMetricasRelatorio(dadosTurno, listaMoradas = []) {
 
 /**
  * Salva o relatório de encerramento de turno diretamente na coleção 'relatorios_turnos' do Firestore.
- * Higieniza o objeto convertendo qualquer 'undefined' para null para garantir compatibilidade estrita.
+ * Tenta obter a instância do Firestore via importação direta (db), window.db ou SDK global.
  * @param {Object} relatorioFinal - Objeto com os dados do relatório formatado
  * @returns {Promise<string>} ID do documento gerado no Firestore
  */
 export async function salvarRelatorioNoFirestore(relatorioFinal) {
-  if (!window.db) {
-    throw new Error("Instância do Firebase Firestore (window.db) não encontrada.");
+  // Resolução em cascata segura da instância do Firestore
+  const firestoreDb = db || window.db || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+
+  if (!firestoreDb) {
+    throw new Error("Não foi possível conectar ao Firestore. Nenhuma instância ativa foi encontrada.");
   }
 
   // HIGIENIZAÇÃO RÍGIDA: Elimina completamente 'undefined' incompatíveis com o Firestore JS SDK
@@ -182,7 +186,7 @@ export async function salvarRelatorioNoFirestore(relatorioFinal) {
   );
 
   try {
-    const docRef = await window.db.collection('relatorios_turnos').add(payloadSanitizado);
+    const docRef = await firestoreDb.collection('relatorios_turnos').add(payloadSanitizado);
     console.log("✅ Relatório de Turno salvo com sucesso no Firestore. ID:", docRef.id);
     return docRef.id;
   } catch (error) {
