@@ -3,9 +3,9 @@
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v70.6, botão de menu hambúrguer global, barra de navegação inferior e modais.
+      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v71.1, botão de menu hambúrguer global, barra de navegação inferior e modais.
       NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático.
-      Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e Service Worker.
+      Depende de: config.js, js/rotas-relatorios.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e Service Worker.
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -88,7 +88,7 @@
     <!-- Container Principal (Shell) -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v70.6) -->
+        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v71.1) -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex items-center justify-between">
             <!-- Botão do Menu Hambúrguer -->
             <button id="btn-abrir-menu" class="text-white hover:text-blue-200 text-base font-bold bg-blue-700/50 w-9 h-9 rounded-lg border border-blue-400/30 flex items-center justify-center transition-all cursor-pointer">
@@ -97,7 +97,7 @@
             
             <span class="absolute left-1/2 transform -translate-x-1/2">Classifica Pack</span>
             
-            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v71.1</span>
+            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v72</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS -->
@@ -399,6 +399,7 @@
 
     <!-- Scripts -->
     <script src="config.js"></script>
+    <script type="module" src="js/rotas-relatorios.js"></script>
     <script type="module" src="js/main.js"></script>
 
     <script>
