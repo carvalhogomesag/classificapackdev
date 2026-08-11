@@ -1,8 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v71.0 - Módulo de Formatação de Inputs e Google Places Autocomplete
+ * Versão v71.1 - Módulo de Formatação de Inputs e Google Places Autocomplete
  * Faz: Controla a formatação e máscara de Código Postal (CP7), botão de prefixo rápido,
- *      escuta de limites para geocodificação e inicialização do Google Places Autocomplete.
+ *      escuta de limites para geocodificação, suporte a Enter e inicialização do Google Places Autocomplete.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js
  */
 
@@ -49,6 +49,34 @@ export function configurarEventosPrefixoRapido() {
 }
 
 /**
+ * Associa o evento de pressionar a tecla ENTER nos campos de entrada para adicionar o pacote imediatamente
+ */
+export function configurarTeclasEnterAdicao() {
+    const inputCP = document.getElementById('rota-codigo-postal');
+    const inputMorada = document.getElementById('rota-morada-completa');
+
+    const dispararAdicao = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const btnAdicionar = document.getElementById('btn-adicionar-postal-rota');
+            if (btnAdicionar) {
+                btnAdicionar.click();
+            }
+        }
+    };
+
+    if (inputCP && inputCP.dataset.enterBound !== "true") {
+        inputCP.addEventListener('keydown', dispararAdicao);
+        inputCP.dataset.enterBound = "true";
+    }
+
+    if (inputMorada && inputMorada.dataset.enterBound !== "true") {
+        inputMorada.addEventListener('keydown', dispararAdicao);
+        inputMorada.dataset.enterBound = "true";
+    }
+}
+
+/**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
  */
 export function configurarFormatacaoCodigoPostal() {
@@ -66,6 +94,8 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
     });
+
+    configurarTeclasEnterAdicao();
 }
 
 /**
@@ -113,6 +143,8 @@ export function configurarEscutaCodigoPostalParaLimites() {
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
+
+    configurarTeclasEnterAdicao();
 
     if (inputMorada.dataset.autocompleteBound === "true") return;
 

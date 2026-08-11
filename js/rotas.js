@@ -1,8 +1,9 @@
 /**
  * js/rotas.js
- * Versão v71.0 - Com Componentes de Geografia, Odómetro, Modais, Inputs e UI Isolados
+ * Versão v71.1 - Com Componentes de Geografia, Odómetro, Modais, Inputs e UI Isolados
  * Faz: Gestão principal da aba de rotas, integrando os componentes 'rotas-geografia.js',
  *      'rotas-odometro.js', 'rotas-modais.js', 'rotas-inputs.js' e 'rotas-ui.js'.
+ * Alteração v71.1: Abertura automática do modal de observações/detalhes ao adicionar morada.
  */
 
 import { saveData } from './storage.js';
@@ -265,6 +266,7 @@ export async function processarAdicaoPorPostal() {
         } else {
             // Adiciona sempre a morada à lista de planeamento (Moradas Mapeadas)
             window.moradasEntregas.push(novaMorada);
+            const novoIndexPlaneamento = window.moradasEntregas.length - 1;
 
             if (rotaJaOtimizada) {
                 // SE A ROTA JÁ FOI OTIMIZADA ANTERIORMENTE:
@@ -278,6 +280,7 @@ export async function processarAdicaoPorPostal() {
                 ) : 0;
 
                 window.rotaOtimizada.push(novaMorada);
+                const novoIndexConducao = window.rotaOtimizada.length - 1;
 
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
@@ -295,11 +298,21 @@ export async function processarAdicaoPorPostal() {
                 }, 200);
 
                 alternarModoRota('conducao');
+
+                // ABRIR AUTOMATICAMENTE O MODAL DE EDIÇÃO/OBSERVAÇÕES (Modo Condução)
+                setTimeout(() => {
+                    abrirModalEdicaoParagem(novoIndexConducao, 'conducao');
+                }, 150);
             } else {
                 // FASE INICIAL DE PLANEAMENTO (SEM OTIMIZAÇÃO AINDA):
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
                 alternarModoRota('planeamento');
+
+                // ABRIR AUTOMATICAMENTE O MODAL DE EDIÇÃO/OBSERVAÇÕES (Modo Planeamento)
+                setTimeout(() => {
+                    abrirModalEdicaoParagem(novoIndexPlaneamento, 'planeamento');
+                }, 150);
             }
         }
 
