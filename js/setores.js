@@ -1,10 +1,10 @@
 /**
  * setores.js
- * Versão v72.0 - Com Reconciliação Inteligente de Marcadores, Bloqueio Anti-Flicker e Painel do Gestor
- * Faz: Controla o ecrã de Atribuição de Bricks com atualização otimista instantânea e sem oscilação,
- *      reconcilia marcadores no mapa do gestor sem os destruir desnecessariamente e calcula as
- *      médias históricas de carga por Brick a partir dos relatórios do Firestore.
- * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js, ./rotas-relatorios.js
+ * Versão v72.1 - Pesquisa em Tempo Real por CP7, Reconciliação de Marcadores e Painel do Gestor
+ * Faz: Controla o ecrã de Atribuição de Bricks com atualização otimista instantânea sem oscilação,
+ *      pesquisa síncrona por CP7 (ex: 2640-401, 2640-578) com totais de entregas/recolhas,
+ *      e reconciliação inteligente de marcadores no mapa do gestor.
+ * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js, ./rotas-relatorios.js
  */
 
 import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
@@ -36,6 +36,9 @@ let dashboardMarkersMap = new Map();
 
 // Cache local em memória RAM das coordenadas já geocodificadas
 let brickCoordsCache = {};
+
+// Cache local de dados de relatórios calculados
+let ultimasMediasCalculadas = [];
 
 try {
     const cached = localStorage.getItem('cp_brick_coords');
@@ -239,7 +242,6 @@ function desenharBricksNoMapa() {
                 totalPontosDesenhados++;
 
                 if (!dashboardMarkersMap.has(markerKey)) {
-                    // Criar novo marcador apenas se ainda não existir
                     const marker = new google.maps.Marker({
                         position: coords,
                         map: dashboardMap,
@@ -294,7 +296,6 @@ function desenharBricksNoMapa() {
         });
     });
 
-    // Remover apenas os marcadores que foram desmarcados (sem apagar os restantes)
     for (const [key, marker] of dashboardMarkersMap.entries()) {
         if (!keysDesejadas.has(key)) {
             marker.setMap(null);
@@ -543,11 +544,59 @@ function exibirModalDetalheRelatorio(relatorio) {
 }
 
 // =========================================================================
+// RENDERIZADOR DA TABELA FILTRADA DE MÉDIAS E TOTAIS POR CP7 / BRICK
+// =========================================================================
+function renderizarTabelaMediasFiltrada(termoPesquisa = "") {
+    const tbodyMedias = document.getElementById('tbody-medias-bricks');
+    if (!tbodyMedias) return;
+
+    tbodyMedias.innerHTML = "";
+
+    const termo = termoPesquisa.toLowerCase().trim();
+
+    const filtrados = ultimasMediasCalculadas.filter(item => {
+        if (!termo) return true;
+        const bId = String(item.brickId || '').toLowerCase();
+        const nBrick = String(item.nomeBrick || '').toLowerCase();
+        return bId.includes(termo) || nBrick.includes(termo);
+    });
+
+    if (filtrados.length === 0) {
+        tbodyMedias.innerHTML = `
+            <tr>
+                <td colspan="6" class="p-4 text-center text-gray-400 italic font-semibold">
+                    ${termo ? `Nenhum Brick ou Código Postal encontrado para "${termoPesquisa}".` : 'Sem dados de Bricks nos relatórios.'}
+                </td>
+            </tr>`;
+        return;
+    }
+
+    filtrados.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-purple-50/40 transition-colors";
+        tr.innerHTML = `
+            <td class="p-2.5 font-bold text-gray-800">
+                ${item.nomeBrick} 
+                <span class="text-[9px] text-purple-600 font-mono font-bold block">${item.brickId}</span>
+            </td>
+            <td class="p-2.5 text-center text-[10px] font-bold uppercase text-gray-500">${item.concelho}</td>
+            <td class="p-2.5 text-center text-sm font-black text-green-700 bg-green-50/50">${item.somaTotalObjetos - (item.mediaFalhasPorTurno * item.totalTurnosAtendido || 0)}</td>
+            <td class="p-2.5 text-center font-extrabold text-purple-700 bg-purple-50/50">${item.somaTotalObjetos}</td>
+            <td class="p-2.5 text-center font-bold text-red-500">${Math.round(item.mediaFalhasPorTurno * item.totalTurnosAtendido)}</td>
+            <td class="p-2.5 text-center text-sm font-black text-blue-700 bg-blue-50/50">${item.mediaObjetosPorTurno}</td>
+        `;
+        tbodyMedias.appendChild(tr);
+    });
+}
+
+// =========================================================================
 // RENDERIZAÇÃO DO PAINEL DO GESTOR: RELATÓRIOS E MÉDIAS DE CARGA POR BRICK
 // =========================================================================
 async function renderizarPainelRelatoriosGestor() {
     const tbodyMedias = document.getElementById('tbody-medias-bricks');
     const containerHistorico = document.getElementById('lista-relatorios-historico');
+    const inputPesquisa = document.getElementById('filtro-pesquisa-brick');
+
     if (!tbodyMedias || !containerHistorico) return;
 
     try {
@@ -589,30 +638,18 @@ async function renderizarPainelRelatoriosGestor() {
         if (elEvtHora) elEvtHora.textContent = (somaEvtHora / totalTurnos).toFixed(1);
         if (elEvtKm) elEvtKm.textContent = (somaEvtKm / totalTurnos).toFixed(1);
 
-        // Tabela de Médias por Brick
-        const listaMedias = calcularMediasHistoricasPorBrick(relatorios);
-        tbodyMedias.innerHTML = "";
+        // Calcular e Guardar Médias
+        ultimasMediasCalculadas = calcularMediasHistoricasPorBrick(relatorios);
 
-        if (listaMedias.length === 0) {
-            tbodyMedias.innerHTML = `
-                <tr>
-                    <td colspan="6" class="p-4 text-center text-gray-400 italic">Sem dados de Bricks nos relatórios.</td>
-                </tr>`;
-        } else {
-            listaMedias.forEach(item => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-purple-50/40 transition-colors";
-                tr.innerHTML = `
-                    <td class="p-2.5 font-bold text-gray-800">${item.nomeBrick} <span class="text-[9px] text-gray-400 block font-mono">${item.brickId}</span></td>
-                    <td class="p-2.5 text-center text-[10px] font-bold uppercase text-gray-500">${item.concelho}</td>
-                    <td class="p-2.5 text-center text-sm font-black text-purple-700 bg-purple-50/50">${item.mediaObjetosPorTurno}</td>
-                    <td class="p-2.5 text-center text-green-600 font-bold">${item.mediaEntregasPorTurno}</td>
-                    <td class="p-2.5 text-center text-purple-600 font-bold">${item.mediaRecolhasPorTurno}</td>
-                    <td class="p-2.5 text-center text-red-500 font-bold">${item.mediaFalhasPorTurno}</td>
-                `;
-                tbodyMedias.appendChild(tr);
+        // Ativar Escuta do Campo de Pesquisa por CP7
+        if (inputPesquisa && !inputPesquisa.dataset.listenerAtivo) {
+            inputPesquisa.addEventListener('input', (e) => {
+                renderizarTabelaMediasFiltrada(e.target.value);
             });
+            inputPesquisa.dataset.listenerAtivo = "true";
         }
+
+        renderizarTabelaMediasFiltrada(inputPesquisa ? inputPesquisa.value : "");
 
         // Histórico Recente de Relatórios
         containerHistorico.innerHTML = "";
@@ -690,7 +727,6 @@ export function renderGeographicTree() {
 
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    // Map estruturado e normalizado
     const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -805,7 +841,6 @@ export function renderGeographicTree() {
                         updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
 
-                    // ATIVA FLAG ANTI-CONCORRÊNCIA PARA EVITAR QUE SNAPSHOTS FIRESTORE REVERTAM A UI
                     isLocalBrickUpdating = true;
 
                     // 1. ATUALIZAÇÃO OTIMISTA IMEDIATA EM MEMÓRIA RAM LOCAL
@@ -925,7 +960,6 @@ export function renderGeographicTree() {
 // CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES E BRICKS (WINDOW)
 // =========================================================================
 window.renderizarSetoresUI = () => {
-    // Se estiver a decorrer uma atualização local do utilizador, ignora re-renders do onSnapshot
     if (isLocalBrickUpdating) return;
 
     const seletorConcelho = document.getElementById('select-concelho-setores');

@@ -1,8 +1,8 @@
 <!--
   setores.html
-  Versão v72.0 - Painel de Atribuição de Bricks, Auditoria Saldo Zero e Relatórios/Médias de Carga por Brick do Gestor.
+  Versão v72.1 - Painel de Atribuição de Bricks, Auditoria Saldo Zero e Pesquisa/Análise de Carga por CP7/Brick para o Gestor.
   Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks aos Motoristas,
-       Auditoria de Saldo Zero e o novo Painel de Relatórios e Médias por Brick para o Gestor.
+       Auditoria de Saldo Zero e o Painel de Pesquisa e Análise de Totais e Médias por Código Postal (CP7) para o Gestor.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -42,7 +42,7 @@
         </div>
     </div>
 
-    <!-- NOVO PAINEL: AUDITORIA E BALANÇO DE BRICKS (SALDO ZERO) -->
+    <!-- PAINEL DE AUDITORIA E BALANÇO DE BRICKS (SALDO ZERO) -->
     <div id="painel-auditoria-bricks" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
         <div class="flex items-center justify-between">
             <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
@@ -69,19 +69,17 @@
             </div>
         </div>
 
-        <!-- Lista colapsável de Bricks pendentes de dono (Só surge se houver falhas de alocação) -->
         <div id="container-bricks-pendentes" class="hidden border border-red-100 bg-red-50/20 p-3 rounded-xl space-y-2 animate-fade-in">
             <span class="block text-[10px] font-black text-red-700 uppercase tracking-wider flex items-center space-x-1">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <span>Bricks Órfãos (Sem Motorista)</span>
             </span>
             <div id="lista-bricks-pendentes" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto text-[10px] text-gray-600 font-bold pr-1">
-                <!-- Preenchido dinamicamente por setores.js -->
             </div>
         </div>
     </div>
 
-    <!-- PAINEL DO GESTOR: RELATÓRIOS E MÉDIAS DE ENCOMENDAS POR BRICK -->
+    <!-- PAINEL DO GESTOR: RELATÓRIOS E PESQUISA DE ENCOMENDAS POR BRICK / CP7 -->
     <div id="painel-relatorios-gestor" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-gray-100 space-y-2 sm:space-y-0">
             <div class="flex items-center space-x-2">
@@ -89,8 +87,8 @@
                     <i class="fa-solid fa-chart-pie text-sm"></i>
                 </div>
                 <div>
-                    <h3 class="text-xs font-black uppercase text-gray-700 tracking-wider">Painel do Gestor: Média de Carga por Brick e Telemetria</h3>
-                    <p class="text-[11px] text-gray-400">Análise histórica de volume por Brick e relatórios de turnos</p>
+                    <h3 class="text-xs font-black uppercase text-gray-700 tracking-wider">Análise do Gestor: Totais e Médias por CP7 / Brick</h3>
+                    <p class="text-[11px] text-gray-400">Consulte quantas entregas e recolhas foram efetuadas em qualquer Código Postal</p>
                 </div>
             </div>
 
@@ -120,28 +118,41 @@
             </div>
         </div>
 
-        <!-- TABELA DE MÉDIAS POR BRICK -->
+        <!-- CAMPO DE PESQUISA DIRETA POR CP7 OU BRICK -->
         <div class="space-y-2">
-            <h4 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1">
-                <i class="fa-solid fa-boxes-stacked text-purple-600"></i>
-                <span>Média Diária de Pacotes por Brick (Estante)</span>
-            </h4>
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <h4 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1">
+                    <i class="fa-solid fa-magnifying-glass text-purple-600"></i>
+                    <span>Pesquisar Código Postal / Brick (Ex: 2640-401, 2640-578)</span>
+                </h4>
+            </div>
 
-            <div class="border border-gray-200 rounded-xl overflow-hidden max-h-64 overflow-y-auto">
+            <div class="relative">
+                <input type="text" id="filtro-pesquisa-brick" placeholder="Digite o CP7 ou nome da localidade (Ex: 2640-401, Ericeira...)" 
+                       class="w-full p-3 pl-10 border border-purple-200 rounded-xl text-xs font-bold bg-purple-50/30 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all">
+                <div class="absolute left-3 top-3 text-purple-400 text-sm">
+                    <i class="fa-solid fa-search"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABELA DE TOTAIS E MÉDIAS POR BRICK -->
+        <div class="space-y-2">
+            <div class="border border-gray-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead class="bg-gray-100 text-gray-500 uppercase text-[9px] font-black tracking-wider sticky top-0">
                         <tr>
-                            <th class="p-2.5">Brick (Estante)</th>
+                            <th class="p-2.5">Brick / CP7</th>
                             <th class="p-2.5 text-center">Concelho</th>
-                            <th class="p-2.5 text-center">Média Objetos/Turno</th>
-                            <th class="p-2.5 text-center">Entregas</th>
-                            <th class="p-2.5 text-center">Recolhas</th>
-                            <th class="p-2.5 text-center">Falhas</th>
+                            <th class="p-2.5 text-center bg-green-50 text-green-800">Total Entregues</th>
+                            <th class="p-2.5 text-center bg-purple-50 text-purple-800">Total Recolhidos</th>
+                            <th class="p-2.5 text-center bg-red-50 text-red-800">Total Falhas</th>
+                            <th class="p-2.5 text-center bg-blue-50 text-blue-800">Média / Turno</th>
                         </tr>
                     </thead>
                     <tbody id="tbody-medias-bricks" class="divide-y divide-gray-100 font-semibold text-gray-700">
                         <tr>
-                            <td colspan="6" class="p-4 text-center text-gray-400 italic">A carregar médias de carga dos Bricks...</td>
+                            <td colspan="6" class="p-4 text-center text-gray-400 italic">A carregar registos dos Bricks...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -152,7 +163,7 @@
         <div class="space-y-2 pt-2 border-t border-gray-100">
             <h4 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1">
                 <i class="fa-solid fa-clock-rotate-left text-blue-600"></i>
-                <span>Relatórios de Turno Guardados no Backend</span>
+                <span>Histórico de Relatórios Registados no Backend</span>
             </h4>
 
             <div id="lista-relatorios-historico" class="space-y-2 max-h-56 overflow-y-auto pr-1">
@@ -161,7 +172,7 @@
         </div>
     </div>
 
-    <!-- EXPLICAÇÃO DO PAINEL -->
+    <!-- EXPLICAÇÃO DO PAINEL DE ATRIBUIÇÃO -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
         <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
             <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
@@ -172,10 +183,10 @@
         </p>
     </div>
 
-    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet, coluna em Telemóvel) -->
+    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane) -->
     <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
         
-        <!-- COLUNA ESQUERDA: LISTAGEM E SELEÇÃO DE MOTORISTAS ATIVOS -->
+        <!-- COLUNA ESQUERDA: LISTAGEM DE MOTORISTAS -->
         <div class="md:col-span-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
             <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
                 <i class="fa-solid fa-users text-blue-500"></i>
@@ -183,12 +194,11 @@
             </h3>
             
             <div id="lista-atribuicao-motoristas" class="space-y-2 max-h-96 overflow-y-auto pr-1">
-                <!-- Preenchido dinamicamente por setores.js -->
                 <p class="text-xs text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
             </div>
         </div>
 
-        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS DE MAFRA OU SINTRA -->
+        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS -->
         <div class="md:col-span-8 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
             <div class="flex justify-between items-center">
                 <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
@@ -200,7 +210,6 @@
                 </span>
             </div>
 
-            <!-- Contentor dinâmico da árvore preenchido pelo setores.js -->
             <div id="arvore-bricks-localidades" class="border rounded-lg p-2 max-h-[500px] overflow-y-auto space-y-2 bg-gray-50/50">
                 <p class="text-xs text-gray-400 italic text-center py-8">Por favor, escolha um motorista na lista para carregar os Bricks.</p>
             </div>
@@ -222,7 +231,6 @@
             </div>
             
             <div id="conteudo-modal-relatorio" class="p-4 space-y-4 overflow-y-auto text-xs text-gray-700">
-                <!-- Preenchido dinamicamente pelo setores.js -->
             </div>
 
             <div class="p-3 bg-gray-50 border-t text-right">
