@@ -2,9 +2,10 @@
  * ============================================================================
  * CLASSIFICA PACK - MÓDULO DE RELATÓRIOS DE TURNO E DESEMPENHO POR BRICK
  * Ficheiro: js/rotas-relatorios.js
- * Versão: v71.2 - Importação direta e segura do Firestore (firebase-init.js).
+ * Versão: v72.0 - Exportações completas de histórico e médias por Brick.
  * Função: Agrupa dados da rota finalizada por Brick, calcula métricas de
- *         eficiência (Eventos/Hora, Eventos/KM) e persiste no Firestore.
+ *         eficiência (Eventos/Hora, Eventos/KM), gera médias por Brick e
+ *         permite ao Gestor consultar o histórico no Firestore.
  * ============================================================================
  */
 
@@ -30,7 +31,7 @@ export function verificarPendenciasRota(listaMoradas = []) {
 }
 
 /**
- * Agrupa as entregas/recolhas por Brick.
+ * Agrupa as entregas/recolhas por Brick para o relatório do turno corrente.
  * @param {Array} listaMoradas - Array de objetos de moradas/entregas da rota
  * @returns {Object} - Mapeamento com contagem de totais, entregas, recolhas e falhas por Brick
  */
@@ -56,7 +57,8 @@ export function agruparObjetosPorBrick(listaMoradas = []) {
         entregasConcluidas: 0,
         recolhasConcluidas: 0,
         falhas: 0,
-        pendentes: 0
+        pendentes: 0,
+        totalEventos: 0
       };
     }
 
@@ -71,8 +73,10 @@ export function agruparObjetosPorBrick(listaMoradas = []) {
       } else {
         relatorioBricks[brickId].entregasConcluidas += 1;
       }
+      relatorioBricks[brickId].totalEventos += 1;
     } else if (status === 'falha' || status === 'incidencia' || status === 'recusado' || status === 'ausente') {
       relatorioBricks[brickId].falhas += 1;
+      relatorioBricks[brickId].totalEventos += 1;
     } else {
       relatorioBricks[brickId].pendentes += 1;
     }
@@ -168,19 +172,16 @@ export function calcularMetricasRelatorio(dadosTurno, listaMoradas = []) {
 
 /**
  * Salva o relatório de encerramento de turno diretamente na coleção 'relatorios_turnos' do Firestore.
- * Tenta obter a instância do Firestore via importação direta (db), window.db ou SDK global.
  * @param {Object} relatorioFinal - Objeto com os dados do relatório formatado
  * @returns {Promise<string>} ID do documento gerado no Firestore
  */
 export async function salvarRelatorioNoFirestore(relatorioFinal) {
-  // Resolução em cascata segura da instância do Firestore
   const firestoreDb = db || window.db || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
 
   if (!firestoreDb) {
     throw new Error("Não foi possível conectar ao Firestore. Nenhuma instância ativa foi encontrada.");
   }
 
-  // HIGIENIZAÇÃO RÍGIDA: Elimina completamente 'undefined' incompatíveis com o Firestore JS SDK
   const payloadSanitizado = JSON.parse(
     JSON.stringify(relatorioFinal, (key, value) => (value === undefined ? null : value))
   );
@@ -195,10 +196,103 @@ export async function salvarRelatorioNoFirestore(relatorioFinal) {
   }
 }
 
+/**
+ * Consulta o histórico completo de relatórios no Firestore com suporte a filtros opcionais.
+ * @param {Object} [filtros] - { driverId, concelho, dataInicio, dataFim }
+ * @returns {Promise<Array>} Lista de relatórios de turno
+ */
+export async function carregarHistoricoRelatorios(filtros = {}) {
+  const firestoreDb = db || window.db || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+  if (!firestoreDb) return [];
+
+  try {
+    let query = firestoreDb.collection('relatorios_turnos');
+
+    if (filtros.driverId) {
+      query = query.where('driverId', '==', filtros.driverId);
+    }
+    if (filtros.concelho) {
+      query = query.where('concelho', '==', filtros.concelho);
+    }
+
+    const snapshot = await query.get();
+    const relatorios = [];
+
+    snapshot.forEach(doc => {
+      relatorios.push({ id: doc.id, ...doc.data() });
+    });
+
+    // Ordenação decrescente por data de criação
+    relatorios.sort((a, b) => new Date(b.dataHoraCriacao || 0) - new Date(a.dataHoraCriacao || 0));
+
+    return relatorios;
+  } catch (error) {
+    console.error("❌ Erro ao consultar histórico de relatórios no Firestore:", error);
+    return [];
+  }
+}
+
+/**
+ * Processa a lista histórica de relatórios e calcula a média de encomendas/eventos por Brick.
+ * @param {Array} relatorios - Lista de relatórios obtida do Firestore
+ * @returns {Array} Lista agregada com médias de cada Brick ordenada por volume
+ */
+export function calcularMediasHistoricasPorBrick(relatorios = []) {
+  const mapaBricks = {};
+
+  relatorios.forEach(relatorio => {
+    const detalhamento = relatorio.detalhamentoPorBrick || {};
+
+    Object.entries(detalhamento).forEach(([brickId, dados]) => {
+      if (!mapaBricks[brickId]) {
+        mapaBricks[brickId] = {
+          brickId: brickId,
+          nomeBrick: dados.nomeBrick || 'Brick Desconhecido',
+          concelho: dados.concelho || 'Não Especificado',
+          totalTurnosAtendido: 0,
+          somaObjetosAlocados: 0,
+          somaEntregas: 0,
+          somaRecolhas: 0,
+          somaFalhas: 0
+        };
+      }
+
+      mapaBricks[brickId].totalTurnosAtendido += 1;
+      mapaBricks[brickId].somaObjetosAlocados += (dados.totalAlocados || 0);
+      mapaBricks[brickId].somaEntregas += (dados.entregasConcluidas || 0);
+      mapaBricks[brickId].somaRecolhas += (dados.recolhasConcluidas || 0);
+      mapaBricks[brickId].somaFalhas += (dados.falhas || 0);
+    });
+  });
+
+  // Calcular as médias por turno
+  const listaMedias = Object.values(mapaBricks).map(item => {
+    const turnos = Math.max(1, item.totalTurnosAtendido);
+    return {
+      brickId: item.brickId,
+      nomeBrick: item.nomeBrick,
+      concelho: item.concelho,
+      totalTurnosAtendido: item.totalTurnosAtendido,
+      somaTotalObjetos: item.somaObjetosAlocados,
+      mediaObjetosPorTurno: parseFloat((item.somaObjetosAlocados / turnos).toFixed(1)),
+      mediaEntregasPorTurno: parseFloat((item.somaEntregas / turnos).toFixed(1)),
+      mediaRecolhasPorTurno: parseFloat((item.somaRecolhas / turnos).toFixed(1)),
+      mediaFalhasPorTurno: parseFloat((item.somaFalhas / turnos).toFixed(1))
+    };
+  });
+
+  // Ordenar Bricks por maior média de objetos por turno
+  listaMedias.sort((a, b) => b.mediaObjetosPorTurno - a.mediaObjetosPorTurno);
+
+  return listaMedias;
+}
+
 // Exportar para o escopo global para compatibilidade com o sistema de scripts Vanilla
 window.rotasRelatorios = {
   verificarPendenciasRota,
   agruparObjetosPorBrick,
   calcularMetricasRelatorio,
-  salvarRelatorioNoFirestore
+  salvarRelatorioNoFirestore,
+  carregarHistoricoRelatorios,
+  calcularMediasHistoricasPorBrick
 };
