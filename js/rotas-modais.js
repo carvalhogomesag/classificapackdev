@@ -1,8 +1,9 @@
 /**
  * js/rotas-modais.js
- * Versão v71.0 - Módulo de Modais de Edição e Re-sequenciação de Paragens
+ * Versão v71.1 - Módulo de Modais de Edição e Re-sequenciação de Paragens
  * Faz: Controla o modal de edição detalhada de entregas/recolhas (morada, observações,
  *      tipo de embalagem, cliente frequente, prioridade) e a alteração manual de sequência de rota.
+ * Alteração v71.1: Suporte polimórfico na abertura do modal (aceita objeto ou índice numérico).
  * Depende de: ./rotas-geografia.js, ./maps.js, ./rotas.js
  */
 
@@ -322,7 +323,12 @@ export function setupModaisEdicao() {
     configurarBotoesRapidosModal();
 }
 
-export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
+/**
+ * Abre o modal de edição da paragem. Suporta receber tanto o objeto da paragem como o índice numérico.
+ * @param {Object|number} paragemOuIndex - Objeto paragem ou índice numérico da lista
+ * @param {string|boolean} modoOuEstaNaRota - Modo ('conducao'|'planeamento') ou booleano
+ */
+export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
     const modalEditarParagem = document.getElementById('modal-editar-paragem');
     const editMoradaTexto = document.getElementById('edit-morada-texto');
     const editMoradaObs = document.getElementById('edit-morada-obs');
@@ -330,10 +336,26 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
 
     if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
 
-    itemSendoEditado = paragem;
-    itemSendoEditado._originalAddress = paragem.address;
+    let paragem = paragemOuIndex;
 
-    editMoradaTexto.value = paragem.address;
+    // RESOLUÇÃO POLIMÓRFICA: Se for um número (índice), obtém o objeto correspondente na memória
+    if (typeof paragemOuIndex === 'number') {
+        if (modoOuEstaNaRota === 'conducao' && window.rotaOtimizada && window.rotaOtimizada[paragemOuIndex]) {
+            paragem = window.rotaOtimizada[paragemOuIndex];
+        } else if (window.moradasEntregas && window.moradasEntregas[paragemOuIndex]) {
+            paragem = window.moradasEntregas[paragemOuIndex];
+        }
+    }
+
+    if (!paragem || typeof paragem !== 'object') {
+        console.warn("[PWA] Paragem inválida ou não encontrada para abrir modal:", paragemOuIndex);
+        return;
+    }
+
+    itemSendoEditado = paragem;
+    itemSendoEditado._originalAddress = paragem.address || "";
+
+    editMoradaTexto.value = paragem.address || "";
     editMoradaObs.value = paragem.observation || "";
     if (editMoradaPrioridade) {
         editMoradaPrioridade.checked = !!paragem.priority;
