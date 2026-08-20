@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v72.1 - Pesquisa em Tempo Real por CP7, Reconciliação de Marcadores e Painel do Gestor
- * Faz: Controla o ecrã de Atribuição de Bricks com atualização otimista instantânea sem oscilação,
- *      pesquisa síncrona por CP7 (ex: 2640-401, 2640-578) com totais de entregas/recolhas,
- *      e reconciliação inteligente de marcadores no mapa do gestor.
+ * Versão v74.4 - Com Calibração Manual de Bricks (Drag & Drop no Mapa do Gestor)
+ * Faz: Controla o ecrã de Atribuição de Bricks, pesquisa síncrona por CP7 com totais,
+ *      e permite ao Gestor arrastar (Drag & Drop) qualquer pino de Brick no mapa
+ *      para calibrar a sua posição real, salvando as coordenadas no Firestore.
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js, ./rotas-relatorios.js
  */
 
@@ -212,7 +212,7 @@ function inicializarMapaBricksDashboard() {
 }
 
 // =========================================================================
-// DESENHAR OS PINS GEOGRÁFICOS COM RECONCILIAÇÃO INTELIGENTE (SEM FLICKER)
+// DESENHO E CALIBRAÇÃO MANUAL DE PINOS (DRAG & DROP) NO MAPA DO GESTOR
 // =========================================================================
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
@@ -242,9 +242,11 @@ function desenharBricksNoMapa() {
                 totalPontosDesenhados++;
 
                 if (!dashboardMarkersMap.has(markerKey)) {
+                    // Marcador configurado como ARRASTÁVEL (draggable: true) para o Gestor calibrar
                     const marker = new google.maps.Marker({
                         position: coords,
                         map: dashboardMap,
+                        draggable: true,
                         icon: {
                             path: pinSvgPath,
                             fillColor: drv.color,
@@ -254,9 +256,41 @@ function desenharBricksNoMapa() {
                             scale: 1.2,
                             anchor: new google.maps.Point(12, 22)
                         },
-                        title: `${freg} - ${loc} (${drv.name})`
+                        title: `${freg} - ${loc} (Arraste para calibrar posição)`
                     });
 
+                    // Evento disparado ao soltar o pino arrastado
+                    marker.addListener('dragend', (event) => {
+                        const novaLat = event.latLng.lat();
+                        const novaLng = event.latLng.lng();
+                        const novasCoords = { lat: novaLat, lng: novaLng };
+
+                        // 1. Atualizar na cache local
+                        brickCoordsCache[id] = novasCoords;
+                        salvarCacheCoordenadas();
+
+                        // 2. Persistir no Firestore na coleção de coordenadas partilhadas
+                        db.collection('brickCoordinates').doc(id).set(novasCoords).then(() => {
+                            console.log(`✅ [CALIBRAÇÃO] Posição do Brick "${id}" atualizada com sucesso no Firestore.`);
+                        }).catch((err) => {
+                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar nova coordenada do Brick "${id}":`, err);
+                        });
+
+                        // 3. Exibir confirmação no balão
+                        if (dashboardInfoWindow) {
+                            dashboardInfoWindow.setContent(`
+                                <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 4px;">
+                                    <div style="font-weight: 800; color: #10B981;">📍 Posição Calibrada!</div>
+                                    <div style="color: #374151; font-weight: 600; font-size: 10px; margin-top: 2px;">${freg} - ${loc}</div>
+                                    <div style="color: #6B7280; font-size: 9px; font-mono;">(${novaLat.toFixed(5)}, ${novaLng.toFixed(5)})</div>
+                                </div>
+                            `);
+                            dashboardInfoWindow.setPosition(novasCoords);
+                            dashboardInfoWindow.open(dashboardMap, marker);
+                        }
+                    });
+
+                    // Balão informativo ao clicar
                     const exibirInfoBrick = () => {
                         if (dashboardInfoWindow) {
                             const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg]) 
@@ -280,9 +314,12 @@ function desenharBricksNoMapa() {
                                         <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${drv.color}; flex-shrink: 0;"></span>
                                         <span style="color: ${drv.color}; font-weight: 800; font-size: 11px; text-transform: uppercase;">Estante de: ${drv.name}</span>
                                     </div>
+                                    <div style="margin-top: 6px; font-size: 9px; color: #9CA3AF; font-style: italic;">
+                                        💡 Dica: Pode arrastar este pino para calibrar a localização exata no mapa.
+                                    </div>
                                 </div>
                             `);
-                            dashboardInfoWindow.setPosition(coords);
+                            dashboardInfoWindow.setPosition(marker.getPosition());
                             dashboardInfoWindow.open(dashboardMap, marker);
                         }
                     };
