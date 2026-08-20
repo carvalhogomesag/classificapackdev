@@ -1,8 +1,8 @@
 /**
  * maps.js
- * Versão v71.0 - Com Balões Informativos (InfoWindow) Ricos ao Clicar nos Pinos
+ * Versão v74.0 - Com Pinos Laranjas, Borda Preta e Bouncing para Novas Paragens por Confirmar
  * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos,
- *      dispersão em espiral, pino saltitante e balões de informação interativos ao clicar).
+ *      dispersão em espiral, pino saltitante laranja com bordas pretas para novas adições e balões de informação).
  * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps).
  */
 
@@ -195,10 +195,14 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
         let pinoColor = "#2563EB"; 
         let bounceAnimation = null;
+        let strokeColor = "#FFFFFF";
+        let strokeWeight = 2;
 
         if (p.isNewUnconfirmed) {
-            pinoColor = "#F59E0B"; 
-            bounceAnimation = google.maps.Animation.BOUNCE; 
+            pinoColor = "#F97316"; // Laranja vibrante para novas paragens não confirmadas
+            bounceAnimation = google.maps.Animation.BOUNCE; // Pino saltitante
+            strokeColor = "#000000"; // Borda preta marcada
+            strokeWeight = 3;
         } else if (p.status === "Entregue") {
             pinoColor = "#10B981"; 
         } else if (p.status === "Falhou" || p.status === "Failed") {
@@ -210,18 +214,18 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             map: googleMap,
             label: { 
                 text: (i + 1).toString(), 
-                color: p.isNewUnconfirmed ? "#000000" : "#FFFFFF", 
+                color: p.isNewUnconfirmed ? "#FFFFFF" : "#FFFFFF", 
                 fontWeight: "bold" 
             },
             title: p.address,
             animation: bounceAnimation,
             icon: {
                 path: google.maps.SymbolPath.CIRCLE,
-                scale: 14,
+                scale: 15,
                 fillColor: pinoColor,
                 fillOpacity: 1,
-                strokeWeight: p.isNewUnconfirmed ? 3 : 2,
-                strokeColor: p.isNewUnconfirmed ? "#000000" : "#FFFFFF"
+                strokeWeight: strokeWeight,
+                strokeColor: strokeColor
             }
         });
 
@@ -232,7 +236,9 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             const opLabel = isRecolha ? "Recolha" : "Entrega";
             
             let statusBadge = `<span style="background: #DBEAFE; color: #1E40AF; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">Pendente</span>`;
-            if (p.status === "Entregue") {
+            if (p.isNewUnconfirmed) {
+                statusBadge = `<span style="background: #FFEDD5; color: #C2410C; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">⚠️ Por Confirmar</span>`;
+            } else if (p.status === "Entregue") {
                 statusBadge = `<span style="background: #D1FAE5; color: #065F46; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✓ Entregue</span>`;
             } else if (p.status === "Falhou" || p.status === "Failed") {
                 statusBadge = `<span style="background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✗ Falhou</span>`;
@@ -240,6 +246,13 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
             const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
             const obsText = p.observation ? `<div style="font-size: 10px; color: #4B5563; font-style: italic; background: #FEF3C7; padding: 4px; border-radius: 4px; margin-top: 4px;">💬 ${p.observation}</div>` : '';
+
+            // Botão adicional de confirmação se o pino estiver por confirmar
+            const confirmBtnHtml = p.isNewUnconfirmed ? `
+                <button onclick="if(typeof window.confirmarPosicaoParagem === 'function') { window.confirmarPosicaoParagem('${p.id}'); }" style="background: #10B981; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer; width: 100%; margin-bottom: 4px;">
+                    ✓ Confirmar Posição Atual
+                </button>
+            ` : '';
 
             googleInfoWindow.setContent(`
                 <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 240px;">
@@ -260,9 +273,10 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                     ${brickText}
                     ${obsText}
 
-                    <div style="margin-top: 8px; display: flex; gap: 4px;">
-                        <button onclick="if(typeof window.abrirModalAlterarSequencia === 'function') window.abrirModalAlterarSequencia(${i}, window.rotaOtimizada[${i}])" style="flex: 1; background: #2563EB; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;">
-                            Alterar Ordem
+                    <div style="margin-top: 8px;">
+                        ${confirmBtnHtml}
+                        <button onclick="if(typeof window.abrirModalAlterarSequencia === 'function') window.abrirModalAlterarSequencia(${i}, window.rotaOtimizada[${i}])" style="width: 100%; background: #2563EB; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;">
+                            Alterar Ordem Manual
                         </button>
                     </div>
                 </div>
