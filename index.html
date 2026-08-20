@@ -3,9 +3,9 @@
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v72.1, botão de menu hambúrguer global, barra de navegação inferior e modais.
-      NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático.
-      Depende de: config.js, js/rotas-relatorios.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e Service Worker.
+      Versão v74.3 - App Shell PWA com Menu Hambúrguer Modularizado em Lista e Sub-Modais
+      Faz: Casca principal com navegação por abas, modais globais e menu lateral em lista limpa.
+      Depende de: config.js, js/rotas-relatorios.js, js/main.js, Tailwind CSS, FontAwesome, Tesseract.js e Firebase.
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -88,7 +88,7 @@
     <!-- Container Principal (Shell) -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v72.1) -->
+        <!-- Cabeçalho de Identidade com Versão v74.3 -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex items-center justify-between">
             <!-- Botão do Menu Hambúrguer -->
             <button id="btn-abrir-menu" class="text-white hover:text-blue-200 text-base font-bold bg-blue-700/50 w-9 h-9 rounded-lg border border-blue-400/30 flex items-center justify-center transition-all cursor-pointer">
@@ -106,56 +106,72 @@
         <div id="container-view-intervalos"></div>
         <div id="container-view-rotas"></div>
 
-        <!-- MENU LATERAL / HAMBÚRGUER (Global) -->
+        <!-- MENU LATERAL / HAMBÚRGUER (Modularizado em Lista de Ações) -->
         <div id="menu-lateral-overlay" class="hidden fixed inset-0 bg-black/60 z-[9999] transition-opacity">
-            <div id="menu-lateral-conteudo" class="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl flex flex-col transform -translate-x-full transition-transform duration-300">
+            <div id="menu-lateral-conteudo" class="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-2xl flex flex-col transform -translate-x-full transition-transform duration-300">
+                
                 <!-- Cabeçalho do Menu -->
                 <div class="bg-blue-600 text-white p-4 flex items-center justify-between">
                     <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-gears text-lg"></i>
-                        <span class="font-bold text-sm uppercase tracking-wider">Definições e Menu</span>
+                        <span class="font-bold text-sm uppercase tracking-wider">Definições e Opções</span>
                     </div>
-                    <button id="btn-fechar-menu" class="text-white hover:text-gray-200 p-1 text-lg">
+                    <button id="btn-fechar-menu" class="text-white hover:text-gray-200 p-1 text-lg cursor-pointer">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
-                <!-- Opções do Menu -->
-                <div class="flex-1 p-4 space-y-4 overflow-y-auto">
-                    <!-- Secção: Preferências do Navegador -->
-                    <div class="space-y-2">
-                        <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Navegador Preferido</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button type="button" id="pref-nav-google" class="pref-nav-btn p-3 rounded-xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-1 bg-gray-50 text-gray-700 transition-all cursor-pointer" data-nav="google">
-                                <i class="fa-solid fa-map-location-dot text-blue-600 text-base"></i>
-                                <span>Google Maps</span>
-                            </button>
-                            <button type="button" id="pref-nav-waze" class="pref-nav-btn p-3 rounded-xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-x-0 space-y-1 bg-gray-50 text-gray-700 transition-all cursor-pointer" data-nav="waze">
-                                <i class="fa-solid fa-car-burst text-sky-500 text-base"></i>
-                                <span>Waze</span>
-                            </button>
+                <!-- Lista de Itens do Menu (Cada um abre o seu Modal) -->
+                <div class="flex-1 p-4 space-y-3 overflow-y-auto">
+                    
+                    <!-- Opção 1: Navegador Preferido -->
+                    <button type="button" id="menu-item-navegador" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                <i class="fa-solid fa-diamond-turn-right"></i>
+                            </div>
+                            <div>
+                                <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Navegador Preferido</span>
+                                <span id="menu-subtitulo-navegador" class="text-[11px] font-semibold text-blue-600">Google Maps</span>
+                            </div>
                         </div>
-                        <p class="text-[11px] text-gray-400 italic">O navegador escolhido abrirá automaticamente ao clicar em "Navegar" nas rotas.</p>
-                    </div>
+                        <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                    </button>
 
-                    <hr class="border-gray-100">
-
-                    <!-- Secção: Prefixo Padrão de Código Postal -->
-                    <div class="space-y-2">
-                        <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Prefixo Padrão (4 Dígitos)</label>
-                        <div class="flex items-center space-x-2">
-                            <input type="text" id="pref-prefixo-padrao" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ex: 2640" 
-                                class="w-full p-3 border border-gray-200 rounded-xl text-sm font-bold text-center outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition-all">
+                    <!-- Opção 2: Prefixo Padrão de Código Postal -->
+                    <button type="button" id="menu-item-prefixo" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                <i class="fa-solid fa-hashtag"></i>
+                            </div>
+                            <div>
+                                <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Prefixo Padrão</span>
+                                <span id="menu-subtitulo-prefixo" class="text-[11px] font-semibold text-indigo-600 font-mono">CP: 2640-</span>
+                            </div>
                         </div>
-                        <p class="text-[11px] text-gray-400 italic">Este prefixo será preenchido automaticamente ao abrir o aplicativo.</p>
-                    </div>
+                        <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                    </button>
 
-                    <hr class="border-gray-100">
+                    <!-- Opção 3: Relatórios do Gestor -->
+                    <button type="button" id="menu-item-relatorios" class="w-full bg-gray-50 hover:bg-purple-50/50 active:bg-purple-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-purple-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                <i class="fa-solid fa-chart-pie"></i>
+                            </div>
+                            <div>
+                                <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Relatórios do Gestor</span>
+                                <span class="text-[11px] font-semibold text-purple-600">Médias de carga e telemetria</span>
+                            </div>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                    </button>
 
-                    <!-- Secção: Informação de Sessão -->
-                    <div class="space-y-2 pt-1">
-                        <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Conta Ativa</label>
-                        <div class="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-center space-x-3">
+                    <hr class="border-gray-100 my-2">
+
+                    <!-- Informação de Sessão Ativa -->
+                    <div class="space-y-1.5 pt-1">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-wider">Conta Ativa</label>
+                        <div class="bg-blue-50 border border-blue-100 p-3 rounded-2xl flex items-center space-x-3">
                             <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
                                 <i class="fa-solid fa-user"></i>
                             </div>
@@ -168,8 +184,8 @@
                 </div>
 
                 <!-- Rodapé do Menu (Terminar Sessão) -->
-                <div class="p-4 bg-gray-50 border-t">
-                    <button id="menu-btn-logout" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-xs flex items-center justify-center space-x-2 border border-red-200 transition-all cursor-pointer">
+                <div class="p-4 bg-gray-50 border-t border-gray-100">
+                    <button id="menu-btn-logout" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3.5 rounded-2xl text-xs flex items-center justify-center space-x-2 border border-red-200 transition-all cursor-pointer">
                         <i class="fa-solid fa-right-from-bracket"></i>
                         <span>Terminar Sessão</span>
                     </button>
@@ -293,6 +309,111 @@
             </button>
         </nav>
 
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAIS DEDICADOS DO MENU HAMBÚRGUER (MODULARES) -->
+    <!-- ========================================================================= -->
+
+    <!-- 1. MODAL DE ESCOLHA DO NAVEGADOR PREFERIDO -->
+    <div id="modal-menu-navegador" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl flex flex-col mx-auto">
+            <div class="bg-blue-600 text-white p-4 flex items-center justify-between font-bold text-sm">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-diamond-turn-right text-base"></i>
+                    <span>Navegador Preferido</span>
+                </div>
+                <button id="btn-fechar-modal-nav" class="text-white hover:text-blue-200 text-base cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-4">
+                <p class="text-xs text-gray-500">Escolha a aplicação que abrirá automaticamente ao clicar em "Navegar" nas rotas:</p>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button" class="pref-nav-btn p-4 rounded-2xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-2 bg-gray-50 text-gray-700 hover:bg-blue-50 transition-all cursor-pointer" data-nav="google">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-map-location-dot"></i>
+                        </div>
+                        <span class="font-bold">Google Maps</span>
+                    </button>
+
+                    <button type="button" class="pref-nav-btn p-4 rounded-2xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-2 bg-gray-50 text-gray-700 hover:bg-sky-50 transition-all cursor-pointer" data-nav="waze">
+                        <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-500 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-car-burst"></i>
+                        </div>
+                        <span class="font-bold">Waze</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-3 bg-gray-50 border-t text-center">
+                <button id="btn-fechar-modal-nav-ok" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-xs cursor-pointer">
+                    Concluir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. MODAL DE DEFINIÇÃO DO PREFIXO PADRÃO -->
+    <div id="modal-menu-prefixo" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl flex flex-col mx-auto">
+            <div class="bg-indigo-600 text-white p-4 flex items-center justify-between font-bold text-sm">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-hashtag text-base"></i>
+                    <span>Prefixo Padrão de CP</span>
+                </div>
+                <button id="btn-fechar-modal-prefixo" class="text-white hover:text-indigo-200 text-base cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-4 text-center">
+                <p class="text-xs text-gray-500 text-left">Defina o prefixo de 4 dígitos que será preenchido automaticamente nos ecrãs de triagem e rotas:</p>
+                
+                <div>
+                    <input type="text" id="input-modal-prefixo" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ex: 2640" 
+                           class="w-full p-4 border-2 border-indigo-200 focus:border-indigo-600 rounded-2xl text-2xl font-black text-center outline-none bg-indigo-50/40 focus:bg-white tracking-widest font-mono transition-all">
+                </div>
+                <p class="text-[11px] text-gray-400 italic">Exemplo: 2640 (Mafra), 2710 (Sintra), etc.</p>
+            </div>
+
+            <div class="p-3 bg-gray-50 border-t flex space-x-2">
+                <button id="btn-cancelar-modal-prefixo" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-xs cursor-pointer">Cancelar</button>
+                <button id="btn-salvar-modal-prefixo" class="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl text-xs cursor-pointer">Guardar Prefixo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. MODAL DE ATALHO DE RELATÓRIOS DO GESTOR -->
+    <div id="modal-menu-relatorios" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl flex flex-col mx-auto">
+            <div class="bg-purple-600 text-white p-4 flex items-center justify-between font-bold text-sm">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-chart-pie text-base"></i>
+                    <span>Relatórios do Gestor</span>
+                </div>
+                <button id="btn-fechar-modal-relatorios-menu" class="text-white hover:text-purple-200 text-base cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-3 text-center">
+                <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <h4 class="font-bold text-gray-800 text-sm">Painel Completo de Bricks e Turnos</h4>
+                <p class="text-xs text-gray-500 text-center">Aceda à aba Bricks para visualizar o mapa geral, histórico de turnos guardados no Firestore e médias diárias de pacotes por Código Postal.</p>
+            </div>
+
+            <div class="p-3 bg-gray-50 border-t">
+                <button id="btn-ir-para-relatorios" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3.5 rounded-xl text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all">
+                    <i class="fa-solid fa-arrow-right"></i>
+                    <span>Abrir Painel na Aba Bricks</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- MODAIS DE ODÓMETRO E SEQUÊNCIA -->
