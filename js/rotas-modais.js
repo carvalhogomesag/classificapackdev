@@ -1,8 +1,9 @@
 /**
  * js/rotas-modais.js
- * Versão v74.0 - Módulo de Modais de Edição Simplificada e Re-sequenciação de Paragens
+ * Versão v74.1 - Módulo de Modais de Edição Simplificada e Re-sequenciação de Paragens
  * Faz: Controla o modal de edição detalhada de entregas/recolhas (morada, observações,
  *      tipo de operação, prioridade) e a alteração manual de sequência de rota.
+ * Alteração v74.1: Preserva o estado isNewUnconfirmed (laranja saltitante) ao salvar observações.
  * Depende de: ./rotas-geografia.js, ./maps.js, ./rotas.js
  */
 
@@ -21,7 +22,7 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
     : 'https://classificapack-backend.onrender.com';
 
 // =========================================================================
-// CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO
+// CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO (DESATIVA O BOUNCE E O LARANJA)
 // =========================================================================
 export function confirmarPosicaoParagem(paragemId) {
     const paragem = window.rotaOtimizada.find(p => p.id === paragemId);
@@ -38,7 +39,7 @@ export function confirmarPosicaoParagem(paragemId) {
 window.confirmarPosicaoParagem = confirmarPosicaoParagem;
 
 // ==========================================
-// RE-SEQUENCIAÇÃO DE ENTREGA (ALTERAR POSIÇÃO)
+// RE-SEQUENCIAÇÃO DE ENTREGA (ALTERAR POSIÇÃO E CONFIRMAR)
 // ==========================================
 export function abrirModalAlterarSequencia(indexAtual, paragem) {
     const modal = document.getElementById('modal-alterar-sequencia');
@@ -69,6 +70,7 @@ export function abrirModalAlterarSequencia(indexAtual, paragem) {
 
         const novoIndex = novaPos - 1;
 
+        // Ao alterar a ordem, a posição fica confirmada (desativa o bounce)
         paragem.isNewUnconfirmed = false;
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) originalPre.isNewUnconfirmed = false;
@@ -170,7 +172,7 @@ export function setupModaisEdicao() {
                 }
             }
 
-            itemSendoEditado.isNewUnconfirmed = false;
+            // ATENÇÃO: Mantém o isNewUnconfirmed intacto! Não desativa o salto nem a cor laranja aqui.
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
             itemSendoEditado.tipoOperacao = novoTipoOperacao;

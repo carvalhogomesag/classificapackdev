@@ -1,9 +1,9 @@
 /**
  * js/rotas.js
- * Versão v71.1 - Com Componentes de Geografia, Odómetro, Modais, Inputs e UI Isolados
+ * Versão v74.1 - Com Componentes de Geografia, Odómetro, Modais, Inputs e UI Isolados
  * Faz: Gestão principal da aba de rotas, integrando os componentes 'rotas-geografia.js',
  *      'rotas-odometro.js', 'rotas-modais.js', 'rotas-inputs.js' e 'rotas-ui.js'.
- * Alteração v71.1: Abertura automática e segura do modal de observações/detalhes ao adicionar morada.
+ * Alteração v74.1: Ativação rigorosa do estado laranja saltitante para novas adições pós-otimização.
  */
 
 import { saveData } from './storage.js';
@@ -125,13 +125,13 @@ export function alternarModoRota(modo) {
 
     if (modo === 'conducao') {
         planningControls.classList.add('hidden');
-        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
-        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all cursor-pointer";
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer";
         localStorage.setItem('cp_modo_rota', 'conducao');
     } else {
         planningControls.classList.remove('hidden');
-        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
-        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all cursor-pointer";
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer";
         localStorage.setItem('cp_modo_rota', 'planeamento');
     }
 }
@@ -239,8 +239,8 @@ export async function processarAdicaoPorPostal() {
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
         const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
-        // Apenas fica marcado como não-confirmado se a rota JÁ TIVER SIDO OTIMIZADA previamente
-        const rotaJaOtimizada = window.isRouteOptimized === true;
+        // Verifica se a rota já foi otimizada (na memória ou na flag de estado)
+        const rotaJaOtimizada = window.isRouteOptimized === true || (Array.isArray(window.rotaOtimizada) && window.rotaOtimizada.length > 0);
 
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
@@ -253,7 +253,7 @@ export async function processarAdicaoPorPostal() {
             brickId: brickId,
             brickName: brickName,
             tipoOperacao: tipoOperacaoVal,
-            isNewUnconfirmed: rotaJaOtimizada
+            isNewUnconfirmed: rotaJaOtimizada // Se a rota já está em andamento, marca como não confirmada (laranja saltitante)
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -264,11 +264,11 @@ export async function processarAdicaoPorPostal() {
             sincronizarPersistencia();
             alert("Ponto de Partida configurado com sucesso!");
         } else {
-            // Adiciona sempre a morada à lista de planeamento (Moradas Mapeadas)
+            // Adiciona à lista geral de moradas
             window.moradasEntregas.push(novaMorada);
 
             if (rotaJaOtimizada) {
-                // SE A ROTA JÁ FOI OTIMIZADA ANTERIORMENTE:
+                // SE A ROTA JÁ FOI OTIMIZADA: adiciona ao fim da rota otimizada e exibe no mapa
                 let pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
 
                 novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
@@ -297,7 +297,7 @@ export async function processarAdicaoPorPostal() {
 
                 alternarModoRota('conducao');
 
-                // ABRIR AUTOMATICAMENTE O MODAL DE EDIÇÃO/OBSERVAÇÕES (Passando o Objeto Direto)
+                // Abre o modal para preenchimento de observações mantendo o estado não confirmado
                 setTimeout(() => {
                     abrirModalEdicaoParagem(novaMorada, 'conducao');
                 }, 150);
@@ -307,7 +307,6 @@ export async function processarAdicaoPorPostal() {
                 renderMoradasAdicionadas();
                 alternarModoRota('planeamento');
 
-                // ABRIR AUTOMATICAMENTE O MODAL DE EDIÇÃO/OBSERVAÇÕES (Passando o Objeto Direto)
                 setTimeout(() => {
                     abrirModalEdicaoParagem(novaMorada, 'planeamento');
                 }, 150);
