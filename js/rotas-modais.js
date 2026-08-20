@@ -1,9 +1,8 @@
 /**
  * js/rotas-modais.js
- * Versão v71.1 - Módulo de Modais de Edição e Re-sequenciação de Paragens
+ * Versão v74.0 - Módulo de Modais de Edição Simplificada e Re-sequenciação de Paragens
  * Faz: Controla o modal de edição detalhada de entregas/recolhas (morada, observações,
- *      tipo de embalagem, cliente frequente, prioridade) e a alteração manual de sequência de rota.
- * Alteração v71.1: Suporte polimórfico na abertura do modal (aceita objeto ou índice numérico).
+ *      tipo de operação, prioridade) e a alteração manual de sequência de rota.
  * Depende de: ./rotas-geografia.js, ./maps.js, ./rotas.js
  */
 
@@ -16,8 +15,6 @@ import {
 } from './rotas.js';
 
 let itemSendoEditado = null;
-let embalagemSelecionada = "";
-let origemSelecionada = "";
 
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:3000'
@@ -102,90 +99,6 @@ export function abrirModalAlterarSequencia(indexAtual, paragem) {
     btnCancelar.onclick = () => modal.classList.add('hidden');
 }
 window.abrirModalAlterarSequencia = abrirModalAlterarSequencia;
-
-// ==========================================
-// AUXILIARES DE PREENCHIMENTO RÁPIDO DO MODAL
-// ==========================================
-function textObservacoesAutomatico() {
-    const textareaObs = document.getElementById('edit-morada-obs');
-    if (!textareaObs) return;
-
-    const partes = [];
-    if (embalagemSelecionada) partes.push(embalagemSelecionada);
-    if (origemSelecionada) partes.push(origemSelecionada);
-
-    textareaObs.value = partes.join(" ");
-}
-
-function atualizarEstilosBotoesModal() {
-    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
-    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
-
-    botoesEmbalagem.forEach(btn => {
-        const tipo = btn.getAttribute('data-tipo');
-        if (embalagemSelecionada === tipo) {
-            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
-        } else {
-            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
-        }
-    });
-
-    botoesOrigem.forEach(btn => {
-        const origem = btn.getAttribute('data-origem');
-        if (origemSelecionada === origem) {
-            btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
-        } else {
-            if (origem === 'Fraldas') {
-                btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1";
-            } else {
-                btn.className = "btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
-            }
-        }
-    });
-}
-
-function preencherSelecoesPorTexto(observacao) {
-    embalagemSelecionada = "";
-    origemSelecionada = "";
-
-    if (!observacao) return;
-    const obsUpper = observacao.toUpperCase();
-
-    if (obsUpper.includes("ENVELOPE")) embalagemSelecionada = "Envelope";
-    else if (obsUpper.includes("CAIXA PEQUENA")) embalagemSelecionada = "Caixa Pequena";
-    else if (obsUpper.includes("CAIXA GRANDE")) embalagemSelecionada = "Caixa Grande";
-    else if (obsUpper.includes("PACOTE")) embalagemSelecionada = "Pacote";
-
-    if (obsUpper.includes("AMAZON")) origemSelecionada = "Amazon";
-    else if (obsUpper.includes("ZARA")) origemSelecionada = "Zara";
-    else if (obsUpper.includes("CHINA") || obsUpper.includes("TEMU") || obsUpper.includes("SHEIN")) origemSelecionada = "China (Temu/Shein)";
-    else if (obsUpper.includes("FRALDAS")) origemSelecionada = "Fraldas";
-}
-
-function configurarBotoesRapidosModal() {
-    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
-    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
-
-    botoesEmbalagem.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tipo = btn.getAttribute('data-tipo');
-            embalagemSelecionada = (embalagemSelecionada === tipo) ? "" : tipo;
-            atualizarEstilosBotoesModal();
-            textObservacoesAutomatico();
-        });
-    });
-
-    botoesOrigem.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const origem = btn.getAttribute('data-origem');
-            origemSelecionada = (origemSelecionada === origem) ? "" : origem;
-            atualizarEstilosBotoesModal();
-            textObservacoesAutomatico();
-        });
-    });
-}
 
 // =========================================================================
 // CONFIGURAÇÃO DOS MODAIS DE EDIÇÃO DE PARAGEM
@@ -319,12 +232,10 @@ export function setupModaisEdicao() {
             editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
         });
     }
-
-    configurarBotoesRapidosModal();
 }
 
 /**
- * Abre o modal de edição da paragem. Suporta receber tanto o objeto da paragem como o índice numérico.
+ * Abre o modal de edição da paragem de forma simplificada e polimórfica.
  * @param {Object|number} paragemOuIndex - Objeto paragem ou índice numérico da lista
  * @param {string|boolean} modoOuEstaNaRota - Modo ('conducao'|'planeamento') ou booleano
  */
@@ -338,7 +249,6 @@ export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
 
     let paragem = paragemOuIndex;
 
-    // RESOLUÇÃO POLIMÓRFICA: Se for um número (índice), obtém o objeto correspondente na memória
     if (typeof paragemOuIndex === 'number') {
         if (modoOuEstaNaRota === 'conducao' && window.rotaOtimizada && window.rotaOtimizada[paragemOuIndex]) {
             paragem = window.rotaOtimizada[paragemOuIndex];
@@ -376,9 +286,6 @@ export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
             editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
         }
     }
-
-    preencherSelecoesPorTexto(paragem.observation || "");
-    atualizarEstilosBotoesModal();
 
     modalEditarParagem.classList.remove('hidden');
 
