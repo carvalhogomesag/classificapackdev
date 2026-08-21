@@ -1,8 +1,8 @@
 /**
  * js/ui-menu.js
- * Versão v74.6 - Módulo Modularizado de Gestão do Menu Lateral, Gestão e Sub-Modais
- * Faz: Auto-inicializa o menu lateral, controla as opções de Gestão exclusivas para Gestores
- *      (Motoristas e Bricks), além dos 3 modais dedicados (Navegador, Prefixo e Relatórios).
+ * Versão v74.7 - Módulo de Gestão do Menu Lateral, Painel de Gestão e Sub-Modais
+ * Faz: Auto-inicializa o menu lateral com a secção de Gestão unificada (Motoristas,
+ *      Bricks e Relatórios), além dos modais dedicados de preferências e fecho de sessão.
  * Depende de: ./navigation.js, ./firebase-init.js
  */
 
@@ -68,7 +68,7 @@ function atualizarEstilosModalNavegador() {
 }
 
 /**
- * Configuração dos 3 Modais Dedicados do Menu
+ * Configuração dos Modais e Botões de Gestão do Menu
  */
 function configurarModaisDoMenu() {
     const overlayMenu = document.getElementById('menu-lateral-overlay');
@@ -81,7 +81,7 @@ function configurarModaisDoMenu() {
         }, 300);
     };
 
-    // Helper seguro para navegação por abas
+    // Helper seguro para navegação direta por abas
     const navegarParaAba = (aba) => {
         fecharGavetaMenu();
         if (typeof window.showTab === 'function') {
@@ -93,10 +93,14 @@ function configurarModaisDoMenu() {
     };
 
     // -------------------------------------------------------------
-    // BOTÕES DE GESTÃO EXCLUSIVA (MOTORISTAS E BRICKS)
+    // BOTÕES DO PAINEL DE GESTÃO (EXCLUSIVO)
     // -------------------------------------------------------------
     const itemMenuMotoristas = document.getElementById('menu-item-motoristas');
     const itemMenuBricks = document.getElementById('menu-item-bricks');
+    const itemMenuRelatorios = document.getElementById('menu-item-relatorios');
+    const modalRelatorios = document.getElementById('modal-menu-relatorios');
+    const btnFecharRelX = document.getElementById('btn-fechar-modal-relatorios-menu');
+    const btnIrParaRelatorios = document.getElementById('btn-ir-para-relatorios');
 
     if (itemMenuMotoristas && !itemMenuMotoristas.dataset.bound) {
         itemMenuMotoristas.addEventListener('click', (e) => {
@@ -112,6 +116,28 @@ function configurarModaisDoMenu() {
             navegarParaAba('intervalos');
         });
         itemMenuBricks.dataset.bound = "true";
+    }
+
+    // Modal de Relatórios & Análise
+    const fecharModalRelatorios = () => {
+        if (modalRelatorios) modalRelatorios.classList.add('hidden');
+    };
+
+    if (itemMenuRelatorios && modalRelatorios && !itemMenuRelatorios.dataset.bound) {
+        itemMenuRelatorios.addEventListener('click', (e) => {
+            e.preventDefault();
+            modalRelatorios.classList.remove('hidden');
+        });
+        itemMenuRelatorios.dataset.bound = "true";
+    }
+
+    if (btnFecharRelX) btnFecharRelX.onclick = fecharModalRelatorios;
+
+    if (btnIrParaRelatorios) {
+        btnIrParaRelatorios.onclick = () => {
+            fecharModalRelatorios();
+            navegarParaAba('intervalos');
+        };
     }
 
     // -------------------------------------------------------------
@@ -203,36 +229,6 @@ function configurarModaisDoMenu() {
             }
 
             fecharModalPrefixo();
-        };
-    }
-
-    // -------------------------------------------------------------
-    // 3. MODAL DE ATALHO PARA RELATÓRIOS DO GESTOR
-    // -------------------------------------------------------------
-    const itemMenuRelatorios = document.getElementById('menu-item-relatorios');
-    const modalRelatorios = document.getElementById('modal-menu-relatorios');
-    const btnFecharRelX = document.getElementById('btn-fechar-modal-relatorios-menu');
-    const btnIrParaRelatorios = document.getElementById('btn-ir-para-relatorios');
-
-    const fecharModalRelatorios = () => {
-        if (modalRelatorios) modalRelatorios.classList.add('hidden');
-    };
-
-    if (itemMenuRelatorios && modalRelatorios && !itemMenuRelatorios.dataset.bound) {
-        itemMenuRelatorios.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            modalRelatorios.classList.remove('hidden');
-        });
-        itemMenuRelatorios.dataset.bound = "true";
-    }
-
-    if (btnFecharRelX) btnFecharRelX.onclick = fecharModalRelatorios;
-
-    if (btnIrParaRelatorios) {
-        btnIrParaRelatorios.onclick = () => {
-            fecharModalRelatorios();
-            navegarParaAba('intervalos');
         };
     }
 }
