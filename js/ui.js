@@ -1,8 +1,9 @@
 /**
  * ui.js
- * Faz: Controla a navegação entre abas, atualização do visor principal e os eventos do teclado numérico virtual.
- *      Despoleta automaticamente a triagem no instante em que o último dígito do código postal é inserido.
- *      NOVO: Oculta reativamente os menus de Motoristas e Bricks se o utilizador autenticado for da Role 'Motorista'.
+ * Versão v74.6 - Controlo de Navegação, Interface e Permissões por Role
+ * Faz: Controla a navegação entre abas, atualização do visor principal, eventos do teclado
+ *      numérico virtual e a exibição condicional da secção de Gestão no Menu Hambúrguer
+ *      consoante o nível de acesso (Gestor vs Motorista).
  * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
  * Depende de: Nenhuns módulos.
  */
@@ -11,10 +12,15 @@
  * Configura os listeners dos botões de navegação inferior
  */
 export function setupNavigation(showTab) {
-    document.getElementById('nav-triagem').addEventListener('click', () => showTab('triagem'));
-    document.getElementById('nav-motoristas').addEventListener('click', () => showTab('motoristas'));
-    document.getElementById('nav-intervalos').addEventListener('click', () => showTab('intervalos'));
-    document.getElementById('nav-rotas').addEventListener('click', () => showTab('rotas'));
+    const navTriagem = document.getElementById('nav-triagem');
+    const navRotas = document.getElementById('nav-rotas');
+    const navMotoristas = document.getElementById('nav-motoristas');
+    const navIntervalos = document.getElementById('nav-intervalos');
+
+    if (navTriagem) navTriagem.addEventListener('click', () => showTab('triagem'));
+    if (navRotas) navRotas.addEventListener('click', () => showTab('rotas'));
+    if (navMotoristas) navMotoristas.addEventListener('click', () => showTab('motoristas'));
+    if (navIntervalos) navIntervalos.addEventListener('click', () => showTab('intervalos'));
 }
 
 /**
@@ -33,8 +39,8 @@ export function showTab(tabName) {
     const activeView = document.getElementById(`view-${tabName}`);
     if (activeView) activeView.classList.remove('hidden');
     
-    // Reset dos estilos visuais dos botões do menu
-    ['triagem', 'motoristas', 'intervalos', 'rotas'].forEach(id => {
+    // Reset dos estilos visuais dos botões da barra inferior
+    ['triagem', 'rotas'].forEach(id => {
         const btn = document.getElementById(`nav-${id}`);
         if (btn) {
             btn.classList.remove('text-blue-600', 'font-bold');
@@ -48,7 +54,7 @@ export function showTab(tabName) {
         activeNav.classList.remove('text-gray-400', 'font-semibold');
     }
 
-    // Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba!
+    // Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba
     if (tabName === 'intervalos' && typeof window.renderizarSetoresUI === 'function') {
         window.renderizarSetoresUI();
     }
@@ -66,30 +72,36 @@ export function showTab(tabName) {
         }, 200);
     }
 }
+window.showTab = showTab;
 
 /**
- * NOVO: Bloqueia e oculta os menus de administração para motoristas comuns
+ * Bloqueia e oculta os acessos de administração no Menu Hambúrguer para motoristas comuns
  */
 export function aplicarPermissoesPorRole(role) {
-    const navMotoristas = document.getElementById('nav-motoristas');
-    const navIntervalos = document.getElementById('nav-intervalos');
+    const secaoGestorMenu = document.getElementById('menu-secao-gestor');
+    const badgeRole = document.getElementById('menu-user-role-badge');
+    const roleFormatada = (role || '').toLowerCase();
     
-    if (role === 'Motorista') {
+    window.currentUserRole = role;
+    localStorage.setItem('cp_user_role', role);
+
+    if (roleFormatada === 'motorista') {
         console.log("[AUTH] A aplicar restrições de nível: Motorista.");
-        if (navMotoristas) navMotoristas.classList.add('hidden');
-        if (navIntervalos) navIntervalos.classList.add('hidden');
+        if (secaoGestorMenu) secaoGestorMenu.classList.add('hidden');
+        if (badgeRole) badgeRole.textContent = "Motorista";
         
-        // Se estiver num ecrã restrito, redireciona o utilizador para a triagem de segurança
+        // Se estiver num ecrã restrito, redireciona o utilizador para a triagem
         const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
         if (activeTab === 'motoristas' || activeTab === 'intervalos') {
             showTab('triagem');
         }
     } else {
         console.log("[AUTH] A aplicar acessos de nível: Gestor.");
-        if (navMotoristas) navMotoristas.classList.remove('hidden');
-        if (navIntervalos) navIntervalos.classList.remove('hidden');
+        if (secaoGestorMenu) secaoGestorMenu.classList.remove('hidden');
+        if (badgeRole) badgeRole.textContent = "Gestor (Acesso Total)";
     }
 }
+window.aplicarPermissoesPorRole = aplicarPermissoesPorRole;
 
 /**
  * Atualiza o painel visor do código postal
@@ -168,7 +180,6 @@ export function setupPrefixLock() {
             inputPrefixo.focus();
             
             window.lockedPrefixValue = sanitizeDigits(inputPrefixo.value).substring(0, 4);
-            // Prefixo inicial adaptado para Mafra (2640) de forma centralizada
             if (!window.lockedPrefixValue) {
                 window.lockedPrefixValue = "2640";
                 inputPrefixo.value = "2640";

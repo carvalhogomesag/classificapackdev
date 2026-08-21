@@ -1,9 +1,8 @@
 /**
  * js/ui-menu.js
- * Versão v74.3 - Módulo Modularizado de Gestão do Menu Lateral e Sub-Modais
- * Faz: Auto-inicializa a abertura/fecho do menu lateral em lista limpa e controla
- *      individualmente os 3 modais dedicados (Navegador Preferido, Prefixo Padrão
- *      e Relatórios do Gestor), além da exibição de conta ativa e fecho de sessão (logout).
+ * Versão v74.6 - Módulo Modularizado de Gestão do Menu Lateral, Gestão e Sub-Modais
+ * Faz: Auto-inicializa o menu lateral, controla as opções de Gestão exclusivas para Gestores
+ *      (Motoristas e Bricks), além dos 3 modais dedicados (Navegador, Prefixo e Relatórios).
  * Depende de: ./navigation.js, ./firebase-init.js
  */
 
@@ -33,6 +32,7 @@ export function definirPrefixoPadrao(prefix) {
 function atualizarSubtitulosMenu() {
     const subNav = document.getElementById('menu-subtitulo-navegador');
     const subPref = document.getElementById('menu-subtitulo-prefixo');
+    const userRoleBadge = document.getElementById('menu-user-role-badge');
 
     if (subNav) {
         const navAtual = obterNavegadorPreferido();
@@ -42,6 +42,11 @@ function atualizarSubtitulosMenu() {
     if (subPref) {
         const prefixoAtual = obterPrefixoPadrao();
         subPref.textContent = `CP: ${prefixoAtual}-`;
+    }
+
+    if (userRoleBadge) {
+        const role = window.currentUserRole || localStorage.getItem('cp_user_role') || 'motorista';
+        userRoleBadge.textContent = role.toLowerCase() === 'gestor' ? 'Gestor (Acesso Total)' : 'Motorista';
     }
 }
 
@@ -66,6 +71,49 @@ function atualizarEstilosModalNavegador() {
  * Configuração dos 3 Modais Dedicados do Menu
  */
 function configurarModaisDoMenu() {
+    const overlayMenu = document.getElementById('menu-lateral-overlay');
+    const conteudoMenu = document.getElementById('menu-lateral-conteudo');
+
+    const fecharGavetaMenu = () => {
+        if (conteudoMenu) conteudoMenu.classList.add('-translate-x-full');
+        setTimeout(() => {
+            if (overlayMenu) overlayMenu.classList.add('hidden');
+        }, 300);
+    };
+
+    // Helper seguro para navegação por abas
+    const navegarParaAba = (aba) => {
+        fecharGavetaMenu();
+        if (typeof window.showTab === 'function') {
+            window.showTab(aba);
+        } else {
+            const btnNav = document.getElementById(aba === 'motoristas' ? 'nav-motoristas' : (aba === 'intervalos' ? 'nav-intervalos' : `nav-${aba}`));
+            if (btnNav) btnNav.click();
+        }
+    };
+
+    // -------------------------------------------------------------
+    // BOTÕES DE GESTÃO EXCLUSIVA (MOTORISTAS E BRICKS)
+    // -------------------------------------------------------------
+    const itemMenuMotoristas = document.getElementById('menu-item-motoristas');
+    const itemMenuBricks = document.getElementById('menu-item-bricks');
+
+    if (itemMenuMotoristas && !itemMenuMotoristas.dataset.bound) {
+        itemMenuMotoristas.addEventListener('click', (e) => {
+            e.preventDefault();
+            navegarParaAba('motoristas');
+        });
+        itemMenuMotoristas.dataset.bound = "true";
+    }
+
+    if (itemMenuBricks && !itemMenuBricks.dataset.bound) {
+        itemMenuBricks.addEventListener('click', (e) => {
+            e.preventDefault();
+            navegarParaAba('intervalos');
+        });
+        itemMenuBricks.dataset.bound = "true";
+    }
+
     // -------------------------------------------------------------
     // 1. MODAL DE NAVEGADOR PREFERIDO
     // -------------------------------------------------------------
@@ -165,8 +213,6 @@ function configurarModaisDoMenu() {
     const modalRelatorios = document.getElementById('modal-menu-relatorios');
     const btnFecharRelX = document.getElementById('btn-fechar-modal-relatorios-menu');
     const btnIrParaRelatorios = document.getElementById('btn-ir-para-relatorios');
-    const overlayMenu = document.getElementById('menu-lateral-overlay');
-    const conteudoMenu = document.getElementById('menu-lateral-conteudo');
 
     const fecharModalRelatorios = () => {
         if (modalRelatorios) modalRelatorios.classList.add('hidden');
@@ -186,20 +232,7 @@ function configurarModaisDoMenu() {
     if (btnIrParaRelatorios) {
         btnIrParaRelatorios.onclick = () => {
             fecharModalRelatorios();
-
-            // Fecha o menu lateral
-            if (conteudoMenu) conteudoMenu.classList.add('-translate-x-full');
-            setTimeout(() => {
-                if (overlayMenu) overlayMenu.classList.add('hidden');
-            }, 300);
-
-            // Troca para a aba de Bricks (onde está o painel de relatórios)
-            if (typeof window.showTab === 'function') {
-                window.showTab('intervalos');
-            } else {
-                const navBricksBtn = document.getElementById('nav-intervalos');
-                if (navBricksBtn) navBricksBtn.click();
-            }
+            navegarParaAba('intervalos');
         };
     }
 }
@@ -217,7 +250,6 @@ export function setupMenuLateral() {
 
     if (!btnAbrir || !overlay || !conteudo) return;
 
-    // Função para abrir o menu lateral
     const abrirMenu = () => {
         overlay.classList.remove('hidden');
         setTimeout(() => {
@@ -235,7 +267,6 @@ export function setupMenuLateral() {
         atualizarSubtitulosMenu();
     };
 
-    // Função para fechar o menu lateral
     const fecharMenu = () => {
         conteudo.classList.add('-translate-x-full');
         setTimeout(() => {
@@ -246,14 +277,13 @@ export function setupMenuLateral() {
     btnAbrir.onclick = abrirMenu;
     if (btnFechar) btnFechar.onclick = fecharMenu;
     
-    // Fecha ao clicar fora do painel
     overlay.onclick = (e) => {
         if (e.target === overlay) {
             fecharMenu();
         }
     };
 
-    // Configura os 3 sub-modais
+    // Configura os botões de navegação e sub-modais
     configurarModaisDoMenu();
 
     // Configuração do botão de Logout
@@ -280,7 +310,7 @@ export function setupMenuLateral() {
     atualizarSubtitulosMenu();
 }
 
-// AUTO-INICIALIZAÇÃO GARANTIDA: Executa imediatamente ou quando o DOM estiver pronto
+// AUTO-INICIALIZAÇÃO GARANTIDA
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setupMenuLateral);
 } else {

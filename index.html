@@ -3,8 +3,8 @@
 <head>
     <!--
       index.html
-      Versão v74.3 - App Shell PWA com Menu Hambúrguer Modularizado em Lista e Sub-Modais
-      Faz: Casca principal com navegação por abas, modais globais e menu lateral em lista limpa.
+      Versão v74.6 - Barra Inferior Focada e Menu Hambúrguer com Acessos de Gestor
+      Faz: Casca principal com navegação limpa, modais globais e menu lateral com área exclusiva de Gestor.
       Depende de: config.js, js/rotas-relatorios.js, js/main.js, Tailwind CSS, FontAwesome, Tesseract.js e Firebase.
     -->
     <meta charset="UTF-8">
@@ -88,7 +88,7 @@
     <!-- Container Principal (Shell) -->
     <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade com Versão v74.3 -->
+        <!-- Cabeçalho de Identidade -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex items-center justify-between">
             <!-- Botão do Menu Hambúrguer -->
             <button id="btn-abrir-menu" class="text-white hover:text-blue-200 text-base font-bold bg-blue-700/50 w-9 h-9 rounded-lg border border-blue-400/30 flex items-center justify-center transition-all cursor-pointer">
@@ -97,7 +97,7 @@
             
             <span class="absolute left-1/2 transform -translate-x-1/2">Classifica Pack</span>
             
-            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v74.4.3</span>
+            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v75</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS -->
@@ -106,7 +106,7 @@
         <div id="container-view-intervalos"></div>
         <div id="container-view-rotas"></div>
 
-        <!-- MENU LATERAL / HAMBÚRGUER (Modularizado em Lista de Ações) -->
+        <!-- MENU LATERAL / HAMBÚRGUER (Com Secção Exclusiva de Gestão) -->
         <div id="menu-lateral-overlay" class="hidden fixed inset-0 bg-black/60 z-[9999] transition-opacity">
             <div id="menu-lateral-conteudo" class="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-2xl flex flex-col transform -translate-x-full transition-transform duration-300">
                 
@@ -114,57 +114,97 @@
                 <div class="bg-blue-600 text-white p-4 flex items-center justify-between">
                     <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-gears text-lg"></i>
-                        <span class="font-bold text-sm uppercase tracking-wider">Definições e Opções</span>
+                        <span class="font-bold text-sm uppercase tracking-wider">Definições e Menu</span>
                     </div>
                     <button id="btn-fechar-menu" class="text-white hover:text-gray-200 p-1 text-lg cursor-pointer">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
-                <!-- Lista de Itens do Menu (Cada um abre o seu Modal) -->
+                <!-- Lista de Itens do Menu -->
                 <div class="flex-1 p-4 space-y-3 overflow-y-auto">
                     
-                    <!-- Opção 1: Navegador Preferido -->
-                    <button type="button" id="menu-item-navegador" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
-                                <i class="fa-solid fa-diamond-turn-right"></i>
+                    <!-- SECÇÃO EXCLUSIVA DE GESTOR (MOTORISTAS E BRICKS) -->
+                    <div id="menu-secao-gestor" class="space-y-2.5 pb-2">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-wider">Painel de Gestão (Exclusivo)</label>
+                        
+                        <!-- Botão: Gestão de Motoristas -->
+                        <button type="button" id="menu-item-motoristas" class="w-full bg-blue-50/60 hover:bg-blue-100/70 active:bg-blue-200/70 p-3.5 rounded-2xl border border-blue-200 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base group-hover:scale-105 transition-transform shadow-xs">
+                                    <i class="fa-solid fa-users"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Gestão de Motoristas</span>
+                                    <span class="text-[11px] font-semibold text-blue-600">Criar, editar e filtrar equipa</span>
+                                </div>
                             </div>
-                            <div>
-                                <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Navegador Preferido</span>
-                                <span id="menu-subtitulo-navegador" class="text-[11px] font-semibold text-blue-600">Google Maps</span>
-                            </div>
-                        </div>
-                        <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
-                    </button>
+                            <i class="fa-solid fa-chevron-right text-blue-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
 
-                    <!-- Opção 2: Prefixo Padrão de Código Postal -->
-                    <button type="button" id="menu-item-prefixo" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
-                                <i class="fa-solid fa-hashtag"></i>
+                        <!-- Botão: Atribuição de Bricks -->
+                        <button type="button" id="menu-item-bricks" class="w-full bg-indigo-50/60 hover:bg-indigo-100/70 active:bg-indigo-200/70 p-3.5 rounded-2xl border border-indigo-200 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-base group-hover:scale-105 transition-transform shadow-xs">
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Atribuição de Bricks</span>
+                                    <span class="text-[11px] font-semibold text-indigo-600">Mapa, estantes e saldo zero</span>
+                                </div>
                             </div>
-                            <div>
-                                <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Prefixo Padrão</span>
-                                <span id="menu-subtitulo-prefixo" class="text-[11px] font-semibold text-indigo-600 font-mono">CP: 2640-</span>
-                            </div>
-                        </div>
-                        <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
-                    </button>
+                            <i class="fa-solid fa-chevron-right text-indigo-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
 
-                    <!-- Opção 3: Relatórios do Gestor -->
-                    <button type="button" id="menu-item-relatorios" class="w-full bg-gray-50 hover:bg-purple-50/50 active:bg-purple-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-purple-300 flex items-center justify-between transition-all cursor-pointer group text-left">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
-                                <i class="fa-solid fa-chart-pie"></i>
+                        <hr class="border-gray-200/70 my-2">
+                    </div>
+
+                    <!-- SECÇÃO DE PREFERÊNCIAS E DEFINIÇÕES (GERAL) -->
+                    <div class="space-y-2.5">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-wider">Preferências Gerais</label>
+
+                        <!-- Opção: Navegador Preferido -->
+                        <button type="button" id="menu-item-navegador" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                    <i class="fa-solid fa-diamond-turn-right"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Navegador Preferido</span>
+                                    <span id="menu-subtitulo-navegador" class="text-[11px] font-semibold text-blue-600">Google Maps</span>
+                                </div>
                             </div>
-                            <div>
-                                <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Relatórios do Gestor</span>
-                                <span class="text-[11px] font-semibold text-purple-600">Médias de carga e telemetria</span>
+                            <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+
+                        <!-- Opção: Prefixo Padrão de Código Postal -->
+                        <button type="button" id="menu-item-prefixo" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                    <i class="fa-solid fa-hashtag"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Prefixo Padrão</span>
+                                    <span id="menu-subtitulo-prefixo" class="text-[11px] font-semibold text-indigo-600 font-mono">CP: 2640-</span>
+                                </div>
                             </div>
-                        </div>
-                        <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
-                    </button>
+                            <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+
+                        <!-- Opção: Relatórios do Gestor -->
+                        <button type="button" id="menu-item-relatorios" class="w-full bg-gray-50 hover:bg-purple-50/50 active:bg-purple-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-purple-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                    <i class="fa-solid fa-chart-pie"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Relatórios do Gestor</span>
+                                    <span class="text-[11px] font-semibold text-purple-600">Médias de carga e telemetria</span>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+                    </div>
 
                     <hr class="border-gray-100 my-2">
 
@@ -177,7 +217,7 @@
                             </div>
                             <div class="flex-1 truncate">
                                 <span id="menu-user-email" class="text-xs font-bold text-blue-900 block truncate">A carregar...</span>
-                                <span class="text-[10px] text-blue-500 font-semibold">Sessão Segura Cloud</span>
+                                <span id="menu-user-role-badge" class="text-[10px] text-blue-600 font-bold block uppercase tracking-wider">Sessão Segura</span>
                             </div>
                         </div>
                     </div>
@@ -289,22 +329,19 @@
             </div>
         </div>
 
-        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA -->
-        <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-4xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
-            <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
-                <i class="fa-solid fa-qrcode text-lg"></i>
+        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA (FOCADA: TRIAGEM E ROTAS) -->
+        <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-4xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg px-6">
+            <button id="nav-triagem" class="flex flex-col items-center justify-center flex-1 h-full text-blue-600 font-bold text-xs space-y-1">
+                <i class="fa-solid fa-qrcode text-xl"></i>
                 <span>Triagem</span>
             </button>
-            <button id="nav-motoristas" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
-                <i class="fa-solid fa-users text-lg"></i>
-                <span>Motoristas</span>
-            </button>
-            <button id="nav-intervalos" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
-                <i class="fa-solid fa-boxes-stacked text-lg"></i>
-                <span>Bricks</span>
-            </button>
-            <button id="nav-rotas" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
-                <i class="fa-solid fa-route text-lg"></i>
+            
+            <!-- Botões legados mantidos ocultos para compatibilidade com seletores JS existentes -->
+            <button id="nav-motoristas" class="hidden"></button>
+            <button id="nav-intervalos" class="hidden"></button>
+
+            <button id="nav-rotas" class="flex flex-col items-center justify-center flex-1 h-full text-gray-400 font-semibold text-xs space-y-1">
+                <i class="fa-solid fa-route text-xl"></i>
                 <span>Rotas</span>
             </button>
         </nav>
@@ -410,7 +447,7 @@
             <div class="p-3 bg-gray-50 border-t">
                 <button id="btn-ir-para-relatorios" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3.5 rounded-xl text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all">
                     <i class="fa-solid fa-arrow-right"></i>
-                    <span>Abrir Painel na Aba Bricks</span>
+                    <span>Abrir Painel de Bricks</span>
                 </button>
             </div>
         </div>
