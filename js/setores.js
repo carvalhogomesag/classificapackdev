@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v74.4 - Com Calibração Manual de Bricks (Drag & Drop no Mapa do Gestor)
- * Faz: Controla o ecrã de Atribuição de Bricks, pesquisa síncrona por CP7 com totais,
- *      e permite ao Gestor arrastar (Drag & Drop) qualquer pino de Brick no mapa
- *      para calibrar a sua posição real, salvando as coordenadas no Firestore.
+ * Versão v74.5 - Com Trava de Segurança e Modo de Calibração Opcional para Bricks
+ * Faz: Controla o ecrã de Atribuição de Bricks, pesquisa síncrona por CP7, reatribuição
+ *      direta de motoristas pelo balão do mapa, e trava de segurança para pinos (modo seguro por padrão
+ *      com opção de desbloqueio para calibração manual de coordenadas).
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js, ./rotas-relatorios.js
  */
 
@@ -26,6 +26,9 @@ let freguesiasExpandidas = new Set();
 
 // Flag anti-concorrência para evitar que snapshots do Firestore revertam edições locais imediatas
 let isLocalBrickUpdating = false;
+
+// Estado da Trava de Segurança dos Pinos (Falso = Travado/Modo Seguro, Verdadeiro = Destravado para Calibração)
+let modoCalibracaoAtivo = false;
 
 // Instâncias internas seguras do mapa do gestor e balão de informação
 let dashboardMap = null;
@@ -181,11 +184,122 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
 }
 
 // =========================================================================
+// REATRIBUIÇÃO DIRETA DE MOTORISTA A PARTIR DO BALÃO DO MAPA
+// =========================================================================
+window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
+    if (!brickId || !novoMotoristaId) return;
+
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+    const novoMotorista = driversArr.find(d => d.id === novoMotoristaId);
+    if (!novoMotorista) return;
+
+    const normalizedBid = normalizarBrickId(brickId);
+    let motoristaAnterior = null;
+
+    // 1. Remover o Brick do dono anterior
+    driversArr.forEach(d => {
+        if (Array.isArray(d.brickIds)) {
+            const hasBrick = d.brickIds.some(id => normalizarBrickId(id) === normalizedBid);
+            if (hasBrick && d.id !== novoMotoristaId) {
+                motoristaAnterior = d;
+                d.brickIds = d.brickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
+            }
+        }
+    });
+
+    // 2. Adicionar ao novo motorista
+    if (!Array.isArray(novoMotorista.brickIds)) {
+        novoMotorista.brickIds = [];
+    }
+    const jaPossui = novoMotorista.brickIds.some(id => normalizarBrickId(id) === normalizedBid);
+    if (!jaPossui) {
+        novoMotorista.brickIds.push(brickId);
+    }
+
+    // 3. Atualização otimista imediata na memória local
+    isLocalBrickUpdating = true;
+    saveData(
+        window.drivers, 
+        [], 
+        window.assignments, 
+        window.partidaLocalizacao, 
+        window.moradasEntregas, 
+        window.rotaOtimizada, 
+        window.dataRotaSelecionada, 
+        window.rotaIniciada
+    );
+
+    // 4. Re-renderizar interface visual e marcadores no mapa
+    renderDriversForAttribution();
+    renderGeographicTree();
+    atualizarAuditoriaBricks();
+    desenharBricksNoMapa();
+
+    // 5. Persistir as alterações no Firestore
+    const promises = [];
+    if (motoristaAnterior) {
+        promises.push(db.collection('drivers').doc(motoristaAnterior.id).update({
+            brickIds: motoristaAnterior.brickIds
+        }));
+    }
+    promises.push(db.collection('drivers').doc(novoMotorista.id).update({
+        brickIds: novoMotorista.brickIds
+    }));
+
+    Promise.all(promises).then(() => {
+        console.log(`✅ [ATRIBUIÇÃO MAPA] Brick "${brickId}" atribuído com sucesso a "${novoMotorista.name}".`);
+    }).catch(err => {
+        console.error("❌ Erro ao sincronizar reatribuição no Firestore:", err);
+    }).finally(() => {
+        isLocalBrickUpdating = false;
+    });
+};
+
+// =========================================================================
+// CONTROLO DO BOTÃO DE TRAVA / MODO DE CALIBRAÇÃO DE PINOS
+// =========================================================================
+function configurarControloModoCalibracao() {
+    const btnToggle = document.getElementById('btn-toggle-modo-calibracao');
+    const icone = document.getElementById('icone-trava-calibracao');
+    const texto = document.getElementById('texto-trava-calibracao');
+    const aviso = document.getElementById('aviso-calibracao-ativa');
+
+    if (!btnToggle || btnToggle.dataset.bound === "true") return;
+
+    btnToggle.addEventListener('click', () => {
+        modoCalibracaoAtivo = !modoCalibracaoAtivo;
+
+        if (modoCalibracaoAtivo) {
+            // MODO CALIBRAÇÃO ATIVO (Destravado para mover)
+            btnToggle.className = "bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-amber-600 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-md animate-none";
+            if (icone) icone.className = "fa-solid fa-unlock text-white";
+            if (texto) texto.textContent = "Calibração Ativa (Pinos Móveis)";
+            if (aviso) aviso.classList.remove('hidden');
+        } else {
+            // MODO SEGURO (Travado para não mover por acidente)
+            btnToggle.className = "bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs";
+            if (icone) icone.className = "fa-solid fa-lock text-green-600";
+            if (texto) texto.textContent = "Pinos Bloqueados (Modo Seguro)";
+            if (aviso) aviso.classList.add('hidden');
+        }
+
+        // Atualiza a propriedade draggable de todos os marcadores no mapa
+        for (const marker of dashboardMarkersMap.values()) {
+            marker.setDraggable(modoCalibracaoAtivo);
+        }
+    });
+
+    btnToggle.dataset.bound = "true";
+}
+
+// =========================================================================
 // INICIALIZAÇÃO DO MAPA GERAL DO GESTOR
 // =========================================================================
 function inicializarMapaBricksDashboard() {
     const mapEl = document.getElementById('map-dashboard-bricks');
     if (!mapEl || typeof google === 'undefined') return;
+
+    configurarControloModoCalibracao();
 
     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
 
@@ -212,7 +326,7 @@ function inicializarMapaBricksDashboard() {
 }
 
 // =========================================================================
-// DESENHO E CALIBRAÇÃO MANUAL DE PINOS (DRAG & DROP) NO MAPA DO GESTOR
+// DESENHO, CALIBRAÇÃO E REATRIBUIÇÃO DE BRICKS NO MAPA DO GESTOR
 // =========================================================================
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
@@ -223,6 +337,12 @@ function desenharBricksNoMapa() {
     let totalPontosDesenhados = 0;
 
     const pinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
+
+    // Filtra apenas os motoristas deste concelho para o seletor do balão
+    const driversDoConcelho = driversArr.filter(driver => {
+        const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
+        return concelhos.includes(concelhoAtivo);
+    });
 
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -242,11 +362,11 @@ function desenharBricksNoMapa() {
                 totalPontosDesenhados++;
 
                 if (!dashboardMarkersMap.has(markerKey)) {
-                    // Marcador configurado como ARRASTÁVEL (draggable: true) para o Gestor calibrar
+                    // Cria o marcador com a trava respeitando o estado atual do modo de calibração
                     const marker = new google.maps.Marker({
                         position: coords,
                         map: dashboardMap,
-                        draggable: true,
+                        draggable: modoCalibracaoAtivo,
                         icon: {
                             path: pinSvgPath,
                             fillColor: drv.color,
@@ -256,27 +376,24 @@ function desenharBricksNoMapa() {
                             scale: 1.2,
                             anchor: new google.maps.Point(12, 22)
                         },
-                        title: `${freg} - ${loc} (Arraste para calibrar posição)`
+                        title: `${freg} - ${loc} (${drv.name})`
                     });
 
-                    // Evento disparado ao soltar o pino arrastado
+                    // Evento de arrastar o pino para calibrar (só acionado se modoCalibracaoAtivo estiver true)
                     marker.addListener('dragend', (event) => {
                         const novaLat = event.latLng.lat();
                         const novaLng = event.latLng.lng();
                         const novasCoords = { lat: novaLat, lng: novaLng };
 
-                        // 1. Atualizar na cache local
                         brickCoordsCache[id] = novasCoords;
                         salvarCacheCoordenadas();
 
-                        // 2. Persistir no Firestore na coleção de coordenadas partilhadas
                         db.collection('brickCoordinates').doc(id).set(novasCoords).then(() => {
-                            console.log(`✅ [CALIBRAÇÃO] Posição do Brick "${id}" atualizada com sucesso no Firestore.`);
+                            console.log(`✅ [CALIBRAÇÃO] Posição do Brick "${id}" atualizada no Firestore.`);
                         }).catch((err) => {
-                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar nova coordenada do Brick "${id}":`, err);
+                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar coordenada do Brick "${id}":`, err);
                         });
 
-                        // 3. Exibir confirmação no balão
                         if (dashboardInfoWindow) {
                             dashboardInfoWindow.setContent(`
                                 <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 4px;">
@@ -290,7 +407,7 @@ function desenharBricksNoMapa() {
                         }
                     });
 
-                    // Balão informativo ao clicar
+                    // Balão informativo rico com Seletor Interativo de Motorista
                     const exibirInfoBrick = () => {
                         if (dashboardInfoWindow) {
                             const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg]) 
@@ -301,8 +418,14 @@ function desenharBricksNoMapa() {
                                 ? (cpList.length === 1 ? cpList[0] : `${cpList[0]} a ${cpList[cpList.length - 1]}`)
                                 : "";
 
+                            const opcoesDriversHtml = driversDoConcelho.map(d => `
+                                <option value="${d.id}" ${d.id === drv.id ? 'selected' : ''} style="color: ${d.color}; font-weight: bold;">
+                                    ${d.name}
+                                </option>
+                            `).join('');
+
                             dashboardInfoWindow.setContent(`
-                                <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 220px;">
+                                <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 6px; line-height: 1.4; max-width: 250px;">
                                     <div style="font-weight: 800; color: #1F2937; font-size: 13px; margin-bottom: 2px;">
                                         📍 ${freg}
                                     </div>
@@ -310,12 +433,24 @@ function desenharBricksNoMapa() {
                                         Brick: ${loc}
                                     </div>
                                     ${cpFormatado ? `<div style="font-size: 10px; font-family: monospace; color: #6B7280; margin-top: 2px;">CPs: ${cpFormatado}</div>` : ''}
-                                    <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px border-dashed #E5E7EB;">
-                                        <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${drv.color}; flex-shrink: 0;"></span>
-                                        <span style="color: ${drv.color}; font-weight: 800; font-size: 11px; text-transform: uppercase;">Estante de: ${drv.name}</span>
+
+                                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E5E7EB;">
+                                        <label style="display: block; font-size: 9px; font-weight: 900; text-transform: uppercase; color: #6B7280; margin-bottom: 3px;">
+                                            Estante de (Alterar Motorista):
+                                        </label>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: ${drv.color}; flex-shrink: 0;"></span>
+                                            <select onchange="if(typeof window.trocarMotoristaDoBrick === 'function') window.trocarMotoristaDoBrick('${id}', this.value)"
+                                                    style="flex: 1; padding: 4px 6px; border-radius: 6px; border: 1px solid #D1D5DB; font-size: 11px; font-weight: 800; color: #1F2937; background: #F9FAFB; outline: none; cursor: pointer;">
+                                                ${opcoesDriversHtml}
+                                            </select>
+                                        </div>
                                     </div>
+
                                     <div style="margin-top: 6px; font-size: 9px; color: #9CA3AF; font-style: italic;">
-                                        💡 Dica: Pode arrastar este pino para calibrar a localização exata no mapa.
+                                        ${modoCalibracaoAtivo 
+                                            ? '🔓 Modo Calibração: Pode arrastar este pino para o local exato.' 
+                                            : '🔒 Modo Seguro: Pinos travados contra arrasto acidental.'}
                                     </div>
                                 </div>
                             `);
@@ -880,17 +1015,14 @@ export function renderGeographicTree() {
 
                     isLocalBrickUpdating = true;
 
-                    // 1. ATUALIZAÇÃO OTIMISTA IMEDIATA EM MEMÓRIA RAM LOCAL
                     activeDriver.brickIds = updatedBrickIds;
                     saveData(window.drivers, [], window.assignments, window.partidaLocalizacao, window.moradasEntregas, window.rotaOtimizada, window.dataRotaSelecionada, window.rotaIniciada);
 
-                    // 2. RE-RENDERIZADO OTIMISTA DA INTERFACE NA HORA
                     renderDriversForAttribution();
                     renderGeographicTree();
                     atualizarAuditoriaBricks();
                     desenharBricksNoMapa();
 
-                    // 3. ENVIO ASSÍNCRONO PARA O FIRESTORE EM SEGUNDO PLANO
                     db.collection('drivers').doc(activeDriver.id).update({
                         brickIds: updatedBrickIds
                     }).then(() => {
@@ -949,17 +1081,14 @@ export function renderGeographicTree() {
 
                 isLocalBrickUpdating = true;
 
-                // 1. ATUALIZAÇÃO OTIMISTA IMEDIATA EM MEMÓRIA RAM LOCAL
                 activeDriver.brickIds = updatedBrickIds;
                 saveData(window.drivers, [], window.assignments, window.partidaLocalizacao, window.moradasEntregas, window.rotaOtimizada, window.dataRotaSelecionada, window.rotaIniciada);
 
-                // 2. RE-RENDERIZADO OTIMISTA DA INTERFACE NA HORA
                 renderDriversForAttribution();
                 renderGeographicTree();
                 atualizarAuditoriaBricks();
                 desenharBricksNoMapa();
 
-                // 3. ENVIO ASSÍNCRONO PARA O FIRESTORE EM SEGUNDO PLANO
                 db.collection('drivers').doc(activeDriver.id).update({
                     brickIds: updatedBrickIds
                 }).then(() => {
@@ -1018,6 +1147,8 @@ window.renderizarSetoresUI = () => {
             seletorConcelho.dataset.listenerAtivo = "true";
         }
     }
+
+    configurarControloModoCalibracao();
 
     const btnAtualizarRelatorios = document.getElementById('btn-atualizar-relatorios');
     if (btnAtualizarRelatorios && !btnAtualizarRelatorios.dataset.listenerAtivo) {

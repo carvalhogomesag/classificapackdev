@@ -1,8 +1,8 @@
 <!--
   setores.html
-  Versão v72.1 - Painel de Atribuição de Bricks, Auditoria Saldo Zero e Pesquisa/Análise de Carga por CP7/Brick para o Gestor.
-  Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks aos Motoristas,
-       Auditoria de Saldo Zero e o Painel de Pesquisa e Análise de Totais e Médias por Código Postal (CP7) para o Gestor.
+  Versão v74.5 - Com Botão de Trava/Calibração de Pinos no Mapa e Painel Analítico do Gestor
+  Faz: Contém a estrutura visual responsiva do ecrã de Atribuição de Bricks, controlo de trava
+       de segurança de pinos no mapa (Modo Seguro vs Calibração), e painel de médias por CP7.
   NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -31,14 +31,30 @@
         </div>
     </div>
     
-    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
+    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) COM TRAVA DE SEGURANÇA -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
-        <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
-            <i class="fa-solid fa-map-location-dot text-blue-600"></i>
-            <span>Visão do Gestor: Distribuição Geográfica de Bricks (Estantes)</span>
-        </h3>
-        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
+                <i class="fa-solid fa-map-location-dot text-blue-600"></i>
+                <span>Visão do Gestor: Distribuição Geográfica de Bricks</span>
+            </h3>
+
+            <!-- BOTÃO DE ALTERNÂNCIA: MODO SEGURO (TRAVADO) VS MODO CALIBRAÇÃO (ARRASTÁVEL) -->
+            <button type="button" id="btn-toggle-modo-calibracao" 
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
+                <i id="icone-trava-calibracao" class="fa-solid fa-lock text-green-600"></i>
+                <span id="texto-trava-calibracao">Pinos Bloqueados (Modo Seguro)</span>
+            </button>
+        </div>
+
+        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs relative">
             <div id="map-dashboard-bricks" class="w-full h-80 bg-gray-50"></div>
+            
+            <!-- Aviso visual no topo do mapa quando a calibração está ativa -->
+            <div id="aviso-calibracao-ativa" class="hidden absolute top-2 left-1/2 transform -translate-x-1/2 bg-amber-500/95 text-white font-bold text-[10px] px-3 py-1 rounded-full shadow-md flex items-center space-x-1.5 pointer-events-none z-10 animate-pulse">
+                <i class="fa-solid fa-unlock"></i>
+                <span>Modo de Calibração Ativo: Pode arrastar os pinos</span>
+            </div>
         </div>
     </div>
 
@@ -225,7 +241,7 @@
                     <i class="fa-solid fa-file-contract"></i>
                     <span>Detalhe do Relatório de Turno</span>
                 </div>
-                <button id="btn-fechar-modal-relatorio" class="text-white hover:text-gray-200 text-base">
+                <button id="btn-fechar-modal-relatorio" class="text-white hover:text-gray-200 text-base cursor-pointer">
                     <i class="fa-solid fa-xmark"></i>
                 </button>
             </div>
@@ -234,7 +250,7 @@
             </div>
 
             <div class="p-3 bg-gray-50 border-t text-right">
-                <button id="btn-fechar-modal-relatorio-ok" class="bg-purple-600 text-white font-bold px-4 py-2 rounded-xl text-xs">
+                <button id="btn-fechar-modal-relatorio-ok" class="bg-purple-600 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer">
                     Fechar
                 </button>
             </div>
