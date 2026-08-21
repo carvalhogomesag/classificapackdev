@@ -1,8 +1,9 @@
 /**
  * js/ui-menu.js
- * Versão v74.7 - Módulo de Gestão do Menu Lateral, Painel de Gestão e Sub-Modais
- * Faz: Auto-inicializa o menu lateral com a secção de Gestão unificada (Motoristas,
- *      Bricks e Relatórios), além dos modais dedicados de preferências e fecho de sessão.
+ * Versão v75.0 - Módulo de Gestão do Menu Lateral com Navegação Direta de Gestão
+ * Faz: Auto-inicializa o menu lateral e permite navegação direta e limpa para
+ *      as páginas de Motoristas, Bricks e Centro de Relatórios Desktop-First,
+ *      além dos modais dedicados de preferências e fecho de sessão.
  * Depende de: ./navigation.js, ./firebase-init.js
  */
 
@@ -68,7 +69,7 @@ function atualizarEstilosModalNavegador() {
 }
 
 /**
- * Configuração dos Modais e Botões de Gestão do Menu
+ * Configuração dos Itens de Gestão e Modais do Menu
  */
 function configurarModaisDoMenu() {
     const overlayMenu = document.getElementById('menu-lateral-overlay');
@@ -87,20 +88,17 @@ function configurarModaisDoMenu() {
         if (typeof window.showTab === 'function') {
             window.showTab(aba);
         } else {
-            const btnNav = document.getElementById(aba === 'motoristas' ? 'nav-motoristas' : (aba === 'intervalos' ? 'nav-intervalos' : `nav-${aba}`));
+            const btnNav = document.getElementById(`nav-${aba}`);
             if (btnNav) btnNav.click();
         }
     };
 
     // -------------------------------------------------------------
-    // BOTÕES DO PAINEL DE GESTÃO (EXCLUSIVO)
+    // BOTÕES DO PAINEL DE GESTÃO (NAVEGAÇÃO DIRETA SEM POPUPS)
     // -------------------------------------------------------------
     const itemMenuMotoristas = document.getElementById('menu-item-motoristas');
     const itemMenuBricks = document.getElementById('menu-item-bricks');
     const itemMenuRelatorios = document.getElementById('menu-item-relatorios');
-    const modalRelatorios = document.getElementById('modal-menu-relatorios');
-    const btnFecharRelX = document.getElementById('btn-fechar-modal-relatorios-menu');
-    const btnIrParaRelatorios = document.getElementById('btn-ir-para-relatorios');
 
     if (itemMenuMotoristas && !itemMenuMotoristas.dataset.bound) {
         itemMenuMotoristas.addEventListener('click', (e) => {
@@ -118,26 +116,13 @@ function configurarModaisDoMenu() {
         itemMenuBricks.dataset.bound = "true";
     }
 
-    // Modal de Relatórios & Análise
-    const fecharModalRelatorios = () => {
-        if (modalRelatorios) modalRelatorios.classList.add('hidden');
-    };
-
-    if (itemMenuRelatorios && modalRelatorios && !itemMenuRelatorios.dataset.bound) {
+    // Ao clicar em Relatórios, abre diretamente a nova página completa
+    if (itemMenuRelatorios && !itemMenuRelatorios.dataset.bound) {
         itemMenuRelatorios.addEventListener('click', (e) => {
             e.preventDefault();
-            modalRelatorios.classList.remove('hidden');
+            navegarParaAba('relatorios');
         });
         itemMenuRelatorios.dataset.bound = "true";
-    }
-
-    if (btnFecharRelX) btnFecharRelX.onclick = fecharModalRelatorios;
-
-    if (btnIrParaRelatorios) {
-        btnIrParaRelatorios.onclick = () => {
-            fecharModalRelatorios();
-            navegarParaAba('intervalos');
-        };
     }
 
     // -------------------------------------------------------------
@@ -279,10 +264,8 @@ export function setupMenuLateral() {
         }
     };
 
-    // Configura os botões de navegação e sub-modais
     configurarModaisDoMenu();
 
-    // Configuração do botão de Logout
     if (btnLogout) {
         btnLogout.onclick = () => {
             const confirmar = confirm("Tem a certeza que deseja terminar sessão?");

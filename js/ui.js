@@ -1,9 +1,8 @@
 /**
  * ui.js
- * Versão v74.6 - Controlo de Navegação, Interface e Permissões por Role
- * Faz: Controla a navegação entre abas, atualização do visor principal, eventos do teclado
- *      numérico virtual e a exibição condicional da secção de Gestão no Menu Hambúrguer
- *      consoante o nível de acesso (Gestor vs Motorista).
+ * Versão v75.0 - Controlo de Navegação, Interface, Ecrã de Relatórios e Permissões
+ * Faz: Controla a alternância entre todos os ecrãs (Triagem, Motoristas, Bricks, Rotas e Relatórios),
+ *      atualização do visor principal, teclado numérico e segurança por nível de acesso (Role).
  * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
  * Depende de: Nenhuns módulos.
  */
@@ -16,11 +15,13 @@ export function setupNavigation(showTab) {
     const navRotas = document.getElementById('nav-rotas');
     const navMotoristas = document.getElementById('nav-motoristas');
     const navIntervalos = document.getElementById('nav-intervalos');
+    const navRelatorios = document.getElementById('nav-relatorios');
 
     if (navTriagem) navTriagem.addEventListener('click', () => showTab('triagem'));
     if (navRotas) navRotas.addEventListener('click', () => showTab('rotas'));
     if (navMotoristas) navMotoristas.addEventListener('click', () => showTab('motoristas'));
     if (navIntervalos) navIntervalos.addEventListener('click', () => showTab('intervalos'));
+    if (navRelatorios) navRelatorios.addEventListener('click', () => showTab('relatorios'));
 }
 
 /**
@@ -30,7 +31,7 @@ export function showTab(tabName) {
     // Guarda o separador ativo para que ao reabrir/regressar, a app continue onde estava
     localStorage.setItem('cp_active_tab', tabName);
 
-    const views = ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas'];
+    const views = ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas', 'view-relatorios'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -54,12 +55,15 @@ export function showTab(tabName) {
         activeNav.classList.remove('text-gray-400', 'font-semibold');
     }
 
-    // Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba
+    // Dispara a sincronização e carregamento de dados da respetiva aba
     if (tabName === 'intervalos' && typeof window.renderizarSetoresUI === 'function') {
         window.renderizarSetoresUI();
     }
     if (tabName === 'motoristas' && typeof window.renderizarMotoristasUI === 'function') {
         window.renderizarMotoristasUI();
+    }
+    if (tabName === 'relatorios' && typeof window.renderizarRelatoriosUI === 'function') {
+        window.renderizarRelatoriosUI();
     }
 
     // Corrige renderização do mapa Google se entrar na aba Rotas
@@ -92,7 +96,7 @@ export function aplicarPermissoesPorRole(role) {
         
         // Se estiver num ecrã restrito, redireciona o utilizador para a triagem
         const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
-        if (activeTab === 'motoristas' || activeTab === 'intervalos') {
+        if (activeTab === 'motoristas' || activeTab === 'intervalos' || activeTab === 'relatorios') {
             showTab('triagem');
         }
     } else {
@@ -133,7 +137,7 @@ export function setupKeypad() {
                 window.currentInput += val;
                 if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
                 
-                // Quando atinge o número total de dígitos, despoleta de imediato a triagem de forma automática!
+                // Quando atinge o número total de dígitos, despoleta de imediato a triagem
                 if (window.currentInput.length === maxDigits) {
                     const btnAnalisar = document.getElementById('btn-analisar');
                     if (btnAnalisar) {

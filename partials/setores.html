@@ -1,9 +1,9 @@
 <!--
   setores.html
-  Versão v74.5 - Com Botão de Trava/Calibração de Pinos no Mapa e Painel Analítico do Gestor
-  Faz: Contém a estrutura visual responsiva do ecrã de Atribuição de Bricks, controlo de trava
-       de segurança de pinos no mapa (Modo Seguro vs Calibração), e painel de médias por CP7.
-  NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
+  Versão v75.0 - Ecrã Dedicado à Atribuição de Bricks, Mapa do Gestor e Auditoria Saldo Zero
+  Faz: Contém a estrutura visual responsiva do ecrã de Atribuição Direta de Bricks aos Motoristas,
+       controlo de trava de segurança de pinos no mapa (Modo Seguro vs Calibração) e Auditoria Saldo Zero.
+  NÃO faz: Não inclui relatórios ou análises estatísticas (movidos para partials/relatorios.html).
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
 
@@ -95,99 +95,6 @@
         </div>
     </div>
 
-    <!-- PAINEL DO GESTOR: RELATÓRIOS E PESQUISA DE ENCOMENDAS POR BRICK / CP7 -->
-    <div id="painel-relatorios-gestor" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-4">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-gray-100 space-y-2 sm:space-y-0">
-            <div class="flex items-center space-x-2">
-                <div class="p-2 bg-purple-50 text-purple-600 rounded-lg">
-                    <i class="fa-solid fa-chart-pie text-sm"></i>
-                </div>
-                <div>
-                    <h3 class="text-xs font-black uppercase text-gray-700 tracking-wider">Análise do Gestor: Totais e Médias por CP7 / Brick</h3>
-                    <p class="text-[11px] text-gray-400">Consulte quantas entregas e recolhas foram efetuadas em qualquer Código Postal</p>
-                </div>
-            </div>
-
-            <button id="btn-atualizar-relatorios" class="bg-purple-50 hover:bg-purple-100 text-purple-700 font-bold text-xs px-3 py-2 rounded-xl border border-purple-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer">
-                <i class="fa-solid fa-rotate text-xs"></i>
-                <span>Atualizar Dados</span>
-            </button>
-        </div>
-
-        <!-- RESUMO GLOBAL DE INDICADORES -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
-            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-150">
-                <span id="gestor-stat-turnos" class="block text-sm font-black text-gray-800">0</span>
-                <span class="text-[9px] font-bold text-gray-400 uppercase">Turnos Analisados</span>
-            </div>
-            <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50">
-                <span id="gestor-stat-duracao" class="block text-sm font-black text-blue-600">0h</span>
-                <span class="text-[9px] font-bold text-blue-500 uppercase">Duração Média</span>
-            </div>
-            <div class="bg-green-50 p-2.5 rounded-xl border border-green-200">
-                <span id="gestor-stat-evt-hora" class="block text-sm font-black text-green-600">0.0</span>
-                <span class="text-[9px] font-bold text-green-500 uppercase">Evt / Hora</span>
-            </div>
-            <div class="bg-purple-50 p-2.5 rounded-xl border border-purple-200">
-                <span id="gestor-stat-evt-km" class="block text-sm font-black text-purple-600">0.0</span>
-                <span class="text-[9px] font-bold text-purple-500 uppercase">Evt / KM</span>
-            </div>
-        </div>
-
-        <!-- CAMPO DE PESQUISA DIRETA POR CP7 OU BRICK -->
-        <div class="space-y-2">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <h4 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1">
-                    <i class="fa-solid fa-magnifying-glass text-purple-600"></i>
-                    <span>Pesquisar Código Postal / Brick (Ex: 2640-401, 2640-578)</span>
-                </h4>
-            </div>
-
-            <div class="relative">
-                <input type="text" id="filtro-pesquisa-brick" placeholder="Digite o CP7 ou nome da localidade (Ex: 2640-401, Ericeira...)" 
-                       class="w-full p-3 pl-10 border border-purple-200 rounded-xl text-xs font-bold bg-purple-50/30 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all">
-                <div class="absolute left-3 top-3 text-purple-400 text-sm">
-                    <i class="fa-solid fa-search"></i>
-                </div>
-            </div>
-        </div>
-
-        <!-- TABELA DE TOTAIS E MÉDIAS POR BRICK -->
-        <div class="space-y-2">
-            <div class="border border-gray-200 rounded-xl overflow-hidden max-h-72 overflow-y-auto">
-                <table class="w-full text-left border-collapse text-xs">
-                    <thead class="bg-gray-100 text-gray-500 uppercase text-[9px] font-black tracking-wider sticky top-0">
-                        <tr>
-                            <th class="p-2.5">Brick / CP7</th>
-                            <th class="p-2.5 text-center">Concelho</th>
-                            <th class="p-2.5 text-center bg-green-50 text-green-800">Total Entregues</th>
-                            <th class="p-2.5 text-center bg-purple-50 text-purple-800">Total Recolhidos</th>
-                            <th class="p-2.5 text-center bg-red-50 text-red-800">Total Falhas</th>
-                            <th class="p-2.5 text-center bg-blue-50 text-blue-800">Média / Turno</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tbody-medias-bricks" class="divide-y divide-gray-100 font-semibold text-gray-700">
-                        <tr>
-                            <td colspan="6" class="p-4 text-center text-gray-400 italic">A carregar registos dos Bricks...</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- LISTA DE HISTÓRICO DE RELATÓRIOS RECENTES -->
-        <div class="space-y-2 pt-2 border-t border-gray-100">
-            <h4 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1">
-                <i class="fa-solid fa-clock-rotate-left text-blue-600"></i>
-                <span>Histórico de Relatórios Registados no Backend</span>
-            </h4>
-
-            <div id="lista-relatorios-historico" class="space-y-2 max-h-56 overflow-y-auto pr-1">
-                <p class="text-xs text-gray-400 italic text-center py-4">A carregar histórico do Firestore...</p>
-            </div>
-        </div>
-    </div>
-
     <!-- EXPLICAÇÃO DO PAINEL DE ATRIBUIÇÃO -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
         <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
@@ -199,7 +106,7 @@
         </p>
     </div>
 
-    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane) -->
+    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet) -->
     <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
         
         <!-- COLUNA ESQUERDA: LISTAGEM DE MOTORISTAS -->
@@ -231,30 +138,6 @@
             </div>
         </div>
 
-    </div>
-
-    <!-- MODAL DE DETALHE DE RELATÓRIO DO GESTOR -->
-    <div id="modal-detalhe-relatorio" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[9999]">
-        <div class="bg-white w-full max-w-lg rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
-            <div class="bg-purple-600 text-white p-4 font-bold text-sm flex items-center justify-between">
-                <div class="flex items-center space-x-2">
-                    <i class="fa-solid fa-file-contract"></i>
-                    <span>Detalhe do Relatório de Turno</span>
-                </div>
-                <button id="btn-fechar-modal-relatorio" class="text-white hover:text-gray-200 text-base cursor-pointer">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            
-            <div id="conteudo-modal-relatorio" class="p-4 space-y-4 overflow-y-auto text-xs text-gray-700">
-            </div>
-
-            <div class="p-3 bg-gray-50 border-t text-right">
-                <button id="btn-fechar-modal-relatorio-ok" class="bg-purple-600 text-white font-bold px-4 py-2 rounded-xl text-xs cursor-pointer">
-                    Fechar
-                </button>
-            </div>
-        </div>
     </div>
 
 </main>

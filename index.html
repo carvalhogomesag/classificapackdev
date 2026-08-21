@@ -3,8 +3,8 @@
 <head>
     <!--
       index.html
-      Versão v74.7 - Painel de Gestão Unificado com Motoristas, Bricks e Relatórios
-      Faz: Casca principal com navegação limpa, modais globais e menu lateral com área de Gestão centralizada.
+      Versão v75.0 - App Shell PWA com Centro de Relatórios Desktop-First Integrado
+      Faz: Casca principal com navegação limpa, modais globais e contentor para o Centro de Relatórios.
       Depende de: config.js, js/rotas-relatorios.js, js/main.js, Tailwind CSS, FontAwesome, Tesseract.js e Firebase.
     -->
     <meta charset="UTF-8">
@@ -77,7 +77,7 @@
                     </div>
                     <input type="password" id="login-senha" required placeholder="••••••••" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-                <button type="submit" id="btn-login-submit" class="w-full bg-blue-600 active:bg-blue-700 text-white font-extrabold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all">
+                <button type="submit" id="btn-login-submit" class="w-full bg-blue-600 active:bg-blue-700 text-white font-extrabold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer">
                     <i class="fa-solid fa-right-to-bracket"></i>
                     <span>Entrar no Sistema</span>
                 </button>
@@ -86,7 +86,7 @@
     </div>
 
     <!-- Container Principal (Shell) -->
-    <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
+    <div class="max-w-md md:max-w-7xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
         <!-- Cabeçalho de Identidade -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex items-center justify-between">
@@ -97,7 +97,7 @@
             
             <span class="absolute left-1/2 transform -translate-x-1/2">Classifica Pack</span>
             
-            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v75.1</span>
+            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v76</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS -->
@@ -105,6 +105,7 @@
         <div id="container-view-motoristas"></div>
         <div id="container-view-intervalos"></div>
         <div id="container-view-rotas"></div>
+        <div id="container-view-relatorios"></div>
 
         <!-- MENU LATERAL / HAMBÚRGUER -->
         <div id="menu-lateral-overlay" class="hidden fixed inset-0 bg-black/60 z-[9999] transition-opacity">
@@ -156,14 +157,14 @@
                             <i class="fa-solid fa-chevron-right text-indigo-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
                         </button>
 
-                        <!-- Botão 3: Relatórios & Análise de Dados -->
+                        <!-- Botão 3: Relatórios & Análise de Dados (Abre a nova página Desktop) -->
                         <button type="button" id="menu-item-relatorios" class="w-full bg-purple-50/60 hover:bg-purple-100/70 active:bg-purple-200/70 p-3.5 rounded-2xl border border-purple-200 flex items-center justify-between transition-all cursor-pointer group text-left">
                             <div class="flex items-center space-x-3">
                                 <div class="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center text-base group-hover:scale-105 transition-transform shadow-xs">
                                     <i class="fa-solid fa-chart-pie"></i>
                                 </div>
                                 <div>
-                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Relatórios & Análise</span>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Centro de Relatórios</span>
                                     <span class="text-[11px] font-semibold text-purple-600">Médias por CP7 e telemetria</span>
                                 </div>
                             </div>
@@ -329,16 +330,16 @@
             </div>
         </div>
 
-        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA (FOCADA: TRIAGEM E ROTAS) -->
-        <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-4xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg px-6">
+        <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA -->
+        <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-7xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg px-6">
             <button id="nav-triagem" class="flex flex-col items-center justify-center flex-1 h-full text-blue-600 font-bold text-xs space-y-1">
                 <i class="fa-solid fa-qrcode text-xl"></i>
                 <span>Triagem</span>
             </button>
             
-            <!-- Botões legados mantidos ocultos para compatibilidade com seletores JS existentes -->
             <button id="nav-motoristas" class="hidden"></button>
             <button id="nav-intervalos" class="hidden"></button>
+            <button id="nav-relatorios" class="hidden"></button>
 
             <button id="nav-rotas" class="flex flex-col items-center justify-center flex-1 h-full text-gray-400 font-semibold text-xs space-y-1">
                 <i class="fa-solid fa-route text-xl"></i>
@@ -349,7 +350,7 @@
     </div>
 
     <!-- ========================================================================= -->
-    <!-- MODAIS DEDICADOS DO MENU HAMBÚRGUER (MODULARES) -->
+    <!-- MODAIS DEDICADOS DO MENU HAMBÚRGUER -->
     <!-- ========================================================================= -->
 
     <!-- 1. MODAL DE ESCOLHA DO NAVEGADOR PREFERIDO -->
@@ -419,36 +420,6 @@
             <div class="p-3 bg-gray-50 border-t flex space-x-2">
                 <button id="btn-cancelar-modal-prefixo" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-xs cursor-pointer">Cancelar</button>
                 <button id="btn-salvar-modal-prefixo" class="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl text-xs cursor-pointer">Guardar Prefixo</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 3. MODAL DE ATALHO DE RELATÓRIOS DO GESTOR -->
-    <div id="modal-menu-relatorios" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
-        <div class="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl flex flex-col mx-auto">
-            <div class="bg-purple-600 text-white p-4 flex items-center justify-between font-bold text-sm">
-                <div class="flex items-center space-x-2">
-                    <i class="fa-solid fa-chart-pie text-base"></i>
-                    <span>Relatórios & Análise de Dados</span>
-                </div>
-                <button id="btn-fechar-modal-relatorios-menu" class="text-white hover:text-purple-200 text-base cursor-pointer">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
-            
-            <div class="p-5 space-y-3 text-center">
-                <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center mx-auto text-2xl">
-                    <i class="fa-solid fa-boxes-stacked"></i>
-                </div>
-                <h4 class="font-bold text-gray-800 text-sm">Painel Completo de Bricks e Turnos</h4>
-                <p class="text-xs text-gray-500 text-center">Consulte o mapa geral, histórico de turnos guardados no Firestore e a ferramenta de pesquisa de médias por Código Postal.</p>
-            </div>
-
-            <div class="p-3 bg-gray-50 border-t">
-                <button id="btn-ir-para-relatorios" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3.5 rounded-xl text-xs flex items-center justify-center space-x-2 cursor-pointer shadow-md transition-all">
-                    <i class="fa-solid fa-arrow-right"></i>
-                    <span>Abrir Painel na Aba Bricks</span>
-                </button>
             </div>
         </div>
     </div>

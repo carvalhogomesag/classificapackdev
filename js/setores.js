@@ -1,19 +1,15 @@
 /**
  * setores.js
- * Versão v74.5 - Com Trava de Segurança e Modo de Calibração Opcional para Bricks
- * Faz: Controla o ecrã de Atribuição de Bricks, pesquisa síncrona por CP7, reatribuição
- *      direta de motoristas pelo balão do mapa, e trava de segurança para pinos (modo seguro por padrão
- *      com opção de desbloqueio para calibração manual de coordenadas).
- * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js, ./rotas-relatorios.js
+ * Versão v75.0 - Módulo de Atribuição de Bricks, Mapa do Gestor e Calibração
+ * Faz: Controla o ecrã de Atribuição de Bricks aos motoristas, calibração manual
+ *      de pinos (Drag & Drop com trava de segurança), reatribuição instantânea
+ *      no mapa e Auditoria de Saldo Zero.
+ * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
 import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
 import { saveData } from './storage.js';
 import { db } from './firebase-init.js';
-import { 
-    carregarHistoricoRelatorios, 
-    calcularMediasHistoricasPorBrick 
-} from './rotas-relatorios.js';
 
 // ID do motorista que está atualmente selecionado na interface para atribuição
 let motoristaAtivoId = null;
@@ -39,9 +35,6 @@ let dashboardMarkersMap = new Map();
 
 // Cache local em memória RAM das coordenadas já geocodificadas
 let brickCoordsCache = {};
-
-// Cache local de dados de relatórios calculados
-let ultimasMediasCalculadas = [];
 
 try {
     const cached = localStorage.getItem('cp_brick_coords');
@@ -270,20 +263,17 @@ function configurarControloModoCalibracao() {
         modoCalibracaoAtivo = !modoCalibracaoAtivo;
 
         if (modoCalibracaoAtivo) {
-            // MODO CALIBRAÇÃO ATIVO (Destravado para mover)
             btnToggle.className = "bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-amber-600 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-md animate-none";
             if (icone) icone.className = "fa-solid fa-unlock text-white";
             if (texto) texto.textContent = "Calibração Ativa (Pinos Móveis)";
             if (aviso) aviso.classList.remove('hidden');
         } else {
-            // MODO SEGURO (Travado para não mover por acidente)
             btnToggle.className = "bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs";
             if (icone) icone.className = "fa-solid fa-lock text-green-600";
             if (texto) texto.textContent = "Pinos Bloqueados (Modo Seguro)";
             if (aviso) aviso.classList.add('hidden');
         }
 
-        // Atualiza a propriedade draggable de todos os marcadores no mapa
         for (const marker of dashboardMarkersMap.values()) {
             marker.setDraggable(modoCalibracaoAtivo);
         }
@@ -338,7 +328,6 @@ function desenharBricksNoMapa() {
 
     const pinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
 
-    // Filtra apenas os motoristas deste concelho para o seletor do balão
     const driversDoConcelho = driversArr.filter(driver => {
         const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
         return concelhos.includes(concelhoAtivo);
@@ -362,7 +351,6 @@ function desenharBricksNoMapa() {
                 totalPontosDesenhados++;
 
                 if (!dashboardMarkersMap.has(markerKey)) {
-                    // Cria o marcador com a trava respeitando o estado atual do modo de calibração
                     const marker = new google.maps.Marker({
                         position: coords,
                         map: dashboardMap,
@@ -379,7 +367,6 @@ function desenharBricksNoMapa() {
                         title: `${freg} - ${loc} (${drv.name})`
                     });
 
-                    // Evento de arrastar o pino para calibrar (só acionado se modoCalibracaoAtivo estiver true)
                     marker.addListener('dragend', (event) => {
                         const novaLat = event.latLng.lat();
                         const novaLng = event.latLng.lng();
@@ -407,7 +394,6 @@ function desenharBricksNoMapa() {
                         }
                     });
 
-                    // Balão informativo rico com Seletor Interativo de Motorista
                     const exibirInfoBrick = () => {
                         if (dashboardInfoWindow) {
                             const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg]) 
@@ -648,217 +634,6 @@ function atualizarAuditoriaBricks() {
                 elListaPendentes.appendChild(itemDiv);
             });
         }
-    }
-}
-
-// =========================================================================
-// EXIBIÇÃO DE DETALHES DO RELATÓRIO DO GESTOR (MODAL)
-// =========================================================================
-function exibirModalDetalheRelatorio(relatorio) {
-    const modal = document.getElementById('modal-detalhe-relatorio');
-    const conteudo = document.getElementById('conteudo-modal-relatorio');
-    if (!modal || !conteudo) return;
-
-    const detalhamentoBricks = relatorio.detalhamentoPorBrick || {};
-    let bricksHtml = Object.values(detalhamentoBricks).map(b => `
-        <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between text-[11px]">
-            <div>
-                <span class="font-bold text-gray-800 block">${b.nomeBrick}</span>
-                <span class="text-[9px] text-gray-400 font-mono">${b.brickId} (${b.concelho})</span>
-            </div>
-            <div class="flex items-center space-x-2 text-[10px] font-bold">
-                <span class="text-gray-700 font-black">Total: ${b.totalAlocados}</span>
-                <span class="text-green-600">✓ ${b.entregasConcluidas}</span>
-                <span class="text-purple-600">📦 ${b.recolhasConcluidas}</span>
-                <span class="text-red-500">✗ ${b.falhas}</span>
-            </div>
-        </div>
-    `).join('');
-
-    if (!bricksHtml) bricksHtml = '<p class="text-gray-400 italic">Sem informação de bricks.</p>';
-
-    conteudo.innerHTML = `
-        <div class="bg-purple-50 p-3 rounded-xl border border-purple-100 space-y-1">
-            <div class="flex justify-between items-center">
-                <span class="font-black text-purple-900 text-sm">${relatorio.driverName}</span>
-                <span class="text-[10px] bg-purple-200 text-purple-800 font-bold px-2 py-0.5 rounded">${relatorio.concelho}</span>
-            </div>
-            <span class="text-[10px] text-purple-600 block">Data do Turno: ${relatorio.dataRelatorio} (${relatorio.dataHoraCriacao})</span>
-        </div>
-
-        <div class="grid grid-cols-2 gap-2 text-center text-[10px]">
-            <div class="bg-gray-50 p-2 rounded-lg border">
-                <span class="text-gray-400 block font-bold uppercase">Telemetria</span>
-                <span class="font-bold text-gray-800 block">${relatorio.telemetriaTurno?.duracaoHoras || 0}h (${relatorio.telemetriaTurno?.kmPercorridos || 0} KM)</span>
-            </div>
-            <div class="bg-gray-50 p-2 rounded-lg border">
-                <span class="text-gray-400 block font-bold uppercase">Eficiência</span>
-                <span class="font-bold text-purple-700 block">${relatorio.metricasEficiencia?.eventosPorHora || 0} evt/h | ${relatorio.metricasEficiencia?.eventosPorKm || 0} evt/KM</span>
-            </div>
-        </div>
-
-        <div class="space-y-1.5">
-            <span class="font-bold text-gray-600 uppercase text-[10px] block">Detalhamento por Brick (Estante)</span>
-            <div class="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                ${bricksHtml}
-            </div>
-        </div>
-    `;
-
-    modal.classList.remove('hidden');
-
-    const btnFecharX = document.getElementById('btn-fechar-modal-relatorio');
-    const btnFecharOk = document.getElementById('btn-fechar-modal-relatorio-ok');
-
-    const fecharModal = () => modal.classList.add('hidden');
-    if (btnFecharX) btnFecharX.onclick = fecharModal;
-    if (btnFecharOk) btnFecharOk.onclick = fecharModal;
-}
-
-// =========================================================================
-// RENDERIZADOR DA TABELA FILTRADA DE MÉDIAS E TOTAIS POR CP7 / BRICK
-// =========================================================================
-function renderizarTabelaMediasFiltrada(termoPesquisa = "") {
-    const tbodyMedias = document.getElementById('tbody-medias-bricks');
-    if (!tbodyMedias) return;
-
-    tbodyMedias.innerHTML = "";
-
-    const termo = termoPesquisa.toLowerCase().trim();
-
-    const filtrados = ultimasMediasCalculadas.filter(item => {
-        if (!termo) return true;
-        const bId = String(item.brickId || '').toLowerCase();
-        const nBrick = String(item.nomeBrick || '').toLowerCase();
-        return bId.includes(termo) || nBrick.includes(termo);
-    });
-
-    if (filtrados.length === 0) {
-        tbodyMedias.innerHTML = `
-            <tr>
-                <td colspan="6" class="p-4 text-center text-gray-400 italic font-semibold">
-                    ${termo ? `Nenhum Brick ou Código Postal encontrado para "${termoPesquisa}".` : 'Sem dados de Bricks nos relatórios.'}
-                </td>
-            </tr>`;
-        return;
-    }
-
-    filtrados.forEach(item => {
-        const tr = document.createElement('tr');
-        tr.className = "hover:bg-purple-50/40 transition-colors";
-        tr.innerHTML = `
-            <td class="p-2.5 font-bold text-gray-800">
-                ${item.nomeBrick} 
-                <span class="text-[9px] text-purple-600 font-mono font-bold block">${item.brickId}</span>
-            </td>
-            <td class="p-2.5 text-center text-[10px] font-bold uppercase text-gray-500">${item.concelho}</td>
-            <td class="p-2.5 text-center text-sm font-black text-green-700 bg-green-50/50">${item.somaTotalObjetos - (item.mediaFalhasPorTurno * item.totalTurnosAtendido || 0)}</td>
-            <td class="p-2.5 text-center font-extrabold text-purple-700 bg-purple-50/50">${item.somaTotalObjetos}</td>
-            <td class="p-2.5 text-center font-bold text-red-500">${Math.round(item.mediaFalhasPorTurno * item.totalTurnosAtendido)}</td>
-            <td class="p-2.5 text-center text-sm font-black text-blue-700 bg-blue-50/50">${item.mediaObjetosPorTurno}</td>
-        `;
-        tbodyMedias.appendChild(tr);
-    });
-}
-
-// =========================================================================
-// RENDERIZAÇÃO DO PAINEL DO GESTOR: RELATÓRIOS E MÉDIAS DE CARGA POR BRICK
-// =========================================================================
-async function renderizarPainelRelatoriosGestor() {
-    const tbodyMedias = document.getElementById('tbody-medias-bricks');
-    const containerHistorico = document.getElementById('lista-relatorios-historico');
-    const inputPesquisa = document.getElementById('filtro-pesquisa-brick');
-
-    if (!tbodyMedias || !containerHistorico) return;
-
-    try {
-        const relatorios = await carregarHistoricoRelatorios({ concelho: concelhoAtivo });
-
-        const elTurnos = document.getElementById('gestor-stat-turnos');
-        const elDuracao = document.getElementById('gestor-stat-duracao');
-        const elEvtHora = document.getElementById('gestor-stat-evt-hora');
-        const elEvtKm = document.getElementById('gestor-stat-evt-km');
-
-        if (relatorios.length === 0) {
-            if (elTurnos) elTurnos.textContent = "0";
-            if (elDuracao) elDuracao.textContent = "0h";
-            if (elEvtHora) elEvtHora.textContent = "0.0";
-            if (elEvtKm) elEvtKm.textContent = "0.0";
-
-            tbodyMedias.innerHTML = `
-                <tr>
-                    <td colspan="6" class="p-4 text-center text-gray-400 italic">Nenhum relatório registado para ${concelhoAtivo}.</td>
-                </tr>`;
-            containerHistorico.innerHTML = `
-                <p class="text-xs text-gray-400 italic text-center py-4">Nenhum turno finalizado registado na nuvem.</p>`;
-            return;
-        }
-
-        let somaDuracao = 0;
-        let somaEvtHora = 0;
-        let somaEvtKm = 0;
-
-        relatorios.forEach(r => {
-            somaDuracao += (r.telemetriaTurno?.duracaoHoras || 0);
-            somaEvtHora += (r.metricasEficiencia?.eventosPorHora || 0);
-            somaEvtKm += (r.metricasEficiencia?.eventosPorKm || 0);
-        });
-
-        const totalTurnos = relatorios.length;
-        if (elTurnos) elTurnos.textContent = totalTurnos;
-        if (elDuracao) elDuracao.textContent = `${(somaDuracao / totalTurnos).toFixed(1)}h`;
-        if (elEvtHora) elEvtHora.textContent = (somaEvtHora / totalTurnos).toFixed(1);
-        if (elEvtKm) elEvtKm.textContent = (somaEvtKm / totalTurnos).toFixed(1);
-
-        // Calcular e Guardar Médias
-        ultimasMediasCalculadas = calcularMediasHistoricasPorBrick(relatorios);
-
-        // Ativar Escuta do Campo de Pesquisa por CP7
-        if (inputPesquisa && !inputPesquisa.dataset.listenerAtivo) {
-            inputPesquisa.addEventListener('input', (e) => {
-                renderizarTabelaMediasFiltrada(e.target.value);
-            });
-            inputPesquisa.dataset.listenerAtivo = "true";
-        }
-
-        renderizarTabelaMediasFiltrada(inputPesquisa ? inputPesquisa.value : "");
-
-        // Histórico Recente de Relatórios
-        containerHistorico.innerHTML = "";
-        relatorios.slice(0, 10).forEach(r => {
-            const dateObj = new Date(r.dataHoraCriacao || r.dataRelatorio);
-            const dataStr = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
-            const horaStr = `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
-
-            const card = document.createElement('div');
-            card.className = "p-3 bg-gray-50 hover:bg-purple-50/50 border border-gray-200 hover:border-purple-200 rounded-xl flex items-center justify-between transition cursor-pointer";
-            card.innerHTML = `
-                <div class="space-y-0.5">
-                    <div class="flex items-center space-x-2">
-                        <span class="font-bold text-gray-800 text-xs">${r.driverName || 'Motorista'}</span>
-                        <span class="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.2 rounded font-mono">${dataStr} ${horaStr}</span>
-                    </div>
-                    <div class="text-[10px] text-gray-500 flex items-center space-x-2">
-                        <span>⏱️ ${r.telemetriaTurno?.duracaoHoras || 0}h</span>
-                        <span>🛣️ ${r.telemetriaTurno?.kmPercorridos || 0} KM</span>
-                        <span>📦 ${r.resumoEventos?.totalObjetosAlocados || 0} pacotes</span>
-                    </div>
-                </div>
-                <button type="button" class="btn-ver-relatorio bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] px-2.5 py-1.5 rounded-lg transition cursor-pointer">
-                    Ver Detalhes
-                </button>
-            `;
-
-            card.querySelector('.btn-ver-relatorio').addEventListener('click', (e) => {
-                e.stopPropagation();
-                exibirModalDetalheRelatorio(r);
-            });
-
-            containerHistorico.appendChild(card);
-        });
-
-    } catch (err) {
-        console.error("Erro ao renderizar painel de relatórios do gestor:", err);
     }
 }
 
@@ -1150,16 +925,9 @@ window.renderizarSetoresUI = () => {
 
     configurarControloModoCalibracao();
 
-    const btnAtualizarRelatorios = document.getElementById('btn-atualizar-relatorios');
-    if (btnAtualizarRelatorios && !btnAtualizarRelatorios.dataset.listenerAtivo) {
-        btnAtualizarRelatorios.addEventListener('click', () => renderizarPainelRelatoriosGestor());
-        btnAtualizarRelatorios.dataset.listenerAtivo = "true";
-    }
-
     renderDriversForAttribution();
     renderGeographicTree();
     atualizarAuditoriaBricks();
-    renderizarPainelRelatoriosGestor();
 
     setTimeout(inicializarMapaBricksDashboard, 150);
 };

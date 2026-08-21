@@ -1,0 +1,196 @@
+<!--
+  partials/relatorios.html
+  Versão v75.0 - Painel de Inteligência Logística e Relatórios do Gestor (Desktop-First)
+  Faz: Ecrã completo e amplo para desktop/tablet com KPIs de telemetria, médias de carga por CP7/Brick,
+       ferramenta de pesquisa em tempo real, histórico de turnos guardados no Firestore e detalhe de eventos.
+  NÃO faz: Não inclui scripts diretos, cabeçalhos globais ou folhas de estilo estáticas.
+  Depende de: Injeção assíncrona pelo main.js no index.html e renderização por rotas-relatorios.js.
+-->
+
+<main id="view-relatorios" class="hidden flex-1 p-6 md:p-8 space-y-6 overflow-y-auto bg-gray-50/50 min-h-screen">
+    
+    <!-- CABEÇALHO DA PÁGINA (DESKTOP) -->
+    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="flex items-center space-x-4">
+            <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-2xl shadow-xs">
+                <i class="fa-solid fa-chart-pie"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-xl font-black text-gray-900 tracking-tight">Centro de Análise e Relatórios</h1>
+                    <span class="bg-purple-100 text-purple-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-purple-200">
+                        Área do Gestor
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">Telemetria de turnos finalizados, médias históricas de pacotes por Código Postal e desempenho da frota.</p>
+            </div>
+        </div>
+
+        <!-- CONTROLOS DE CONCELHO E ATUALIZAÇÃO -->
+        <div class="flex items-center space-x-3">
+            <div class="relative min-w-[200px]">
+                <select id="select-concelho-relatorios" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-xl focus:ring-2 focus:ring-purple-500 p-3 pr-8 font-bold appearance-none cursor-pointer">
+                    <option value="MAFRA">Mafra, Portugal</option>
+                    <option value="SINTRA">Sintra, Portugal</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                    <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                </div>
+            </div>
+
+            <button id="btn-recarregar-dados-relatorios" class="bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-xs px-4 py-3 rounded-xl shadow-sm flex items-center space-x-2 transition-all cursor-pointer">
+                <i class="fa-solid fa-rotate text-xs"></i>
+                <span>Atualizar Dados</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- CARDS DE MÉTRICAS GLOBAIS DE DESEMPENHO (KPIS DESKTOP EM 4 COLUNAS) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-clipboard-check"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Turnos Registados</span>
+                <span id="kpi-total-turnos" class="text-2xl font-black text-gray-800">0</span>
+                <span class="text-[10px] text-gray-400 block font-medium">Turnos com encerramento</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-clock"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-blue-400 tracking-wider block">Duração Média</span>
+                <span id="kpi-duracao-media" class="text-2xl font-black text-blue-600">0.0h</span>
+                <span class="text-[10px] text-blue-400 block font-medium">Tempo médio por turno</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-bolt-lightning"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-green-500 tracking-wider block">Eventos / Hora</span>
+                <span id="kpi-eventos-hora" class="text-2xl font-black text-green-600">0.0</span>
+                <span class="text-[10px] text-green-500 block font-medium">Produtividade horária</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-route"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-purple-500 tracking-wider block">Eventos / KM</span>
+                <span id="kpi-eventos-km" class="text-2xl font-black text-purple-600">0.0</span>
+                <span class="text-[10px] text-purple-500 block font-medium">Densidade por quilómetro</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- GRELHA PRINCIPAL DESKTOP (TABELA DE CARGA POR BRICK + HISTÓRICO DE TURNOS) -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        
+        <!-- COLUNA ESQUERDA (8 COLUNAS): TABELA DE MÉDIAS E TOTAIS POR BRICK / CP7 -->
+        <div class="xl:col-span-8 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+            
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-gray-100">
+                <div>
+                    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center space-x-2">
+                        <i class="fa-solid fa-boxes-stacked text-purple-600"></i>
+                        <span>Média de Encomendas e Totais por Código Postal / Brick</span>
+                    </h2>
+                    <p class="text-xs text-gray-400">Consulte o volume de entregas e recolhas efetuadas em qualquer zona ou CP7 específico.</p>
+                </div>
+
+                <span id="badge-total-bricks-analisados" class="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-xl border border-purple-200 self-start sm:self-auto">
+                    0 Zonas Mapeadas
+                </span>
+            </div>
+
+            <!-- CAMPO DE PESQUISA INTELIGENTE POR CP7 -->
+            <div class="relative">
+                <input type="text" id="filtro-pesquisa-cp7-desktop" placeholder="Pesquisar por Código Postal (Ex: 2640-401, 2640-578) ou Nome da Localidade..." 
+                       class="w-full p-3.5 pl-11 border border-purple-200 rounded-xl text-xs font-bold bg-purple-50/20 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all">
+                <div class="absolute left-3.5 top-3.5 text-purple-500 text-sm">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </div>
+            </div>
+
+            <!-- TABELA EXPANDIDA PARA MONITOR DESKTOP -->
+            <div class="border border-gray-200 rounded-xl overflow-hidden shadow-2xs max-h-[520px] overflow-y-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-gray-100/80 text-gray-500 uppercase text-[10px] font-black tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                        <tr>
+                            <th class="p-3">Brick / Localidade</th>
+                            <th class="p-3 text-center">Concelho</th>
+                            <th class="p-3 text-center bg-green-50 text-green-800">Total Entregas</th>
+                            <th class="p-3 text-center bg-purple-50 text-purple-800">Total Recolhas</th>
+                            <th class="p-3 text-center bg-red-50 text-red-800">Total Falhas</th>
+                            <th class="p-3 text-center bg-blue-50 text-blue-800">Média / Turno</th>
+                            <th class="p-3 text-center">Turnos Atendidos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-tabela-relatorios-desktop" class="divide-y divide-gray-100 font-semibold text-gray-700">
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-gray-400 italic">
+                                <i class="fa-solid fa-spinner animate-spin text-lg block mb-2 text-purple-500"></i>
+                                A consultar dados históricos no Firestore...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- COLUNA DIREITA (4 COLUNAS): HISTÓRICO DE TURNOS GUARDADOS NA NUVEM -->
+        <div class="xl:col-span-4 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4 flex flex-col">
+            
+            <div class="pb-3 border-b border-gray-100">
+                <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center space-x-2">
+                    <i class="fa-solid fa-clock-rotate-left text-blue-600"></i>
+                    <span>Histórico de Turnos (Nuvem)</span>
+                </h2>
+                <p class="text-xs text-gray-400">Turnos encerrados com telemetria gravada.</p>
+            </div>
+
+            <!-- LISTA DE TURNOS COM SCROLL SUAVE -->
+            <div id="lista-turnos-historico-desktop" class="flex-1 space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+                <p class="text-xs text-gray-400 italic text-center py-8">A carregar turnos do Firestore...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL EXPANDIDO DE DETALHE DE RELATÓRIO DO GESTOR -->
+    <div id="modal-detalhe-relatorio-desktop" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="bg-purple-600 text-white p-5 font-bold text-sm flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-file-contract text-lg"></i>
+                    <span class="text-base font-black">Detalhes Completos do Turno</span>
+                </div>
+                <button id="btn-fechar-modal-detalhe-relatorio" class="text-white hover:text-gray-200 text-lg cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div id="conteudo-modal-detalhe-relatorio" class="p-6 space-y-5 overflow-y-auto text-xs text-gray-700">
+                <!-- Preenchido dinamicamente por rotas-relatorios.js -->
+            </div>
+
+            <div class="p-4 bg-gray-50 border-t flex justify-end">
+                <button id="btn-fechar-modal-detalhe-ok" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs cursor-pointer shadow-sm">
+                    Fechar Relatório
+                </button>
+            </div>
+        </div>
+    </div>
+
+</main>

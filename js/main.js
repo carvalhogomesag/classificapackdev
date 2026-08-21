@@ -1,7 +1,8 @@
 /**
  * main.js
- * Versão v70.9 - Com Sincronização em Nuvem do Indicador de Rota Otimizada
- * Faz: Atua como ponto de entrada principal da app. Carrega partials, gere autenticação Firebase, sincroniza Firestore e inicia os submódulos.
+ * Versão v75.0 - Com Injeção do Centro de Relatórios Desktop-First e Sincronização em Nuvem
+ * Faz: Atua como ponto de entrada principal da app. Carrega partials (incluindo relatorios.html),
+ *      gere autenticação Firebase, sincroniza Firestore e inicia os submódulos.
  * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./ui-menu.js, ./firebase-init.js
  */
 
@@ -123,7 +124,7 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = data.rotaOtimizada || [];
             window.dataRotaSelecionada = data.dataRotaSelecionada || "";
             window.rotaIniciada = data.rotaIniciada || false;
-            window.isRouteOptimized = data.isRouteOptimized || false; // NOVO: Sincronização do flag de rota otimizada
+            window.isRouteOptimized = data.isRouteOptimized || false;
             window.routingMethodUsed = data.routingMethodUsed || 'Cloud';
             
             window.tripStarted = data.tripStarted || false;
@@ -177,14 +178,15 @@ function escutarRotaEmTempoReal(uid) {
 }
 
 // =========================================================================
-// CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS
+// CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS (COM RELATORIOS.HTML)
 // =========================================================================
 async function carregarPartials() {
     const partials = [
         { id: 'container-view-triagem', path: 'partials/triagem.html' },
         { id: 'container-view-motoristas', path: 'partials/motoristas.html' },
         { id: 'container-view-intervalos', path: 'partials/setores.html' },
-        { id: 'container-view-rotas', path: 'partials/rotas.html' }
+        { id: 'container-view-rotas', path: 'partials/rotas.html' },
+        { id: 'container-view-relatorios', path: 'partials/relatorios.html' }
     ];
 
     for (const p of partials) {
