@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v75.0 - Módulo de Atribuição de Bricks, Mapa do Gestor e Calibração
+ * Versão v76.1 - Módulo de Atribuição de Bricks, Mapa do Gestor e Calibração
  * Faz: Controla o ecrã de Atribuição de Bricks aos motoristas, calibração manual
  *      de pinos (Drag & Drop com trava de segurança), reatribuição instantânea
- *      no mapa e Auditoria de Saldo Zero.
+ *      no mapa e Auditoria de Saldo Zero com contagem reativa por concelho.
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -497,7 +497,13 @@ export function renderDriversForAttribution() {
     }
 
     filteredDrivers.forEach(driver => {
-        const brickCount = Array.isArray(driver.brickIds) ? driver.brickIds.length : 0;
+        // Contagem precisa de Bricks alocados apenas ao concelho que está ativo no ecrã
+        const brickCount = (Array.isArray(driver.brickIds) ? driver.brickIds : []).filter(id => {
+            if (!id || typeof id !== 'string' || !id.includes('|')) return false;
+            const [freg, loc] = id.split('|');
+            return GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg] && GEOGRAPHY[concelhoAtivo][freg][loc];
+        }).length;
+
         const btn = document.createElement('button');
         btn.type = "button";
         
@@ -512,7 +518,9 @@ export function renderDriversForAttribution() {
                 <span class="w-3 h-3 rounded-full border shadow-sm flex-shrink-0" style="background-color: ${driver.color}"></span>
                 <span class="font-bold text-gray-700 text-xs truncate">${driver.name}</span>
             </div>
-            <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-blue-100/50 text-blue-700 border border-blue-200 flex-shrink-0">
+            <span class="text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                brickCount > 0 ? 'bg-blue-100/50 text-blue-700 border border-blue-200' : 'bg-gray-100 text-gray-500 border border-gray-200'
+            } flex-shrink-0">
                 ${brickCount} Bricks
             </span>
         `;

@@ -1,5 +1,5 @@
 === CLASSICA PACK - CONTEXTO INTEGRAL DO PROJETO ===
-Gerado em: 10/08/2026, 19:24:40
+Gerado em: 21/08/2026, 23:21:32
 
 =========================================
 ARQUIVO: index.html
@@ -10,9 +10,9 @@ ARQUIVO: index.html
 <head>
     <!--
       index.html
-      Faz: Atua como a casca (App Shell) principal do PWA. Contém o cabeçalho com selo de versão v70.6, botão de menu hambúrguer global, barra de navegação inferior e modais.
-      NÃO faz: Não contém ecrãs de triagem, setores ou rotas rígidos em código estático.
-      Depende de: config.js, js/main.js, CDN Tailwind, CDN FontAwesome, CDN Tesseract.js e Service Worker.
+      Versão v75.0 - App Shell PWA com Centro de Relatórios Desktop-First Integrado
+      Faz: Casca principal com navegação limpa, modais globais e contentor para o Centro de Relatórios.
+      Depende de: config.js, js/rotas-relatorios.js, js/main.js, Tailwind CSS, FontAwesome, Tesseract.js e Firebase.
     -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -84,7 +84,7 @@ ARQUIVO: index.html
                     </div>
                     <input type="password" id="login-senha" required placeholder="••••••••" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
-                <button type="submit" id="btn-login-submit" class="w-full bg-blue-600 active:bg-blue-700 text-white font-extrabold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all">
+                <button type="submit" id="btn-login-submit" class="w-full bg-blue-600 active:bg-blue-700 text-white font-extrabold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer">
                     <i class="fa-solid fa-right-to-bracket"></i>
                     <span>Entrar no Sistema</span>
                 </button>
@@ -93,9 +93,9 @@ ARQUIVO: index.html
     </div>
 
     <!-- Container Principal (Shell) -->
-    <div class="max-w-md md:max-w-4xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
+    <div class="max-w-md md:max-w-7xl mx-auto min-h-screen flex flex-col bg-white shadow-lg relative pb-20">
         
-        <!-- Cabeçalho de Identidade (Com Botão de Menu Hambúrguer Global e Selo v70.6) -->
+        <!-- Cabeçalho de Identidade -->
         <header class="bg-blue-600 text-white p-4 text-center font-bold text-lg shadow-md z-10 relative flex items-center justify-between">
             <!-- Botão do Menu Hambúrguer -->
             <button id="btn-abrir-menu" class="text-white hover:text-blue-200 text-base font-bold bg-blue-700/50 w-9 h-9 rounded-lg border border-blue-400/30 flex items-center justify-center transition-all cursor-pointer">
@@ -104,7 +104,7 @@ ARQUIVO: index.html
             
             <span class="absolute left-1/2 transform -translate-x-1/2">Classifica Pack</span>
             
-            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v71.1</span>
+            <span class="bg-blue-500/50 text-blue-100 text-[10px] font-mono px-2 py-0.5 rounded-full border border-blue-400/30">v76.1</span>
         </header>
 
         <!-- CONTENTORES DAS VISTAS PARCIAIS -->
@@ -112,71 +112,128 @@ ARQUIVO: index.html
         <div id="container-view-motoristas"></div>
         <div id="container-view-intervalos"></div>
         <div id="container-view-rotas"></div>
+        <div id="container-view-relatorios"></div>
 
-        <!-- MENU LATERAL / HAMBÚRGUER (Global) -->
+        <!-- MENU LATERAL / HAMBÚRGUER -->
         <div id="menu-lateral-overlay" class="hidden fixed inset-0 bg-black/60 z-[9999] transition-opacity">
-            <div id="menu-lateral-conteudo" class="absolute left-0 top-0 bottom-0 w-72 bg-white shadow-2xl flex flex-col transform -translate-x-full transition-transform duration-300">
+            <div id="menu-lateral-conteudo" class="absolute left-0 top-0 bottom-0 w-80 bg-white shadow-2xl flex flex-col transform -translate-x-full transition-transform duration-300">
+                
                 <!-- Cabeçalho do Menu -->
                 <div class="bg-blue-600 text-white p-4 flex items-center justify-between">
                     <div class="flex items-center space-x-2">
                         <i class="fa-solid fa-gears text-lg"></i>
                         <span class="font-bold text-sm uppercase tracking-wider">Definições e Menu</span>
                     </div>
-                    <button id="btn-fechar-menu" class="text-white hover:text-gray-200 p-1 text-lg">
+                    <button id="btn-fechar-menu" class="text-white hover:text-gray-200 p-1 text-lg cursor-pointer">
                         <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
-                <!-- Opções do Menu -->
-                <div class="flex-1 p-4 space-y-4 overflow-y-auto">
-                    <!-- Secção: Preferências do Navegador -->
-                    <div class="space-y-2">
-                        <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Navegador Preferido</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button type="button" id="pref-nav-google" class="pref-nav-btn p-3 rounded-xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-1 bg-gray-50 text-gray-700 transition-all cursor-pointer" data-nav="google">
-                                <i class="fa-solid fa-map-location-dot text-blue-600 text-base"></i>
-                                <span>Google Maps</span>
-                            </button>
-                            <button type="button" id="pref-nav-waze" class="pref-nav-btn p-3 rounded-xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-x-0 space-y-1 bg-gray-50 text-gray-700 transition-all cursor-pointer" data-nav="waze">
-                                <i class="fa-solid fa-car-burst text-sky-500 text-base"></i>
-                                <span>Waze</span>
-                            </button>
-                        </div>
-                        <p class="text-[11px] text-gray-400 italic">O navegador escolhido abrirá automaticamente ao clicar em "Navegar" nas rotas.</p>
+                <!-- Lista de Itens do Menu -->
+                <div class="flex-1 p-4 space-y-3 overflow-y-auto">
+                    
+                    <!-- SECÇÃO EXCLUSIVA DE GESTOR (MOTORISTAS, BRICKS E RELATÓRIOS) -->
+                    <div id="menu-secao-gestor" class="space-y-2.5 pb-2">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-wider">Painel de Gestão (Exclusivo)</label>
+                        
+                        <!-- Botão 1: Gestão de Motoristas -->
+                        <button type="button" id="menu-item-motoristas" class="w-full bg-blue-50/60 hover:bg-blue-100/70 active:bg-blue-200/70 p-3.5 rounded-2xl border border-blue-200 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-base group-hover:scale-105 transition-transform shadow-xs">
+                                    <i class="fa-solid fa-users"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Gestão de Motoristas</span>
+                                    <span class="text-[11px] font-semibold text-blue-600">Criar, editar e filtrar equipa</span>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-blue-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+
+                        <!-- Botão 2: Atribuição de Bricks -->
+                        <button type="button" id="menu-item-bricks" class="w-full bg-indigo-50/60 hover:bg-indigo-100/70 active:bg-indigo-200/70 p-3.5 rounded-2xl border border-indigo-200 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-base group-hover:scale-105 transition-transform shadow-xs">
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Atribuição de Bricks</span>
+                                    <span class="text-[11px] font-semibold text-indigo-600">Mapa, estantes e saldo zero</span>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-indigo-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+
+                        <!-- Botão 3: Relatórios & Análise de Dados (Abre a nova página Desktop) -->
+                        <button type="button" id="menu-item-relatorios" class="w-full bg-purple-50/60 hover:bg-purple-100/70 active:bg-purple-200/70 p-3.5 rounded-2xl border border-purple-200 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center text-base group-hover:scale-105 transition-transform shadow-xs">
+                                    <i class="fa-solid fa-chart-pie"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Centro de Relatórios</span>
+                                    <span class="text-[11px] font-semibold text-purple-600">Médias por CP7 e telemetria</span>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-purple-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+
+                        <hr class="border-gray-200/70 my-2">
                     </div>
 
-                    <hr class="border-gray-100">
+                    <!-- SECÇÃO DE PREFERÊNCIAS E DEFINIÇÕES (GERAL) -->
+                    <div class="space-y-2.5">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-wider">Preferências Gerais</label>
 
-                    <!-- Secção: Prefixo Padrão de Código Postal -->
-                    <div class="space-y-2">
-                        <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Prefixo Padrão (4 Dígitos)</label>
-                        <div class="flex items-center space-x-2">
-                            <input type="text" id="pref-prefixo-padrao" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ex: 2640" 
-                                class="w-full p-3 border border-gray-200 rounded-xl text-sm font-bold text-center outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 focus:bg-white transition-all">
-                        </div>
-                        <p class="text-[11px] text-gray-400 italic">Este prefixo será preenchido automaticamente ao abrir o aplicativo.</p>
+                        <!-- Opção: Navegador Preferido -->
+                        <button type="button" id="menu-item-navegador" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                    <i class="fa-solid fa-diamond-turn-right"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Navegador Preferido</span>
+                                    <span id="menu-subtitulo-navegador" class="text-[11px] font-semibold text-blue-600">Google Maps</span>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
+
+                        <!-- Opção: Prefixo Padrão de Código Postal -->
+                        <button type="button" id="menu-item-prefixo" class="w-full bg-gray-50 hover:bg-blue-50/50 active:bg-blue-100/50 p-3.5 rounded-2xl border border-gray-200 hover:border-blue-300 flex items-center justify-between transition-all cursor-pointer group text-left">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center text-lg group-hover:scale-105 transition-transform">
+                                    <i class="fa-solid fa-hashtag"></i>
+                                </div>
+                                <div>
+                                    <span class="block text-xs font-bold text-gray-800 uppercase tracking-wider">Prefixo Padrão</span>
+                                    <span id="menu-subtitulo-prefixo" class="text-[11px] font-semibold text-indigo-600 font-mono">CP: 2640-</span>
+                                </div>
+                            </div>
+                            <i class="fa-solid fa-chevron-right text-gray-400 text-xs group-hover:translate-x-0.5 transition-transform"></i>
+                        </button>
                     </div>
 
-                    <hr class="border-gray-100">
+                    <hr class="border-gray-100 my-2">
 
-                    <!-- Secção: Informação de Sessão -->
-                    <div class="space-y-2 pt-1">
-                        <label class="block text-xs font-black uppercase text-gray-400 tracking-wider">Conta Ativa</label>
-                        <div class="bg-blue-50 border border-blue-100 p-3 rounded-xl flex items-center space-x-3">
+                    <!-- Informação de Sessão Ativa -->
+                    <div class="space-y-1.5 pt-1">
+                        <label class="block text-[10px] font-black uppercase text-gray-400 tracking-wider">Conta Ativa</label>
+                        <div class="bg-blue-50 border border-blue-100 p-3 rounded-2xl flex items-center space-x-3">
                             <div class="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
                                 <i class="fa-solid fa-user"></i>
                             </div>
                             <div class="flex-1 truncate">
                                 <span id="menu-user-email" class="text-xs font-bold text-blue-900 block truncate">A carregar...</span>
-                                <span class="text-[10px] text-blue-500 font-semibold">Sessão Segura Cloud</span>
+                                <span id="menu-user-role-badge" class="text-[10px] text-blue-600 font-bold block uppercase tracking-wider">Sessão Segura</span>
                             </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- Rodapé do Menu (Terminar Sessão) -->
-                <div class="p-4 bg-gray-50 border-t">
-                    <button id="menu-btn-logout" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 rounded-xl text-xs flex items-center justify-center space-x-2 border border-red-200 transition-all cursor-pointer">
+                <div class="p-4 bg-gray-50 border-t border-gray-100">
+                    <button id="menu-btn-logout" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3.5 rounded-2xl text-xs flex items-center justify-center space-x-2 border border-red-200 transition-all cursor-pointer">
                         <i class="fa-solid fa-right-from-bracket"></i>
                         <span>Terminar Sessão</span>
                     </button>
@@ -230,17 +287,17 @@ ARQUIVO: index.html
             </div>
         </div>
 
-        <!-- MODAL DE EDIÇÃO DA PARAGEM -->
+        <!-- MODAL DE EDIÇÃO DA PARAGEM (SIMPLIFICADO) -->
         <div id="modal-editar-paragem" class="hidden absolute inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
             <div class="bg-white w-full max-w-md rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] transition-all mx-auto">
                 <div class="flex-shrink-0 bg-gray-50 p-4 border-b flex items-center space-x-2">
                     <i class="fa-solid fa-circle-info text-blue-600 text-lg"></i>
-                    <h3 class="font-bold text-gray-850 text-base">Editar Detalhes da Entrega</h3>
+                    <h3 class="font-bold text-gray-800 text-base">Detalhes da Paragem</h3>
                 </div>
 
                 <div class="flex-1 p-4 overflow-y-auto space-y-4">
                     <div>
-                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Morada de Entrega</label>
+                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Morada / Endereço</label>
                         <input type="text" id="edit-morada-texto" class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50/50">
                     </div>
 
@@ -257,31 +314,9 @@ ARQUIVO: index.html
                         <input type="hidden" id="edit-tipo-operacao" value="Entrega">
                     </div>
 
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Tipo de Embalagem</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button type="button" class="btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-tipo="Envelope">Envelope</button>
-                            <button type="button" class="btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-tipo="Caixa Pequena">Caixa Pequena</button>
-                            <button type="button" class="btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-tipo="Caixa Grande">Caixa Grande</button>
-                            <button type="button" class="btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-tipo="Pacote">Pacote</button>
-                        </div>
-                    </div>
-
-                    <div class="space-y-1.5">
-                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Origem / Cliente Frequente</label>
-                        <div class="grid grid-cols-2 gap-2">
-                            <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-origem="Amazon">Amazon</button>
-                            <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center" data-origem="Zara">Zara</button>
-                            <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center" data-origem="China (Temu/Shein)">China (Temu/Shein)</button>
-                            <button type="button" class="btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1" data-origem="Fraldas">
-                                <i class="fa-solid fa-heart text-red-500"></i> <span>Fraldas</span>
-                            </button>
-                        </div>
-                    </div>
-
                     <div>
-                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Observações / Notas Finais</label>
-                        <textarea id="edit-morada-obs" placeholder="Ex: Deixar na garagem..." class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 h-20 resize-none font-semibold"></textarea>
+                        <label class="block text-xs font-bold uppercase text-gray-500 tracking-wider">Observações / Notas</label>
+                        <textarea id="edit-morada-obs" placeholder="Ex: Deixar no portão, código 1234, ligar ao chegar..." class="w-full mt-1.5 p-3 border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500 h-28 resize-none font-semibold"></textarea>
                     </div>
 
                     <div class="bg-orange-50/50 border border-orange-100 rounded-xl p-3">
@@ -296,32 +331,104 @@ ARQUIVO: index.html
                 </div>
 
                 <div class="flex-shrink-0 p-3 bg-gray-50 border-t flex space-x-3">
-                    <button id="btn-cancelar-edicao" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3.5 rounded-xl text-sm">Cancelar</button>
-                    <button id="btn-salvar-edicao" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-sm">Guardar Alterações</button>
+                    <button id="btn-cancelar-edicao" class="flex-1 bg-gray-200 active:bg-gray-300 text-gray-700 font-bold py-3.5 rounded-xl text-sm cursor-pointer">Cancelar</button>
+                    <button id="btn-salvar-edicao" class="flex-1 bg-blue-600 active:bg-blue-700 text-white font-bold py-3.5 rounded-xl text-sm cursor-pointer">Guardar Alterações</button>
                 </div>
             </div>
         </div>
 
         <!-- BARRA DE NAVEGAÇÃO INFERIOR FIXA -->
-        <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-4xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg">
-            <button id="nav-triagem" class="flex flex-col items-center justify-center w-full h-full text-blue-600 font-bold text-xs space-y-1">
-                <i class="fa-solid fa-qrcode text-lg"></i>
+        <nav id="nav-barra-inferior" class="fixed bottom-0 inset-x-0 max-w-md md:max-w-7xl mx-auto bg-white border-t border-gray-200 h-16 flex items-center justify-around z-20 shadow-lg px-6">
+            <button id="nav-triagem" class="flex flex-col items-center justify-center flex-1 h-full text-blue-600 font-bold text-xs space-y-1">
+                <i class="fa-solid fa-qrcode text-xl"></i>
                 <span>Triagem</span>
             </button>
-            <button id="nav-motoristas" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
-                <i class="fa-solid fa-users text-lg"></i>
-                <span>Motoristas</span>
-            </button>
-            <button id="nav-intervalos" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
-                <i class="fa-solid fa-boxes-stacked text-lg"></i>
-                <span>Bricks</span>
-            </button>
-            <button id="nav-rotas" class="flex flex-col items-center justify-center w-full h-full text-gray-400 font-semibold text-xs space-y-1">
-                <i class="fa-solid fa-route text-lg"></i>
+            
+            <button id="nav-motoristas" class="hidden"></button>
+            <button id="nav-intervalos" class="hidden"></button>
+            <button id="nav-relatorios" class="hidden"></button>
+
+            <button id="nav-rotas" class="flex flex-col items-center justify-center flex-1 h-full text-gray-400 font-semibold text-xs space-y-1">
+                <i class="fa-solid fa-route text-xl"></i>
                 <span>Rotas</span>
             </button>
         </nav>
 
+    </div>
+
+    <!-- ========================================================================= -->
+    <!-- MODAIS DEDICADOS DO MENU HAMBÚRGUER -->
+    <!-- ========================================================================= -->
+
+    <!-- 1. MODAL DE ESCOLHA DO NAVEGADOR PREFERIDO -->
+    <div id="modal-menu-navegador" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl flex flex-col mx-auto">
+            <div class="bg-blue-600 text-white p-4 flex items-center justify-between font-bold text-sm">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-diamond-turn-right text-base"></i>
+                    <span>Navegador Preferido</span>
+                </div>
+                <button id="btn-fechar-modal-nav" class="text-white hover:text-blue-200 text-base cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-4">
+                <p class="text-xs text-gray-500">Escolha a aplicação que abrirá automaticamente ao clicar em "Navegar" nas rotas:</p>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button" class="pref-nav-btn p-4 rounded-2xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-2 bg-gray-50 text-gray-700 hover:bg-blue-50 transition-all cursor-pointer" data-nav="google">
+                        <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-map-location-dot"></i>
+                        </div>
+                        <span class="font-bold">Google Maps</span>
+                    </button>
+
+                    <button type="button" class="pref-nav-btn p-4 rounded-2xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-2 bg-gray-50 text-gray-700 hover:bg-sky-50 transition-all cursor-pointer" data-nav="waze">
+                        <div class="w-10 h-10 rounded-full bg-sky-100 text-sky-500 flex items-center justify-center text-lg">
+                            <i class="fa-solid fa-car-burst"></i>
+                        </div>
+                        <span class="font-bold">Waze</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="p-3 bg-gray-50 border-t text-center">
+                <button id="btn-fechar-modal-nav-ok" class="w-full bg-blue-600 text-white font-bold py-3 rounded-xl text-xs cursor-pointer">
+                    Concluir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. MODAL DE DEFINIÇÃO DO PREFIXO PADRÃO -->
+    <div id="modal-menu-prefixo" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white w-full max-w-sm rounded-3xl overflow-hidden shadow-2xl flex flex-col mx-auto">
+            <div class="bg-indigo-600 text-white p-4 flex items-center justify-between font-bold text-sm">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-hashtag text-base"></i>
+                    <span>Prefixo Padrão de CP</span>
+                </div>
+                <button id="btn-fechar-modal-prefixo" class="text-white hover:text-indigo-200 text-base cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="p-5 space-y-4 text-center">
+                <p class="text-xs text-gray-500 text-left">Defina o prefixo de 4 dígitos que será preenchido automaticamente nos ecrãs de triagem e rotas:</p>
+                
+                <div>
+                    <input type="text" id="input-modal-prefixo" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="Ex: 2640" 
+                           class="w-full p-4 border-2 border-indigo-200 focus:border-indigo-600 rounded-2xl text-2xl font-black text-center outline-none bg-indigo-50/40 focus:bg-white tracking-widest font-mono transition-all">
+                </div>
+                <p class="text-[11px] text-gray-400 italic">Exemplo: 2640 (Mafra), 2710 (Sintra), etc.</p>
+            </div>
+
+            <div class="p-3 bg-gray-50 border-t flex space-x-2">
+                <button id="btn-cancelar-modal-prefixo" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-xs cursor-pointer">Cancelar</button>
+                <button id="btn-salvar-modal-prefixo" class="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-xl text-xs cursor-pointer">Guardar Prefixo</button>
+            </div>
+        </div>
     </div>
 
     <!-- MODAIS DE ODÓMETRO E SEQUÊNCIA -->
@@ -406,6 +513,7 @@ ARQUIVO: index.html
 
     <!-- Scripts -->
     <script src="config.js"></script>
+    <script type="module" src="js/rotas-relatorios.js"></script>
     <script type="module" src="js/main.js"></script>
 
     <script>
@@ -419,7 +527,6 @@ ARQUIVO: index.html
     </script>
 </body>
 </html>
-
 
 =========================================
 ARQUIVO: manifest.json
@@ -457,7 +564,8 @@ ARQUIVO: sw.js
  * Faz: Controla a cache offline de todos os recursos ativos da aplicação.
  */
 
-const CACHE_NAME = 'classificapack-v71.1';
+
+const CACHE_NAME = 'classificapack-v76.1';
 
 const ASSETS = [
   './',
@@ -526,6 +634,7 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
+
 
 =========================================
 ARQUIVO: config.js
@@ -1993,8 +2102,9 @@ ARQUIVO: js/main.js
 
 /**
  * main.js
- * Versão v70.9 - Com Sincronização em Nuvem do Indicador de Rota Otimizada
- * Faz: Atua como ponto de entrada principal da app. Carrega partials, gere autenticação Firebase, sincroniza Firestore e inicia os submódulos.
+ * Versão v75.0 - Com Injeção do Centro de Relatórios Desktop-First e Sincronização em Nuvem
+ * Faz: Atua como ponto de entrada principal da app. Carrega partials (incluindo relatorios.html),
+ *      gere autenticação Firebase, sincroniza Firestore e inicia os submódulos.
  * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./ui-menu.js, ./firebase-init.js
  */
 
@@ -2116,7 +2226,7 @@ function escutarRotaEmTempoReal(uid) {
             window.rotaOtimizada = data.rotaOtimizada || [];
             window.dataRotaSelecionada = data.dataRotaSelecionada || "";
             window.rotaIniciada = data.rotaIniciada || false;
-            window.isRouteOptimized = data.isRouteOptimized || false; // NOVO: Sincronização do flag de rota otimizada
+            window.isRouteOptimized = data.isRouteOptimized || false;
             window.routingMethodUsed = data.routingMethodUsed || 'Cloud';
             
             window.tripStarted = data.tripStarted || false;
@@ -2170,14 +2280,15 @@ function escutarRotaEmTempoReal(uid) {
 }
 
 // =========================================================================
-// CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS
+// CARREGADOR ASSÍNCRONO DOS FICHEIROS PARCIAIS (COM RELATORIOS.HTML)
 // =========================================================================
 async function carregarPartials() {
     const partials = [
         { id: 'container-view-triagem', path: 'partials/triagem.html' },
         { id: 'container-view-motoristas', path: 'partials/motoristas.html' },
         { id: 'container-view-intervalos', path: 'partials/setores.html' },
-        { id: 'container-view-rotas', path: 'partials/rotas.html' }
+        { id: 'container-view-rotas', path: 'partials/rotas.html' },
+        { id: 'container-view-relatorios', path: 'partials/relatorios.html' }
     ];
 
     for (const p of partials) {
@@ -2436,9 +2547,9 @@ ARQUIVO: js/maps.js
 
 /**
  * maps.js
- * Versão v71.0 - Com Balões Informativos (InfoWindow) Ricos ao Clicar nos Pinos
+ * Versão v74.0 - Com Pinos Laranjas, Borda Preta e Bouncing para Novas Paragens por Confirmar
  * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos,
- *      dispersão em espiral, pino saltitante e balões de informação interativos ao clicar).
+ *      dispersão em espiral, pino saltitante laranja com bordas pretas para novas adições e balões de informação).
  * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps).
  */
 
@@ -2631,10 +2742,14 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
         let pinoColor = "#2563EB"; 
         let bounceAnimation = null;
+        let strokeColor = "#FFFFFF";
+        let strokeWeight = 2;
 
         if (p.isNewUnconfirmed) {
-            pinoColor = "#F59E0B"; 
-            bounceAnimation = google.maps.Animation.BOUNCE; 
+            pinoColor = "#F97316"; // Laranja vibrante para novas paragens não confirmadas
+            bounceAnimation = google.maps.Animation.BOUNCE; // Pino saltitante
+            strokeColor = "#000000"; // Borda preta marcada
+            strokeWeight = 3;
         } else if (p.status === "Entregue") {
             pinoColor = "#10B981"; 
         } else if (p.status === "Falhou" || p.status === "Failed") {
@@ -2646,18 +2761,18 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             map: googleMap,
             label: { 
                 text: (i + 1).toString(), 
-                color: p.isNewUnconfirmed ? "#000000" : "#FFFFFF", 
+                color: p.isNewUnconfirmed ? "#FFFFFF" : "#FFFFFF", 
                 fontWeight: "bold" 
             },
             title: p.address,
             animation: bounceAnimation,
             icon: {
                 path: google.maps.SymbolPath.CIRCLE,
-                scale: 14,
+                scale: 15,
                 fillColor: pinoColor,
                 fillOpacity: 1,
-                strokeWeight: p.isNewUnconfirmed ? 3 : 2,
-                strokeColor: p.isNewUnconfirmed ? "#000000" : "#FFFFFF"
+                strokeWeight: strokeWeight,
+                strokeColor: strokeColor
             }
         });
 
@@ -2668,7 +2783,9 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             const opLabel = isRecolha ? "Recolha" : "Entrega";
             
             let statusBadge = `<span style="background: #DBEAFE; color: #1E40AF; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">Pendente</span>`;
-            if (p.status === "Entregue") {
+            if (p.isNewUnconfirmed) {
+                statusBadge = `<span style="background: #FFEDD5; color: #C2410C; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">⚠️ Por Confirmar</span>`;
+            } else if (p.status === "Entregue") {
                 statusBadge = `<span style="background: #D1FAE5; color: #065F46; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✓ Entregue</span>`;
             } else if (p.status === "Falhou" || p.status === "Failed") {
                 statusBadge = `<span style="background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✗ Falhou</span>`;
@@ -2676,6 +2793,13 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
             const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
             const obsText = p.observation ? `<div style="font-size: 10px; color: #4B5563; font-style: italic; background: #FEF3C7; padding: 4px; border-radius: 4px; margin-top: 4px;">💬 ${p.observation}</div>` : '';
+
+            // Botão adicional de confirmação se o pino estiver por confirmar
+            const confirmBtnHtml = p.isNewUnconfirmed ? `
+                <button onclick="if(typeof window.confirmarPosicaoParagem === 'function') { window.confirmarPosicaoParagem('${p.id}'); }" style="background: #10B981; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer; width: 100%; margin-bottom: 4px;">
+                    ✓ Confirmar Posição Atual
+                </button>
+            ` : '';
 
             googleInfoWindow.setContent(`
                 <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 240px;">
@@ -2696,9 +2820,10 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                     ${brickText}
                     ${obsText}
 
-                    <div style="margin-top: 8px; display: flex; gap: 4px;">
-                        <button onclick="if(typeof window.abrirModalAlterarSequencia === 'function') window.abrirModalAlterarSequencia(${i}, window.rotaOtimizada[${i}])" style="flex: 1; background: #2563EB; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;">
-                            Alterar Ordem
+                    <div style="margin-top: 8px;">
+                        ${confirmBtnHtml}
+                        <button onclick="if(typeof window.abrirModalAlterarSequencia === 'function') window.abrirModalAlterarSequencia(${i}, window.rotaOtimizada[${i}])" style="width: 100%; background: #2563EB; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer;">
+                            Alterar Ordem Manual
                         </button>
                     </div>
                 </div>
@@ -3255,9 +3380,9 @@ ARQUIVO: js/rotas-inputs.js
 
 /**
  * js/rotas-inputs.js
- * Versão v71.0 - Módulo de Formatação de Inputs e Google Places Autocomplete
+ * Versão v71.1 - Módulo de Formatação de Inputs e Google Places Autocomplete
  * Faz: Controla a formatação e máscara de Código Postal (CP7), botão de prefixo rápido,
- *      escuta de limites para geocodificação e inicialização do Google Places Autocomplete.
+ *      escuta de limites para geocodificação, suporte a Enter e inicialização do Google Places Autocomplete.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js
  */
 
@@ -3304,6 +3429,34 @@ export function configurarEventosPrefixoRapido() {
 }
 
 /**
+ * Associa o evento de pressionar a tecla ENTER nos campos de entrada para adicionar o pacote imediatamente
+ */
+export function configurarTeclasEnterAdicao() {
+    const inputCP = document.getElementById('rota-codigo-postal');
+    const inputMorada = document.getElementById('rota-morada-completa');
+
+    const dispararAdicao = (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const btnAdicionar = document.getElementById('btn-adicionar-postal-rota');
+            if (btnAdicionar) {
+                btnAdicionar.click();
+            }
+        }
+    };
+
+    if (inputCP && inputCP.dataset.enterBound !== "true") {
+        inputCP.addEventListener('keydown', dispararAdicao);
+        inputCP.dataset.enterBound = "true";
+    }
+
+    if (inputMorada && inputMorada.dataset.enterBound !== "true") {
+        inputMorada.addEventListener('keydown', dispararAdicao);
+        inputMorada.dataset.enterBound = "true";
+    }
+}
+
+/**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
  */
 export function configurarFormatacaoCodigoPostal() {
@@ -3321,6 +3474,8 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
     });
+
+    configurarTeclasEnterAdicao();
 }
 
 /**
@@ -3368,6 +3523,8 @@ export function configurarEscutaCodigoPostalParaLimites() {
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
+
+    configurarTeclasEnterAdicao();
 
     if (inputMorada.dataset.autocompleteBound === "true") return;
 
@@ -3419,9 +3576,10 @@ ARQUIVO: js/rotas-modais.js
 
 /**
  * js/rotas-modais.js
- * Versão v71.0 - Módulo de Modais de Edição e Re-sequenciação de Paragens
+ * Versão v74.1 - Módulo de Modais de Edição Simplificada e Re-sequenciação de Paragens
  * Faz: Controla o modal de edição detalhada de entregas/recolhas (morada, observações,
- *      tipo de embalagem, cliente frequente, prioridade) e a alteração manual de sequência de rota.
+ *      tipo de operação, prioridade) e a alteração manual de sequência de rota.
+ * Alteração v74.1: Preserva o estado isNewUnconfirmed (laranja saltitante) ao salvar observações.
  * Depende de: ./rotas-geografia.js, ./maps.js, ./rotas.js
  */
 
@@ -3434,15 +3592,13 @@ import {
 } from './rotas.js';
 
 let itemSendoEditado = null;
-let embalagemSelecionada = "";
-let origemSelecionada = "";
 
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:3000'
     : 'https://classificapack-backend.onrender.com';
 
 // =========================================================================
-// CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO
+// CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO (DESATIVA O BOUNCE E O LARANJA)
 // =========================================================================
 export function confirmarPosicaoParagem(paragemId) {
     const paragem = window.rotaOtimizada.find(p => p.id === paragemId);
@@ -3459,7 +3615,7 @@ export function confirmarPosicaoParagem(paragemId) {
 window.confirmarPosicaoParagem = confirmarPosicaoParagem;
 
 // ==========================================
-// RE-SEQUENCIAÇÃO DE ENTREGA (ALTERAR POSIÇÃO)
+// RE-SEQUENCIAÇÃO DE ENTREGA (ALTERAR POSIÇÃO E CONFIRMAR)
 // ==========================================
 export function abrirModalAlterarSequencia(indexAtual, paragem) {
     const modal = document.getElementById('modal-alterar-sequencia');
@@ -3490,6 +3646,7 @@ export function abrirModalAlterarSequencia(indexAtual, paragem) {
 
         const novoIndex = novaPos - 1;
 
+        // Ao alterar a ordem, a posição fica confirmada (desativa o bounce)
         paragem.isNewUnconfirmed = false;
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) originalPre.isNewUnconfirmed = false;
@@ -3520,90 +3677,6 @@ export function abrirModalAlterarSequencia(indexAtual, paragem) {
     btnCancelar.onclick = () => modal.classList.add('hidden');
 }
 window.abrirModalAlterarSequencia = abrirModalAlterarSequencia;
-
-// ==========================================
-// AUXILIARES DE PREENCHIMENTO RÁPIDO DO MODAL
-// ==========================================
-function textObservacoesAutomatico() {
-    const textareaObs = document.getElementById('edit-morada-obs');
-    if (!textareaObs) return;
-
-    const partes = [];
-    if (embalagemSelecionada) partes.push(embalagemSelecionada);
-    if (origemSelecionada) partes.push(origemSelecionada);
-
-    textareaObs.value = partes.join(" ");
-}
-
-function atualizarEstilosBotoesModal() {
-    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
-    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
-
-    botoesEmbalagem.forEach(btn => {
-        const tipo = btn.getAttribute('data-tipo');
-        if (embalagemSelecionada === tipo) {
-            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
-        } else {
-            btn.className = "btn-tipo-embalagem px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
-        }
-    });
-
-    botoesOrigem.forEach(btn => {
-        const origem = btn.getAttribute('data-origem');
-        if (origemSelecionada === origem) {
-            btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-600 text-white font-bold text-xs rounded-xl border border-blue-600 transition-all text-center";
-        } else {
-            if (origem === 'Fraldas') {
-                btn.className = "btn-origem-pacote px-3 py-2.5 bg-blue-50 text-blue-700 font-extrabold text-xs rounded-xl border border-blue-200 active:bg-blue-100 transition-all text-center flex items-center justify-center space-x-1";
-            } else {
-                btn.className = "btn-origem-pacote px-3 py-2.5 bg-gray-50 text-gray-700 font-bold text-xs rounded-xl border border-gray-200 active:bg-blue-50 transition-all text-center";
-            }
-        }
-    });
-}
-
-function preencherSelecoesPorTexto(observacao) {
-    embalagemSelecionada = "";
-    origemSelecionada = "";
-
-    if (!observacao) return;
-    const obsUpper = observacao.toUpperCase();
-
-    if (obsUpper.includes("ENVELOPE")) embalagemSelecionada = "Envelope";
-    else if (obsUpper.includes("CAIXA PEQUENA")) embalagemSelecionada = "Caixa Pequena";
-    else if (obsUpper.includes("CAIXA GRANDE")) embalagemSelecionada = "Caixa Grande";
-    else if (obsUpper.includes("PACOTE")) embalagemSelecionada = "Pacote";
-
-    if (obsUpper.includes("AMAZON")) origemSelecionada = "Amazon";
-    else if (obsUpper.includes("ZARA")) origemSelecionada = "Zara";
-    else if (obsUpper.includes("CHINA") || obsUpper.includes("TEMU") || obsUpper.includes("SHEIN")) origemSelecionada = "China (Temu/Shein)";
-    else if (obsUpper.includes("FRALDAS")) origemSelecionada = "Fraldas";
-}
-
-function configurarBotoesRapidosModal() {
-    const botoesEmbalagem = document.querySelectorAll('.btn-tipo-embalagem');
-    const botoesOrigem = document.querySelectorAll('.btn-origem-pacote');
-
-    botoesEmbalagem.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const tipo = btn.getAttribute('data-tipo');
-            embalagemSelecionada = (embalagemSelecionada === tipo) ? "" : tipo;
-            atualizarEstilosBotoesModal();
-            textObservacoesAutomatico();
-        });
-    });
-
-    botoesOrigem.forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            const origem = btn.getAttribute('data-origem');
-            origemSelecionada = (origemSelecionada === origem) ? "" : origem;
-            atualizarEstilosBotoesModal();
-            textObservacoesAutomatico();
-        });
-    });
-}
 
 // =========================================================================
 // CONFIGURAÇÃO DOS MODAIS DE EDIÇÃO DE PARAGEM
@@ -3675,7 +3748,7 @@ export function setupModaisEdicao() {
                 }
             }
 
-            itemSendoEditado.isNewUnconfirmed = false;
+            // ATENÇÃO: Mantém o isNewUnconfirmed intacto! Não desativa o salto nem a cor laranja aqui.
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
             itemSendoEditado.tipoOperacao = novoTipoOperacao;
@@ -3737,11 +3810,14 @@ export function setupModaisEdicao() {
             editTipoEntrega.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
         });
     }
-
-    configurarBotoesRapidosModal();
 }
 
-export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
+/**
+ * Abre o modal de edição da paragem de forma simplificada e polimórfica.
+ * @param {Object|number} paragemOuIndex - Objeto paragem ou índice numérico da lista
+ * @param {string|boolean} modoOuEstaNaRota - Modo ('conducao'|'planeamento') ou booleano
+ */
+export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
     const modalEditarParagem = document.getElementById('modal-editar-paragem');
     const editMoradaTexto = document.getElementById('edit-morada-texto');
     const editMoradaObs = document.getElementById('edit-morada-obs');
@@ -3749,10 +3825,25 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
 
     if (!modalEditarParagem || !editMoradaTexto || !editMoradaObs) return;
 
-    itemSendoEditado = paragem;
-    itemSendoEditado._originalAddress = paragem.address;
+    let paragem = paragemOuIndex;
 
-    editMoradaTexto.value = paragem.address;
+    if (typeof paragemOuIndex === 'number') {
+        if (modoOuEstaNaRota === 'conducao' && window.rotaOtimizada && window.rotaOtimizada[paragemOuIndex]) {
+            paragem = window.rotaOtimizada[paragemOuIndex];
+        } else if (window.moradasEntregas && window.moradasEntregas[paragemOuIndex]) {
+            paragem = window.moradasEntregas[paragemOuIndex];
+        }
+    }
+
+    if (!paragem || typeof paragem !== 'object') {
+        console.warn("[PWA] Paragem inválida ou não encontrada para abrir modal:", paragemOuIndex);
+        return;
+    }
+
+    itemSendoEditado = paragem;
+    itemSendoEditado._originalAddress = paragem.address || "";
+
+    editMoradaTexto.value = paragem.address || "";
     editMoradaObs.value = paragem.observation || "";
     if (editMoradaPrioridade) {
         editMoradaPrioridade.checked = !!paragem.priority;
@@ -3774,9 +3865,6 @@ export function abrirModalEdicaoParagem(paragem, estaNaRotaOtimizada) {
         }
     }
 
-    preencherSelecoesPorTexto(paragem.observation || "");
-    atualizarEstilosBotoesModal();
-
     modalEditarParagem.classList.remove('hidden');
 
     setTimeout(() => {
@@ -3791,14 +3879,20 @@ ARQUIVO: js/rotas-odometro.js
 
 /**
  * js/rotas-odometro.js
- * Versão v70.9 - Módulo de Gestão de Odómetro e Diário de Bordo
+ * Versão v71.1 - Módulo de Gestão de Odómetro, Diário de Bordo e Relatórios
  * Faz: Controla os modais de registo de quilometragem de saída (início do percurso)
- *      e chegada (encerramento do turno), calculando totais percorridos e resetando o turno.
- * Depende de: ./maps.js, ./rotas.js
+ *      e chegada (encerramento do turno), calculando totais percorridos, gerando
+ *      o relatório de desempenho por Brick e salvando no Firestore.
+ * Depende de: ./maps.js, ./rotas.js, ./rotas-relatorios.js
  */
 
 import { limparMapaVisual } from './maps.js';
 import { sincronizarPersistencia, sincronizarInterfaceRota } from './rotas.js';
+import { 
+  verificarPendenciasRota, 
+  calcularMetricasRelatorio, 
+  salvarRelatorioNoFirestore 
+} from './rotas-relatorios.js';
 
 /**
  * Abre o modal de registo de KM de Saída (Início de Rota)
@@ -3841,6 +3935,7 @@ export function abrirModalOdometroSaida(callback) {
         window.tripCompleted = false;
         window.odometerStart = kmVal;
         window.odometerStartHour = horaVal;
+        window.odometerStartTimestamp = new Date().toISOString(); // Registo preciso de início
         window.lastOdometer = kmVal;
 
         sincronizarPersistencia();
@@ -3874,7 +3969,7 @@ export function abrirModalOdometroChegada() {
     const btnConfirmar = document.getElementById('btn-confirmar-chegada-km');
     const btnCancelar = document.getElementById('btn-cancelar-chegada-km');
 
-    btnConfirmar.onclick = () => {
+    btnConfirmar.onclick = async () => {
         const kmVal = parseFloat(inputKm.value);
         const horaVal = inputHora ? inputHora.value.trim() : "";
 
@@ -3887,36 +3982,648 @@ export function abrirModalOdometroChegada() {
             return;
         }
 
-        alert(`Turno Encerrado com Sucesso!\n\nPartida: ${window.odometerStart} KM às ${window.odometerStartHour}\nChegada: ${kmVal} KM às ${horaVal}\nTotal Percorrido: ${(kmVal - window.odometerStart).toFixed(1)} km`);
+        // 1. REGRA DE OURO DE NEGÓCIO: Verificar se existem pendências na rota
+        const listaMoradasAtuais = window.moradasEntregas || [];
+        const validacaoPendencias = verificarPendenciasRota(listaMoradasAtuais);
 
-        window.tripCompleted = true;
-        window.odometerEnd = kmVal;
-        window.odometerEndHour = horaVal;
-        window.lastOdometer = kmVal;
+        if (validacaoPendencias.temPendencias) {
+            alert(`🚨 NÃO É POSSÍVEL ENCERRAR O TURNO!\n\nExistem ${validacaoPendencias.totalPendentes} objeto(s) com estado PENDENTE na sua rota.\n\nPor favor, conclua o registo de todas as entregas/recolhas ou registe os motivos de falha antes de encerrar o turno.`);
+            return;
+        }
 
-        window.partidaLocalizacao = null;
-        window.moradasEntregas = [];
-        window.rotaOtimizada = [];
-        window.isRouteOptimized = false;
-        window.dataRotaSelecionada = "";
-        window.rotaIniciada = false;
-        window.tripStarted = false;
-        window.tripCompleted = false;
-        window.odometerStart = 0;
-        window.odometerStartHour = "";
-        window.odometerEnd = 0;
-        window.odometerEndHour = "";
+        // Disable no botão para evitar duplo clique
+        btnConfirmar.disabled = true;
+        btnConfirmar.innerText = "A gerar relatório...";
 
-        localStorage.removeItem('cp_last_navigated_id');
-        limparMapaVisual();
+        try {
+            // 2. Preparar dados para o Relatório de Turno
+            const driver = window.currentDriver || window.driverAtual || {};
+            const driverId = driver.id || driver.uid || localStorage.getItem('cp_driver_id') || 'DRIVER_SESSAO';
+            const driverName = driver.nome || driver.name || localStorage.getItem('cp_driver_name') || 'Motorista';
 
-        sincronizarPersistencia();
-        modal.classList.add('hidden');
-        sincronizarInterfaceRota();
+            // Determinar o ISO de Início
+            let horaInicioIso = window.odometerStartTimestamp;
+            if (!horaInicioIso && window.odometerStartHour) {
+                const [h, m] = window.odometerStartHour.split(':').map(Number);
+                const dSaida = new Date();
+                if (!isNaN(h) && !isNaN(m)) {
+                    dSaida.setHours(h, m, 0, 0);
+                }
+                horaInicioIso = dSaida.toISOString();
+            }
+            if (!horaInicioIso) horaInicioIso = new Date().toISOString();
+
+            const dadosTurno = {
+                driverId: driverId,
+                driverName: driverName,
+                kmInicial: window.odometerStart || 0,
+                kmFinal: kmVal,
+                horaInicio: horaInicioIso,
+                horaFim: new Date().toISOString(),
+                concelho: window.currentConcelho || window.concelhoAtivo || 'Mafra/Sintra'
+            };
+
+            // 3. Calcular métricas por Brick e de Desempenho
+            const relatorioCalculado = calcularMetricasRelatorio(dadosTurno, listaMoradasAtuais);
+
+            // 4. Salvar na coleção 'relatorios_turnos' do Firestore (com higienização)
+            await salvarRelatorioNoFirestore(relatorioCalculado);
+
+            // 5. Exibir resumo e confirmação
+            const numBricks = Object.keys(relatorioCalculado.detalhamentoPorBrick).length;
+            alert(
+                `🎉 TURNO ENCERRADO E RELATÓRIO GRAVADO NA NUVEM!\n\n` +
+                `⏱️ Duração: ${relatorioCalculado.telemetriaTurno.duracaoHoras}h (${relatorioCalculado.telemetriaTurno.duracaoMinutos} min)\n` +
+                `🛣️ Distância: ${relatorioCalculado.telemetriaTurno.kmPercorridos} KM\n` +
+                `📊 Média: ${relatorioCalculado.metricasEficiencia.eventosPorHora} evt/hora | ${relatorioCalculado.metricasEficiencia.eventosPorKm} evt/KM\n` +
+                `📦 Bricks Atendidos: ${numBricks}\n\n` +
+                `Relatório armazenado com sucesso no backend!`
+            );
+
+        } catch (erro) {
+            console.error("Erro ao gerar/salvar relatório de turno:", erro);
+            const msgDetalhada = erro?.message || String(erro);
+            alert(`Atenção: Ocorreu um erro ao gravar o relatório no Firestore:\n\n${msgDetalhada}\n\nO registo do odómetro local foi processado.`);
+        } finally {
+            // 6. Reset completo do estado da rota do turno
+            window.tripCompleted = true;
+            window.odometerEnd = kmVal;
+            window.odometerEndHour = horaVal;
+            window.lastOdometer = kmVal;
+
+            window.partidaLocalizacao = null;
+            window.moradasEntregas = [];
+            window.rotaOtimizada = [];
+            window.isRouteOptimized = false;
+            window.dataRotaSelecionada = "";
+            window.rotaIniciada = false;
+            window.tripStarted = false;
+            window.tripCompleted = false;
+            window.odometerStart = 0;
+            window.odometerStartHour = "";
+            window.odometerStartTimestamp = null;
+            window.odometerEnd = 0;
+            window.odometerEndHour = "";
+
+            localStorage.removeItem('cp_last_navigated_id');
+            limparMapaVisual();
+
+            sincronizarPersistencia();
+            modal.classList.add('hidden');
+            sincronizarInterfaceRota();
+
+            btnConfirmar.disabled = false;
+            btnConfirmar.innerText = "Confirmar Chegada";
+        }
     };
 
     btnCancelar.onclick = () => modal.classList.add('hidden');
 }
+
+=========================================
+ARQUIVO: js/rotas-relatorios.js
+=========================================
+
+/**
+ * ============================================================================
+ * CLASSIFICA PACK - MÓDULO DE RELATÓRIOS DE TURNO E CENTRO DE ANÁLISE DESKTOP
+ * Ficheiro: js/rotas-relatorios.js
+ * Versão: v75.0 - Controlador Completo do Centro de Análise e Relatórios Desktop-First
+ * Função: Agrupa dados da rota finalizada por Brick, calcula métricas de
+ *         eficiência (Eventos/Hora, Eventos/KM), gera médias por CP7 e
+ *         alimenta o ecrã completo de Relatórios do Gestor.
+ * ============================================================================
+ */
+
+import { resolveBrickForZip } from './rotas-geografia.js';
+import { db } from './firebase-init.js';
+
+// Cache interna de médias calculadas e concelho selecionado nos relatórios
+let ultimasMediasCalculadasDesktop = [];
+let concelhoRelatoriosAtivo = "MAFRA";
+
+/**
+ * Valida se existem encomendas/recolhas pendentes na rota atual.
+ * @param {Array} listaMoradas - Array de objetos de moradas/entregas da rota
+ * @returns {Object} - { temPendencias: boolean, totalPendentes: number, pendentes: Array }
+ */
+export function verificarPendenciasRota(listaMoradas = []) {
+  const pendentes = listaMoradas.filter(m => {
+    const status = (m.status || 'pendente').toLowerCase();
+    return status === 'pendente' || status === 'em_andamento' || status === 'nao_visitado';
+  });
+
+  return {
+    temPendencias: pendentes.length > 0,
+    totalPendentes: pendentes.length,
+    pendentes: pendentes
+  };
+}
+
+/**
+ * Agrupa as entregas/recolhas por Brick para o relatório do turno corrente.
+ * @param {Array} listaMoradas - Array de objetos de moradas/entregas da rota
+ * @returns {Object} - Mapeamento com contagem de totais, entregas, recolhas e falhas por Brick
+ */
+export function agruparObjetosPorBrick(listaMoradas = []) {
+  const relatorioBricks = {};
+
+  listaMoradas.forEach(item => {
+    const cp = item.codigoPostal || item.zipCode || item.cp || item.address || '';
+    const postalMatch = String(cp).match(/\d{4}-\d{3}/);
+    const cpFormatado = postalMatch ? postalMatch[0] : String(cp);
+
+    const brickInfo = resolveBrickForZip(cpFormatado);
+    const brickId = brickInfo?.brickId || item.brickId || 'BRICK_DESCONHECIDO';
+    const brickNome = brickInfo?.brickName || brickInfo?.nome || item.brickName || item.brickNome || item.freguesia || 'Sem Brick Definido';
+
+    if (!relatorioBricks[brickId]) {
+      relatorioBricks[brickId] = {
+        brickId: String(brickId),
+        nomeBrick: String(brickNome),
+        concelho: String(item.concelho || 'Não Especificado'),
+        totalAlocados: 0,
+        entregasConcluidas: 0,
+        recolhasConcluidas: 0,
+        falhas: 0,
+        pendentes: 0,
+        totalEventos: 0
+      };
+    }
+
+    relatorioBricks[brickId].totalAlocados += 1;
+
+    const status = String(item.status || '').toLowerCase();
+    const tipo = String(item.tipoOperacao || item.tipo || 'entrega').toLowerCase();
+
+    if (status === 'concluido' || status === 'entregue' || status === 'sucesso') {
+      if (tipo === 'recolha') {
+        relatorioBricks[brickId].recolhasConcluidas += 1;
+      } else {
+        relatorioBricks[brickId].entregasConcluidas += 1;
+      }
+      relatorioBricks[brickId].totalEventos += 1;
+    } else if (status === 'falha' || status === 'incidencia' || status === 'recusado' || status === 'ausente') {
+      relatorioBricks[brickId].falhas += 1;
+      relatorioBricks[brickId].totalEventos += 1;
+    } else {
+      relatorioBricks[brickId].pendentes += 1;
+    }
+  });
+
+  return relatorioBricks;
+}
+
+/**
+ * Gera a estrutura completa do relatório de encerramento de turno.
+ * @param {Object} dadosTurno - { driverId, driverName, kmInicial, kmFinal, horaInicio, horaFim, concelho }
+ * @param {Array} listaMoradas - Lista de moradas da rota
+ * @returns {Object} Relatório estruturado pronto para gravação
+ */
+export function calcularMetricasRelatorio(dadosTurno, listaMoradas = []) {
+  const horaInicioDate = new Date(dadosTurno.horaInicio);
+  const horaFimDate = new Date(dadosTurno.horaFim || Date.now());
+
+  const duracaoMs = Math.max(0, horaFimDate.getTime() - horaInicioDate.getTime());
+  const duracaoMinutos = Math.round(duracaoMs / (1000 * 60));
+  const duracaoHoras = parseFloat((duracaoMinutos / 60).toFixed(2));
+
+  const kmInicial = Number(dadosTurno.kmInicial) || 0;
+  const kmFinal = Number(dadosTurno.kmFinal) || 0;
+  const kmPercorridos = Math.max(0, kmFinal - kmInicial);
+
+  const resumoBricks = agruparObjetosPorBrick(listaMoradas);
+
+  let totalEntregas = 0;
+  let totalRecolhas = 0;
+  let totalFalhas = 0;
+  let totalPendentes = 0;
+
+  Object.values(resumoBricks).forEach(b => {
+    totalEntregas += b.entregasConcluidas;
+    totalRecolhas += b.recolhasConcluidas;
+    totalFalhas += b.falhas;
+    totalPendentes += b.pendentes;
+  });
+
+  const totalEventosConcluidos = totalEntregas + totalRecolhas + totalFalhas;
+
+  const eventosPorHora = duracaoHoras > 0 ? parseFloat((totalEventosConcluidos / duracaoHoras).toFixed(2)) : 0;
+  const entregasPorHora = duracaoHoras > 0 ? parseFloat((totalEntregas / duracaoHoras).toFixed(2)) : 0;
+  const recolhasPorHora = duracaoHoras > 0 ? parseFloat((totalRecolhas / duracaoHoras).toFixed(2)) : 0;
+  const falhasPorHora = duracaoHoras > 0 ? parseFloat((totalFalhas / duracaoHoras).toFixed(2)) : 0;
+
+  const eventosPorKm = kmPercorridos > 0 ? parseFloat((totalEventosConcluidos / kmPercorridos).toFixed(2)) : 0;
+  const entregasPorKm = kmPercorridos > 0 ? parseFloat((totalEntregas / kmPercorridos).toFixed(2)) : 0;
+
+  const dataAtualISO = new Date().toISOString().split('T')[0];
+
+  return {
+    dataRelatorio: dataAtualISO,
+    dataHoraCriacao: new Date().toISOString(),
+    driverId: String(dadosTurno.driverId || 'MOTORISTA_NAO_IDENTIFICADO'),
+    driverName: String(dadosTurno.driverName || 'Motorista'),
+    concelho: String(dadosTurno.concelho || 'Mafra/Sintra'),
+    telemetriaTurno: {
+      horaInicio: horaInicioDate.toISOString(),
+      horaFim: horaFimDate.toISOString(),
+      duracaoMinutos: duracaoMinutos,
+      duracaoHoras: duracaoHoras,
+      kmInicial: kmInicial,
+      kmFinal: kmFinal,
+      kmPercorridos: kmPercorridos
+    },
+    resumoEventos: {
+      totalObjetosAlocados: listaMoradas.length,
+      totalEventosFinalizados: totalEventosConcluidos,
+      totalEntregas: totalEntregas,
+      totalRecolhas: totalRecolhas,
+      totalFalhas: totalFalhas,
+      totalPendentes: totalPendentes
+    },
+    metricasEficiencia: {
+      eventosPorHora: eventosPorHora,
+      entregasPorHora: entregasPorHora,
+      recolhasPorHora: recolhasPorHora,
+      falhasPorHora: falhasPorHora,
+      eventosPorKm: eventosPorKm,
+      entregasPorKm: entregasPorKm
+    },
+    detalhamentoPorBrick: resumoBricks
+  };
+}
+
+/**
+ * Salva o relatório de encerramento de turno diretamente na coleção 'relatorios_turnos' do Firestore.
+ * @param {Object} relatorioFinal - Objeto com os dados do relatório formatado
+ * @returns {Promise<string>} ID do documento gerado no Firestore
+ */
+export async function salvarRelatorioNoFirestore(relatorioFinal) {
+  const firestoreDb = db || window.db || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+
+  if (!firestoreDb) {
+    throw new Error("Não foi possível conectar ao Firestore. Nenhuma instância ativa foi encontrada.");
+  }
+
+  const payloadSanitizado = JSON.parse(
+    JSON.stringify(relatorioFinal, (key, value) => (value === undefined ? null : value))
+  );
+
+  try {
+    const docRef = await firestoreDb.collection('relatorios_turnos').add(payloadSanitizado);
+    console.log("✅ Relatório de Turno salvo com sucesso no Firestore. ID:", docRef.id);
+    return docRef.id;
+  } catch (error) {
+    console.error("❌ Erro ao guardar o relatório de turno no Firestore:", error);
+    throw error;
+  }
+}
+
+/**
+ * Consulta o histórico completo de relatórios no Firestore.
+ * @param {Object} [filtros] - { driverId, concelho }
+ * @returns {Promise<Array>} Lista de relatórios de turno
+ */
+export async function carregarHistoricoRelatorios(filtros = {}) {
+  const firestoreDb = db || window.db || (typeof firebase !== 'undefined' && firebase.firestore ? firebase.firestore() : null);
+  if (!firestoreDb) return [];
+
+  try {
+    let query = firestoreDb.collection('relatorios_turnos');
+
+    if (filtros.driverId) {
+      query = query.where('driverId', '==', filtros.driverId);
+    }
+    if (filtros.concelho) {
+      query = query.where('concelho', '==', filtros.concelho);
+    }
+
+    const snapshot = await query.get();
+    const relatorios = [];
+
+    snapshot.forEach(doc => {
+      relatorios.push({ id: doc.id, ...doc.data() });
+    });
+
+    relatorios.sort((a, b) => new Date(b.dataHoraCriacao || 0) - new Date(a.dataHoraCriacao || 0));
+
+    return relatorios;
+  } catch (error) {
+    console.error("❌ Erro ao consultar histórico de relatórios no Firestore:", error);
+    return [];
+  }
+}
+
+/**
+ * Processa a lista histórica de relatórios e calcula as médias e totais por Brick/CP7.
+ * @param {Array} relatorios - Lista de relatórios do Firestore
+ * @returns {Array} Lista agregada com médias de cada Brick ordenada por volume
+ */
+export function calcularMediasHistoricasPorBrick(relatorios = []) {
+  const mapaBricks = {};
+
+  relatorios.forEach(relatorio => {
+    const detalhamento = relatorio.detalhamentoPorBrick || {};
+
+    Object.entries(detalhamento).forEach(([brickId, dados]) => {
+      if (!mapaBricks[brickId]) {
+        mapaBricks[brickId] = {
+          brickId: brickId,
+          nomeBrick: dados.nomeBrick || 'Brick Desconhecido',
+          concelho: dados.concelho || 'Não Especificado',
+          totalTurnosAtendido: 0,
+          somaObjetosAlocados: 0,
+          somaEntregas: 0,
+          somaRecolhas: 0,
+          somaFalhas: 0
+        };
+      }
+
+      mapaBricks[brickId].totalTurnosAtendido += 1;
+      mapaBricks[brickId].somaObjetosAlocados += (dados.totalAlocados || 0);
+      mapaBricks[brickId].somaEntregas += (dados.entregasConcluidas || 0);
+      mapaBricks[brickId].somaRecolhas += (dados.recolhasConcluidas || 0);
+      mapaBricks[brickId].somaFalhas += (dados.falhas || 0);
+    });
+  });
+
+  const listaMedias = Object.values(mapaBricks).map(item => {
+    const turnos = Math.max(1, item.totalTurnosAtendido);
+    return {
+      brickId: item.brickId,
+      nomeBrick: item.nomeBrick,
+      concelho: item.concelho,
+      totalTurnosAtendido: item.totalTurnosAtendido,
+      somaTotalObjetos: item.somaObjetosAlocados,
+      totalEntregasAcumuladas: item.somaEntregas,
+      totalRecolhasAcumuladas: item.somaRecolhas,
+      totalFalhasAcumuladas: item.somaFalhas,
+      mediaObjetosPorTurno: parseFloat((item.somaObjetosAlocados / turnos).toFixed(1)),
+      mediaEntregasPorTurno: parseFloat((item.somaEntregas / turnos).toFixed(1)),
+      mediaRecolhasPorTurno: parseFloat((item.somaRecolhas / turnos).toFixed(1)),
+      mediaFalhasPorTurno: parseFloat((item.somaFalhas / turnos).toFixed(1))
+    };
+  });
+
+  listaMedias.sort((a, b) => b.mediaObjetosPorTurno - a.mediaObjetosPorTurno);
+
+  return listaMedias;
+}
+
+// =========================================================================
+// RENDERIZADOR DA TABELA DESKTOP FILTRADA POR PESQUISA DE CP7
+// =========================================================================
+function renderizarTabelaDesktopFiltrada(termoPesquisa = "") {
+  const tbody = document.getElementById('tbody-tabela-relatorios-desktop');
+  const badgeTotal = document.getElementById('badge-total-bricks-analisados');
+  if (!tbody) return;
+
+  tbody.innerHTML = "";
+
+  const termo = termoPesquisa.toLowerCase().trim();
+
+  const filtrados = ultimasMediasCalculadasDesktop.filter(item => {
+    if (!termo) return true;
+    const bId = String(item.brickId || '').toLowerCase();
+    const nBrick = String(item.nomeBrick || '').toLowerCase();
+    return bId.includes(termo) || nBrick.includes(termo);
+  });
+
+  if (badgeTotal) {
+    badgeTotal.textContent = `${filtrados.length} Zonas Mapeadas`;
+  }
+
+  if (filtrados.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="p-8 text-center text-gray-400 italic font-semibold">
+          ${termo ? `Nenhum Brick ou Código Postal encontrado para "${termoPesquisa}".` : 'Sem dados de Bricks nos relatórios registados.'}
+        </td>
+      </tr>`;
+    return;
+  }
+
+  filtrados.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.className = "hover:bg-purple-50/40 transition-colors";
+    tr.innerHTML = `
+      <td class="p-3 font-bold text-gray-800">
+        ${item.nomeBrick} 
+        <span class="text-[10px] text-purple-600 font-mono font-bold block">${item.brickId}</span>
+      </td>
+      <td class="p-3 text-center text-[10px] font-bold uppercase text-gray-500">${item.concelho}</td>
+      <td class="p-3 text-center text-sm font-black text-green-700 bg-green-50/40">${item.totalEntregasAcumuladas}</td>
+      <td class="p-3 text-center text-sm font-black text-purple-700 bg-purple-50/40">${item.totalRecolhasAcumuladas}</td>
+      <td class="p-3 text-center text-sm font-bold text-red-500 bg-red-50/30">${item.totalFalhasAcumuladas}</td>
+      <td class="p-3 text-center text-base font-black text-blue-700 bg-blue-50/40">${item.mediaObjetosPorTurno}</td>
+      <td class="p-3 text-center text-xs font-bold text-gray-600">${item.totalTurnosAtendido} turnos</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// =========================================================================
+// EXIBIÇÃO DE DETALHES DO TURNO EM MODAL EXPANDIDO
+// =========================================================================
+function exibirModalDetalheTurnoDesktop(relatorio) {
+  const modal = document.getElementById('modal-detalhe-relatorio-desktop');
+  const conteudo = document.getElementById('conteudo-modal-detalhe-relatorio');
+  if (!modal || !conteudo) return;
+
+  const detalhamentoBricks = relatorio.detalhamentoPorBrick || {};
+  let bricksHtml = Object.values(detalhamentoBricks).map(b => `
+    <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl flex items-center justify-between text-xs">
+      <div>
+        <span class="font-bold text-gray-800 block">${b.nomeBrick}</span>
+        <span class="text-[10px] text-gray-400 font-mono">${b.brickId} (${b.concelho})</span>
+      </div>
+      <div class="flex items-center space-x-3 text-xs font-bold">
+        <span class="text-gray-800 font-black">Total: ${b.totalAlocados}</span>
+        <span class="text-green-600 bg-green-50 px-2 py-0.5 rounded border border-green-100">✓ ${b.entregasConcluidas}</span>
+        <span class="text-purple-600 bg-purple-50 px-2 py-0.5 rounded border border-purple-100">📦 ${b.recolhasConcluidas}</span>
+        <span class="text-red-500 bg-red-50 px-2 py-0.5 rounded border border-red-100">✗ ${b.falhas}</span>
+      </div>
+    </div>
+  `).join('');
+
+  if (!bricksHtml) bricksHtml = '<p class="text-gray-400 italic">Sem informação de bricks neste registo.</p>';
+
+  conteudo.innerHTML = `
+    <div class="bg-purple-50 p-4 rounded-2xl border border-purple-100 flex items-center justify-between">
+      <div>
+        <span class="font-black text-purple-900 text-base block">${relatorio.driverName}</span>
+        <span class="text-xs text-purple-600">Data do Turno: ${relatorio.dataRelatorio} (${new Date(relatorio.dataHoraCriacao).toLocaleTimeString('pt-PT')})</span>
+      </div>
+      <span class="text-xs bg-purple-200 text-purple-800 font-black px-3 py-1 rounded-full uppercase">${relatorio.concelho}</span>
+    </div>
+
+    <div class="grid grid-cols-3 gap-3 text-center">
+      <div class="bg-gray-50 p-3 rounded-xl border border-gray-150">
+        <span class="text-gray-400 block font-bold text-[10px] uppercase">Duração do Percurso</span>
+        <span class="font-black text-gray-800 text-base block">${relatorio.telemetriaTurno?.duracaoHoras || 0}h (${relatorio.telemetriaTurno?.duracaoMinutos || 0} min)</span>
+      </div>
+      <div class="bg-gray-50 p-3 rounded-xl border border-gray-150">
+        <span class="text-gray-400 block font-bold text-[10px] uppercase">Quilómetros Percorridos</span>
+        <span class="font-black text-gray-800 text-base block">${relatorio.telemetriaTurno?.kmPercorridos || 0} KM</span>
+      </div>
+      <div class="bg-purple-50/50 p-3 rounded-xl border border-purple-100">
+        <span class="text-purple-500 block font-bold text-[10px] uppercase">Eficiência Horária</span>
+        <span class="font-black text-purple-700 text-base block">${relatorio.metricasEficiencia?.eventosPorHora || 0} evt/hora</span>
+      </div>
+    </div>
+
+    <div class="space-y-2">
+      <span class="font-bold text-gray-700 uppercase text-xs block">Desdobramento de Carga por Brick / Estante:</span>
+      <div class="space-y-2 max-h-60 overflow-y-auto pr-1">
+        ${bricksHtml}
+      </div>
+    </div>
+  `;
+
+  modal.classList.remove('hidden');
+
+  const btnFecharX = document.getElementById('btn-fechar-modal-detalhe-relatorio');
+  const btnFecharOk = document.getElementById('btn-fechar-modal-detalhe-ok');
+
+  const fecharModal = () => modal.classList.add('hidden');
+  if (btnFecharX) btnFecharX.onclick = fecharModal;
+  if (btnFecharOk) btnFecharOk.onclick = fecharModal;
+}
+
+// =========================================================================
+// RENDERIZAÇÃO COMPLETA DA PÁGINA DESKTOP DE RELATÓRIOS DO GESTOR
+// =========================================================================
+export async function renderizarRelatoriosUI() {
+  const tbody = document.getElementById('tbody-tabela-relatorios-desktop');
+  const containerHistorico = document.getElementById('lista-turnos-historico-desktop');
+  const inputPesquisa = document.getElementById('filtro-pesquisa-cp7-desktop');
+  const seletorConcelho = document.getElementById('select-concelho-relatorios');
+  const btnRecarregar = document.getElementById('btn-recarregar-dados-relatorios');
+
+  if (!tbody || !containerHistorico) return;
+
+  // Configuração dos controlos de topo
+  if (seletorConcelho && !seletorConcelho.dataset.bound) {
+    seletorConcelho.value = concelhoRelatoriosAtivo;
+    seletorConcelho.addEventListener('change', (e) => {
+      concelhoRelatoriosAtivo = e.target.value;
+      renderizarRelatoriosUI();
+    });
+    seletorConcelho.dataset.bound = "true";
+  }
+
+  if (btnRecarregar && !btnRecarregar.dataset.bound) {
+    btnRecarregar.addEventListener('click', () => renderizarRelatoriosUI());
+    btnRecarregar.dataset.bound = "true";
+  }
+
+  try {
+    const relatorios = await carregarHistoricoRelatorios({ concelho: concelhoRelatoriosAtivo });
+
+    const elTurnos = document.getElementById('kpi-total-turnos');
+    const elDuracao = document.getElementById('kpi-duracao-media');
+    const elEvtHora = document.getElementById('kpi-eventos-hora');
+    const elEvtKm = document.getElementById('kpi-eventos-km');
+
+    if (relatorios.length === 0) {
+      if (elTurnos) elTurnos.textContent = "0";
+      if (elDuracao) elDuracao.textContent = "0.0h";
+      if (elEvtHora) elEvtHora.textContent = "0.0";
+      if (elEvtKm) elEvtKm.textContent = "0.0";
+
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="7" class="p-8 text-center text-gray-400 italic">Nenhum turno finalizado registado para ${concelhoRelatoriosAtivo}.</td>
+        </tr>`;
+      containerHistorico.innerHTML = `
+        <p class="text-xs text-gray-400 italic text-center py-8">Nenhum histórico registado.</p>`;
+      return;
+    }
+
+    let somaDuracao = 0;
+    let somaEvtHora = 0;
+    let somaEvtKm = 0;
+
+    relatorios.forEach(r => {
+      somaDuracao += (r.telemetriaTurno?.duracaoHoras || 0);
+      somaEvtHora += (r.metricasEficiencia?.eventosPorHora || 0);
+      somaEvtKm += (r.metricasEficiencia?.eventosPorKm || 0);
+    });
+
+    const totalTurnos = relatorios.length;
+    if (elTurnos) elTurnos.textContent = totalTurnos;
+    if (elDuracao) elDuracao.textContent = `${(somaDuracao / totalTurnos).toFixed(1)}h`;
+    if (elEvtHora) elEvtHora.textContent = (somaEvtHora / totalTurnos).toFixed(1);
+    if (elEvtKm) elEvtKm.textContent = (somaEvtKm / totalTurnos).toFixed(1);
+
+    // Calcular e guardar médias para a tabela
+    ultimasMediasCalculadasDesktop = calcularMediasHistoricasPorBrick(relatorios);
+
+    // Ativar escuta em tempo real da caixa de pesquisa por CP7
+    if (inputPesquisa && !inputPesquisa.dataset.bound) {
+      inputPesquisa.addEventListener('input', (e) => {
+        renderizarTabelaDesktopFiltrada(e.target.value);
+      });
+      inputPesquisa.dataset.bound = "true";
+    }
+
+    renderizarTabelaDesktopFiltrada(inputPesquisa ? inputPesquisa.value : "");
+
+    // Renderizar a lista histórica de turnos à direita
+    containerHistorico.innerHTML = "";
+    relatorios.forEach(r => {
+      const dateObj = new Date(r.dataHoraCriacao || r.dataRelatorio);
+      const dataStr = `${String(dateObj.getDate()).padStart(2, '0')}/${String(dateObj.getMonth() + 1).padStart(2, '0')}/${dateObj.getFullYear()}`;
+      const horaStr = `${String(dateObj.getHours()).padStart(2, '0')}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+
+      const card = document.createElement('div');
+      card.className = "p-4 bg-gray-50 hover:bg-purple-50/50 border border-gray-200 hover:border-purple-300 rounded-2xl flex items-center justify-between transition-all cursor-pointer shadow-2xs";
+      card.innerHTML = `
+        <div class="space-y-1">
+          <div class="flex items-center space-x-2">
+            <span class="font-bold text-gray-800 text-xs">${r.driverName || 'Motorista'}</span>
+            <span class="text-[10px] bg-gray-200 text-gray-700 px-2 py-0.5 rounded-full font-mono font-bold">${dataStr} ${horaStr}</span>
+          </div>
+          <div class="text-[11px] text-gray-500 flex items-center space-x-3">
+            <span>⏱️ ${r.telemetriaTurno?.duracaoHoras || 0}h</span>
+            <span>🛣️ ${r.telemetriaTurno?.kmPercorridos || 0} KM</span>
+            <span>📦 ${r.resumoEventos?.totalObjetosAlocados || 0} pacotes</span>
+          </div>
+        </div>
+        <button type="button" class="btn-ver-detalhe-desktop bg-purple-600 hover:bg-purple-700 text-white font-bold text-[10px] px-3 py-2 rounded-xl transition-all cursor-pointer shadow-xs">
+          Ver Turno
+        </button>
+      `;
+
+      card.querySelector('.btn-ver-detalhe-desktop').addEventListener('click', (e) => {
+        e.stopPropagation();
+        exibirModalDetalheTurnoDesktop(r);
+      });
+
+      card.addEventListener('click', () => {
+        exibirModalDetalheTurnoDesktop(r);
+      });
+
+      containerHistorico.appendChild(card);
+    });
+
+  } catch (err) {
+    console.error("❌ Erro ao renderizar Centro de Relatórios Desktop:", err);
+  }
+}
+
+// Exportações Globais
+window.rotasRelatorios = {
+  verificarPendenciasRota,
+  agruparObjetosPorBrick,
+  calcularMetricasRelatorio,
+  salvarRelatorioNoFirestore,
+  carregarHistoricoRelatorios,
+  calcularMediasHistoricasPorBrick,
+  renderizarRelatoriosUI
+};
+
+window.renderizarRelatoriosUI = renderizarRelatoriosUI;
 
 =========================================
 ARQUIVO: js/rotas-ui.js
@@ -4266,9 +4973,10 @@ ARQUIVO: js/rotas.js
 
 /**
  * js/rotas.js
- * Versão v71.0 - Com Componentes de Geografia, Odómetro, Modais, Inputs e UI Isolados
+ * Versão v74.1 - Com Componentes de Geografia, Odómetro, Modais, Inputs e UI Isolados
  * Faz: Gestão principal da aba de rotas, integrando os componentes 'rotas-geografia.js',
  *      'rotas-odometro.js', 'rotas-modais.js', 'rotas-inputs.js' e 'rotas-ui.js'.
+ * Alteração v74.1: Ativação rigorosa do estado laranja saltitante para novas adições pós-otimização.
  */
 
 import { saveData } from './storage.js';
@@ -4390,13 +5098,13 @@ export function alternarModoRota(modo) {
 
     if (modo === 'conducao') {
         planningControls.classList.add('hidden');
-        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
-        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all cursor-pointer";
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer";
         localStorage.setItem('cp_modo_rota', 'conducao');
     } else {
         planningControls.classList.remove('hidden');
-        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all";
-        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all";
+        btnPlaneamento.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all cursor-pointer";
+        btnConducao.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer";
         localStorage.setItem('cp_modo_rota', 'planeamento');
     }
 }
@@ -4504,8 +5212,8 @@ export async function processarAdicaoPorPostal() {
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
         const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
-        // Apenas fica marcado como não-confirmado se a rota JÁ TIVER SIDO OTIMIZADA previamente
-        const rotaJaOtimizada = window.isRouteOptimized === true;
+        // Verifica se a rota já foi otimizada (na memória ou na flag de estado)
+        const rotaJaOtimizada = window.isRouteOptimized === true || (Array.isArray(window.rotaOtimizada) && window.rotaOtimizada.length > 0);
 
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
@@ -4518,7 +5226,7 @@ export async function processarAdicaoPorPostal() {
             brickId: brickId,
             brickName: brickName,
             tipoOperacao: tipoOperacaoVal,
-            isNewUnconfirmed: rotaJaOtimizada
+            isNewUnconfirmed: rotaJaOtimizada // Se a rota já está em andamento, marca como não confirmada (laranja saltitante)
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -4529,11 +5237,11 @@ export async function processarAdicaoPorPostal() {
             sincronizarPersistencia();
             alert("Ponto de Partida configurado com sucesso!");
         } else {
-            // Adiciona sempre a morada à lista de planeamento (Moradas Mapeadas)
+            // Adiciona à lista geral de moradas
             window.moradasEntregas.push(novaMorada);
 
             if (rotaJaOtimizada) {
-                // SE A ROTA JÁ FOI OTIMIZADA ANTERIORMENTE:
+                // SE A ROTA JÁ FOI OTIMIZADA: adiciona ao fim da rota otimizada e exibe no mapa
                 let pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
 
                 novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
@@ -4561,11 +5269,20 @@ export async function processarAdicaoPorPostal() {
                 }, 200);
 
                 alternarModoRota('conducao');
+
+                // Abre o modal para preenchimento de observações mantendo o estado não confirmado
+                setTimeout(() => {
+                    abrirModalEdicaoParagem(novaMorada, 'conducao');
+                }, 150);
             } else {
                 // FASE INICIAL DE PLANEAMENTO (SEM OTIMIZAÇÃO AINDA):
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
                 alternarModoRota('planeamento');
+
+                setTimeout(() => {
+                    abrirModalEdicaoParagem(novaMorada, 'planeamento');
+                }, 150);
             }
         }
 
@@ -4926,16 +5643,15 @@ ARQUIVO: js/setores.js
 
 /**
  * setores.js
- * Versão v71.0 - Com Balões Informativos (InfoWindow) nos Pinos do Mapa Geral
- * Faz: Controla o ecrã de Atribuição de Bricks com atualização otimista imediata na memória RAM local,
- *      e adiciona balões de informação ricos ao clicar em qualquer pino do mapa do gestor.
- * Depende de: ./geografia-data.js, ./storage.js, ./motoristas.js, ./firebase-init.js
+ * Versão v75.0 - Módulo de Atribuição de Bricks, Mapa do Gestor e Calibração
+ * Faz: Controla o ecrã de Atribuição de Bricks aos motoristas, calibração manual
+ *      de pinos (Drag & Drop com trava de segurança), reatribuição instantânea
+ *      no mapa e Auditoria de Saldo Zero.
+ * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
 import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
 import { saveData } from './storage.js';
-
-// Importa a instância ativa do Firestore
 import { db } from './firebase-init.js';
 
 // ID do motorista que está atualmente selecionado na interface para atribuição
@@ -4947,10 +5663,18 @@ let concelhoAtivo = "MAFRA";
 // Guarda o estado de expansão de cada freguesia para evitar que fechem ao clicar nos checkboxes
 let freguesiasExpandidas = new Set();
 
+// Flag anti-concorrência para evitar que snapshots do Firestore revertam edições locais imediatas
+let isLocalBrickUpdating = false;
+
+// Estado da Trava de Segurança dos Pinos (Falso = Travado/Modo Seguro, Verdadeiro = Destravado para Calibração)
+let modoCalibracaoAtivo = false;
+
 // Instâncias internas seguras do mapa do gestor e balão de informação
 let dashboardMap = null;
-let dashboardOverlays = [];
 let dashboardInfoWindow = null;
+
+// Mapa de reconciliação inteligente de marcadores (chave: `${driverId}_${brickId}`)
+let dashboardMarkersMap = new Map();
 
 // Cache local em memória RAM das coordenadas já geocodificadas
 let brickCoordsCache = {};
@@ -5096,11 +5820,119 @@ function geocodificarBrickSobProcura(freguesia, localidade) {
 }
 
 // =========================================================================
+// REATRIBUIÇÃO DIRETA DE MOTORISTA A PARTIR DO BALÃO DO MAPA
+// =========================================================================
+window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
+    if (!brickId || !novoMotoristaId) return;
+
+    const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
+    const novoMotorista = driversArr.find(d => d.id === novoMotoristaId);
+    if (!novoMotorista) return;
+
+    const normalizedBid = normalizarBrickId(brickId);
+    let motoristaAnterior = null;
+
+    // 1. Remover o Brick do dono anterior
+    driversArr.forEach(d => {
+        if (Array.isArray(d.brickIds)) {
+            const hasBrick = d.brickIds.some(id => normalizarBrickId(id) === normalizedBid);
+            if (hasBrick && d.id !== novoMotoristaId) {
+                motoristaAnterior = d;
+                d.brickIds = d.brickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
+            }
+        }
+    });
+
+    // 2. Adicionar ao novo motorista
+    if (!Array.isArray(novoMotorista.brickIds)) {
+        novoMotorista.brickIds = [];
+    }
+    const jaPossui = novoMotorista.brickIds.some(id => normalizarBrickId(id) === normalizedBid);
+    if (!jaPossui) {
+        novoMotorista.brickIds.push(brickId);
+    }
+
+    // 3. Atualização otimista imediata na memória local
+    isLocalBrickUpdating = true;
+    saveData(
+        window.drivers, 
+        [], 
+        window.assignments, 
+        window.partidaLocalizacao, 
+        window.moradasEntregas, 
+        window.rotaOtimizada, 
+        window.dataRotaSelecionada, 
+        window.rotaIniciada
+    );
+
+    // 4. Re-renderizar interface visual e marcadores no mapa
+    renderDriversForAttribution();
+    renderGeographicTree();
+    atualizarAuditoriaBricks();
+    desenharBricksNoMapa();
+
+    // 5. Persistir as alterações no Firestore
+    const promises = [];
+    if (motoristaAnterior) {
+        promises.push(db.collection('drivers').doc(motoristaAnterior.id).update({
+            brickIds: motoristaAnterior.brickIds
+        }));
+    }
+    promises.push(db.collection('drivers').doc(novoMotorista.id).update({
+        brickIds: novoMotorista.brickIds
+    }));
+
+    Promise.all(promises).then(() => {
+        console.log(`✅ [ATRIBUIÇÃO MAPA] Brick "${brickId}" atribuído com sucesso a "${novoMotorista.name}".`);
+    }).catch(err => {
+        console.error("❌ Erro ao sincronizar reatribuição no Firestore:", err);
+    }).finally(() => {
+        isLocalBrickUpdating = false;
+    });
+};
+
+// =========================================================================
+// CONTROLO DO BOTÃO DE TRAVA / MODO DE CALIBRAÇÃO DE PINOS
+// =========================================================================
+function configurarControloModoCalibracao() {
+    const btnToggle = document.getElementById('btn-toggle-modo-calibracao');
+    const icone = document.getElementById('icone-trava-calibracao');
+    const texto = document.getElementById('texto-trava-calibracao');
+    const aviso = document.getElementById('aviso-calibracao-ativa');
+
+    if (!btnToggle || btnToggle.dataset.bound === "true") return;
+
+    btnToggle.addEventListener('click', () => {
+        modoCalibracaoAtivo = !modoCalibracaoAtivo;
+
+        if (modoCalibracaoAtivo) {
+            btnToggle.className = "bg-amber-500 hover:bg-amber-600 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-amber-600 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-md animate-none";
+            if (icone) icone.className = "fa-solid fa-unlock text-white";
+            if (texto) texto.textContent = "Calibração Ativa (Pinos Móveis)";
+            if (aviso) aviso.classList.remove('hidden');
+        } else {
+            btnToggle.className = "bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs";
+            if (icone) icone.className = "fa-solid fa-lock text-green-600";
+            if (texto) texto.textContent = "Pinos Bloqueados (Modo Seguro)";
+            if (aviso) aviso.classList.add('hidden');
+        }
+
+        for (const marker of dashboardMarkersMap.values()) {
+            marker.setDraggable(modoCalibracaoAtivo);
+        }
+    });
+
+    btnToggle.dataset.bound = "true";
+}
+
+// =========================================================================
 // INICIALIZAÇÃO DO MAPA GERAL DO GESTOR
 // =========================================================================
 function inicializarMapaBricksDashboard() {
     const mapEl = document.getElementById('map-dashboard-bricks');
     if (!mapEl || typeof google === 'undefined') return;
+
+    configurarControloModoCalibracao();
 
     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
 
@@ -5126,23 +5958,23 @@ function inicializarMapaBricksDashboard() {
     desenharBricksNoMapa();
 }
 
-// ==========================================
-// DESENHAR OS PINS GEOGRÁFICOS DE CADA MOTORISTA NO MAPA GERAL
-// ==========================================
+// =========================================================================
+// DESENHO, CALIBRAÇÃO E REATRIBUIÇÃO DE BRICKS NO MAPA DO GESTOR
+// =========================================================================
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
 
-    if (dashboardInfoWindow) {
-        dashboardInfoWindow.close();
-    }
-
-    dashboardOverlays.forEach(overlay => overlay.setMap(null));
-    dashboardOverlays = [];
-
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
-
+    const keysDesejadas = new Set();
     const bounds = new google.maps.LatLngBounds();
     let totalPontosDesenhados = 0;
+
+    const pinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
+
+    const driversDoConcelho = driversArr.filter(driver => {
+        const concelhos = Array.isArray(driver.concelhos) ? driver.concelhos : ["MAFRA"];
+        return concelhos.includes(concelhoAtivo);
+    });
 
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -5154,64 +5986,123 @@ function desenharBricksNoMapa() {
                     return; 
                 }
 
+                const markerKey = `${drv.id}_${id}`;
+                keysDesejadas.add(markerKey);
+
                 const coords = obterCoordenadaPrecisaBrick(freg, loc);
                 bounds.extend(coords);
                 totalPontosDesenhados++;
 
-                const pinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
+                if (!dashboardMarkersMap.has(markerKey)) {
+                    const marker = new google.maps.Marker({
+                        position: coords,
+                        map: dashboardMap,
+                        draggable: modoCalibracaoAtivo,
+                        icon: {
+                            path: pinSvgPath,
+                            fillColor: drv.color,
+                            fillOpacity: 1.0,
+                            strokeWeight: 1,
+                            strokeColor: "#FFFFFF",
+                            scale: 1.2,
+                            anchor: new google.maps.Point(12, 22)
+                        },
+                        title: `${freg} - ${loc} (${drv.name})`
+                    });
 
-                const marker = new google.maps.Marker({
-                    position: coords,
-                    map: dashboardMap,
-                    icon: {
-                        path: pinSvgPath,
-                        fillColor: drv.color,
-                        fillOpacity: 1.0,
-                        strokeWeight: 1,
-                        strokeColor: "#FFFFFF",
-                        scale: 1.2,
-                        anchor: new google.maps.Point(12, 22)
-                    },
-                    title: `${freg} - ${loc} (${drv.name})`
-                });
-                dashboardOverlays.push(marker);
+                    marker.addListener('dragend', (event) => {
+                        const novaLat = event.latLng.lat();
+                        const novaLng = event.latLng.lng();
+                        const novasCoords = { lat: novaLat, lng: novaLng };
 
-                // BALÃO INFORMATIVO RICO AO CLICAR OU PASSAR O RATO NO PINO DO MAPA GERAL
-                const exibirInfoBrick = () => {
-                    if (dashboardInfoWindow) {
-                        const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg]) 
-                            ? GEOGRAPHY[concelhoAtivo][freg][loc] || [] 
-                            : [];
-                        
-                        const cpFormatado = cpList.length > 0 
-                            ? (cpList.length === 1 ? cpList[0] : `${cpList[0]} a ${cpList[cpList.length - 1]}`)
-                            : "";
+                        brickCoordsCache[id] = novasCoords;
+                        salvarCacheCoordenadas();
 
-                        dashboardInfoWindow.setContent(`
-                            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 220px;">
-                                <div style="font-weight: 800; color: #1F2937; font-size: 13px; margin-bottom: 2px;">
-                                    📍 ${freg}
+                        db.collection('brickCoordinates').doc(id).set(novasCoords).then(() => {
+                            console.log(`✅ [CALIBRAÇÃO] Posição do Brick "${id}" atualizada no Firestore.`);
+                        }).catch((err) => {
+                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar coordenada do Brick "${id}":`, err);
+                        });
+
+                        if (dashboardInfoWindow) {
+                            dashboardInfoWindow.setContent(`
+                                <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 4px;">
+                                    <div style="font-weight: 800; color: #10B981;">📍 Posição Calibrada!</div>
+                                    <div style="color: #374151; font-weight: 600; font-size: 10px; margin-top: 2px;">${freg} - ${loc}</div>
+                                    <div style="color: #6B7280; font-size: 9px; font-mono;">(${novaLat.toFixed(5)}, ${novaLng.toFixed(5)})</div>
                                 </div>
-                                <div style="font-weight: 700; color: #2563EB; font-size: 12px;">
-                                    Brick: ${loc}
-                                </div>
-                                ${cpFormatado ? `<div style="font-size: 10px; font-family: monospace; color: #6B7280; margin-top: 2px;">CPs: ${cpFormatado}</div>` : ''}
-                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 6px; padding-top: 6px; border-top: 1px border-dashed #E5E7EB;">
-                                    <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background-color: ${drv.color}; flex-shrink: 0;"></span>
-                                    <span style="color: ${drv.color}; font-weight: 800; font-size: 11px; text-transform: uppercase;">Estante de: ${drv.name}</span>
-                                </div>
-                            </div>
-                        `);
-                        dashboardInfoWindow.setPosition(coords);
-                        dashboardInfoWindow.open(dashboardMap, marker);
-                    }
-                };
+                            `);
+                            dashboardInfoWindow.setPosition(novasCoords);
+                            dashboardInfoWindow.open(dashboardMap, marker);
+                        }
+                    });
 
-                marker.addListener('mouseover', exibirInfoBrick);
-                marker.addListener('click', exibirInfoBrick);
+                    const exibirInfoBrick = () => {
+                        if (dashboardInfoWindow) {
+                            const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg]) 
+                                ? GEOGRAPHY[concelhoAtivo][freg][loc] || [] 
+                                : [];
+                            
+                            const cpFormatado = cpList.length > 0 
+                                ? (cpList.length === 1 ? cpList[0] : `${cpList[0]} a ${cpList[cpList.length - 1]}`)
+                                : "";
+
+                            const opcoesDriversHtml = driversDoConcelho.map(d => `
+                                <option value="${d.id}" ${d.id === drv.id ? 'selected' : ''} style="color: ${d.color}; font-weight: bold;">
+                                    ${d.name}
+                                </option>
+                            `).join('');
+
+                            dashboardInfoWindow.setContent(`
+                                <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 6px; line-height: 1.4; max-width: 250px;">
+                                    <div style="font-weight: 800; color: #1F2937; font-size: 13px; margin-bottom: 2px;">
+                                        📍 ${freg}
+                                    </div>
+                                    <div style="font-weight: 700; color: #2563EB; font-size: 12px;">
+                                        Brick: ${loc}
+                                    </div>
+                                    ${cpFormatado ? `<div style="font-size: 10px; font-family: monospace; color: #6B7280; margin-top: 2px;">CPs: ${cpFormatado}</div>` : ''}
+
+                                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E5E7EB;">
+                                        <label style="display: block; font-size: 9px; font-weight: 900; text-transform: uppercase; color: #6B7280; margin-bottom: 3px;">
+                                            Estante de (Alterar Motorista):
+                                        </label>
+                                        <div style="display: flex; align-items: center; gap: 6px;">
+                                            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: ${drv.color}; flex-shrink: 0;"></span>
+                                            <select onchange="if(typeof window.trocarMotoristaDoBrick === 'function') window.trocarMotoristaDoBrick('${id}', this.value)"
+                                                    style="flex: 1; padding: 4px 6px; border-radius: 6px; border: 1px solid #D1D5DB; font-size: 11px; font-weight: 800; color: #1F2937; background: #F9FAFB; outline: none; cursor: pointer;">
+                                                ${opcoesDriversHtml}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div style="margin-top: 6px; font-size: 9px; color: #9CA3AF; font-style: italic;">
+                                        ${modoCalibracaoAtivo 
+                                            ? '🔓 Modo Calibração: Pode arrastar este pino para o local exato.' 
+                                            : '🔒 Modo Seguro: Pinos travados contra arrasto acidental.'}
+                                    </div>
+                                </div>
+                            `);
+                            dashboardInfoWindow.setPosition(marker.getPosition());
+                            dashboardInfoWindow.open(dashboardMap, marker);
+                        }
+                    };
+
+                    marker.addListener('mouseover', exibirInfoBrick);
+                    marker.addListener('click', exibirInfoBrick);
+
+                    dashboardMarkersMap.set(markerKey, marker);
+                }
             }
         });
     });
+
+    for (const [key, marker] of dashboardMarkersMap.entries()) {
+        if (!keysDesejadas.has(key)) {
+            marker.setMap(null);
+            dashboardMarkersMap.delete(key);
+        }
+    }
 
     if (totalPontosDesenhados > 0) {
         dashboardMap.fitBounds(bounds);
@@ -5272,7 +6163,7 @@ export function renderDriversForAttribution() {
         btn.addEventListener('click', () => {
             motoristaAtivoId = driver.id;
             renderDriversForAttribution();
-            window.renderizarSetoresUI();
+            renderGeographicTree();
         });
 
         listContainer.appendChild(btn);
@@ -5426,7 +6317,6 @@ export function renderGeographicTree() {
 
     const freguesiasList = Object.keys(GEOGRAPHY[concelho]).sort();
 
-    // Map estruturado e normalizado
     const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -5460,7 +6350,7 @@ export function renderGeographicTree() {
 
         header.innerHTML = `
             <div class="flex items-center space-x-2">
-                <button type="button" class="btn-expand-tree text-gray-500 hover:text-blue-600 font-mono text-[10px] px-2 py-0.5 rounded border bg-white focus:outline-none shadow-sm transition flex items-center space-x-1">
+                <button type="button" class="btn-expand-tree text-gray-500 hover:text-blue-600 font-mono text-[10px] px-2 py-0.5 rounded border bg-white focus:outline-none shadow-sm transition flex items-center space-x-1 cursor-pointer">
                     ${isExpanded 
                         ? "<span><i class='fa-solid fa-minus mr-0.5'></i> Recolher</span>" 
                         : "<span><i class='fa-solid fa-plus mr-0.5'></i> Expandir</span>"
@@ -5541,17 +6431,16 @@ export function renderGeographicTree() {
                         updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
 
-                    // 1. ATUALIZAÇÃO OTIMISTA IMEDIATA EM MEMÓRIA RAM LOCAL
+                    isLocalBrickUpdating = true;
+
                     activeDriver.brickIds = updatedBrickIds;
                     saveData(window.drivers, [], window.assignments, window.partidaLocalizacao, window.moradasEntregas, window.rotaOtimizada, window.dataRotaSelecionada, window.rotaIniciada);
 
-                    // 2. RE-RENDERIZADO OTIMISTA DA INTERFACE NA HORA
                     renderDriversForAttribution();
                     renderGeographicTree();
                     atualizarAuditoriaBricks();
                     desenharBricksNoMapa();
 
-                    // 3. ENVIO ASSÍNCRONO PARA O FIRESTORE EM SEGUNDO PLANO
                     db.collection('drivers').doc(activeDriver.id).update({
                         brickIds: updatedBrickIds
                     }).then(() => {
@@ -5559,6 +6448,8 @@ export function renderGeographicTree() {
                     }).catch((err) => {
                         console.error("[FIREBASE] Erro ao sincronizar Bricks:", err);
                         alert("Erro de ligação: Não foi possível guardar as alterações.");
+                    }).finally(() => {
+                        isLocalBrickUpdating = false;
                     });
                 });
             }
@@ -5606,17 +6497,16 @@ export function renderGeographicTree() {
                     }
                 });
 
-                // 1. ATUALIZAÇÃO OTIMISTA IMEDIATA EM MEMÓRIA RAM LOCAL
+                isLocalBrickUpdating = true;
+
                 activeDriver.brickIds = updatedBrickIds;
                 saveData(window.drivers, [], window.assignments, window.partidaLocalizacao, window.moradasEntregas, window.rotaOtimizada, window.dataRotaSelecionada, window.rotaIniciada);
 
-                // 2. RE-RENDERIZADO OTIMISTA DA INTERFACE NA HORA
                 renderDriversForAttribution();
                 renderGeographicTree();
                 atualizarAuditoriaBricks();
                 desenharBricksNoMapa();
 
-                // 3. ENVIO ASSÍNCRONO PARA O FIRESTORE EM SEGUNDO PLANO
                 db.collection('drivers').doc(activeDriver.id).update({
                     brickIds: updatedBrickIds
                 }).then(() => {
@@ -5624,6 +6514,8 @@ export function renderGeographicTree() {
                 }).catch((err) => {
                     console.error("[FIREBASE] Erro ao sincronizar Bricks em lote:", err);
                     alert("Erro de ligação: Não foi possível guardar as alterações.");
+                }).finally(() => {
+                    isLocalBrickUpdating = false;
                 });
             });
         }
@@ -5652,6 +6544,8 @@ export function renderGeographicTree() {
 // CENTRALIZAÇÃO E ATUALIZAÇÃO DA INTERFACE DE SETORES E BRICKS (WINDOW)
 // =========================================================================
 window.renderizarSetoresUI = () => {
+    if (isLocalBrickUpdating) return;
+
     const seletorConcelho = document.getElementById('select-concelho-setores');
     if (seletorConcelho) {
         seletorConcelho.value = concelhoAtivo;
@@ -5671,6 +6565,8 @@ window.renderizarSetoresUI = () => {
             seletorConcelho.dataset.listenerAtivo = "true";
         }
     }
+
+    configurarControloModoCalibracao();
 
     renderDriversForAttribution();
     renderGeographicTree();
@@ -6434,21 +7330,25 @@ ARQUIVO: js/ui-menu.js
 
 /**
  * js/ui-menu.js
- * Versão v70.6 - Com Gestão de Prefixo Padrão de Código Postal
- * Faz: Gere a abertura/fecho do menu lateral (hambúrguer), a seleção de preferência
- *      de navegação (Google Maps vs Waze), guarda o prefixo padrão de 4 dígitos,
- *      exibe o email do utilizador ativo e gere o fecho de sessão (logout) global.
+ * Versão v75.0 - Módulo de Gestão do Menu Lateral com Navegação Direta de Gestão
+ * Faz: Auto-inicializa o menu lateral e permite navegação direta e limpa para
+ *      as páginas de Motoristas, Bricks e Centro de Relatórios Desktop-First,
+ *      além dos modais dedicados de preferências e fecho de sessão.
  * Depende de: ./navigation.js, ./firebase-init.js
  */
 
 import { obterNavegadorPreferido, definirNavegadorPreferido } from './navigation.js';
 
-// Retorna o prefixo padrão guardado (ou '2640' por omissão)
+/**
+ * Retorna o prefixo padrão de 4 dígitos guardado (ou '2640' por omissão)
+ */
 export function obterPrefixoPadrao() {
     return localStorage.getItem('cp_default_prefix') || '2640';
 }
 
-// Guarda o prefixo padrão sanitizado (4 dígitos)
+/**
+ * Guarda o prefixo padrão sanitizado (4 dígitos)
+ */
 export function definirPrefixoPadrao(prefix) {
     const cleanPrefix = (prefix || '').replace(/\D/g, '').substring(0, 4);
     const finalPrefix = cleanPrefix.length === 4 ? cleanPrefix : '2640';
@@ -6457,6 +7357,200 @@ export function definirPrefixoPadrao(prefix) {
     return finalPrefix;
 }
 
+/**
+ * Atualiza os textos/subtítulos visíveis no menu lateral com base nas preferências guardadas
+ */
+function atualizarSubtitulosMenu() {
+    const subNav = document.getElementById('menu-subtitulo-navegador');
+    const subPref = document.getElementById('menu-subtitulo-prefixo');
+    const userRoleBadge = document.getElementById('menu-user-role-badge');
+
+    if (subNav) {
+        const navAtual = obterNavegadorPreferido();
+        subNav.textContent = navAtual === 'waze' ? 'Waze' : 'Google Maps';
+    }
+
+    if (subPref) {
+        const prefixoAtual = obterPrefixoPadrao();
+        subPref.textContent = `CP: ${prefixoAtual}-`;
+    }
+
+    if (userRoleBadge) {
+        const role = window.currentUserRole || localStorage.getItem('cp_user_role') || 'motorista';
+        userRoleBadge.textContent = role.toLowerCase() === 'gestor' ? 'Gestor (Acesso Total)' : 'Motorista';
+    }
+}
+
+/**
+ * Atualiza os estilos visuais dos botões de seleção de navegador dentro do modal
+ */
+function atualizarEstilosModalNavegador() {
+    const navAtual = obterNavegadorPreferido();
+    const botoesNav = document.querySelectorAll('.pref-nav-btn');
+
+    botoesNav.forEach(btn => {
+        const navType = btn.getAttribute('data-nav');
+        if (navType === navAtual) {
+            btn.className = "pref-nav-btn p-4 rounded-2xl border-2 border-blue-600 text-xs font-black text-center flex flex-col items-center justify-center space-y-2 bg-blue-50 text-blue-700 shadow-sm transition-all cursor-pointer ring-2 ring-blue-400/30";
+        } else {
+            btn.className = "pref-nav-btn p-4 rounded-2xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-2 bg-gray-50 text-gray-700 hover:bg-gray-100 transition-all cursor-pointer opacity-70 hover:opacity-100";
+        }
+    });
+}
+
+/**
+ * Configuração dos Itens de Gestão e Modais do Menu
+ */
+function configurarModaisDoMenu() {
+    const overlayMenu = document.getElementById('menu-lateral-overlay');
+    const conteudoMenu = document.getElementById('menu-lateral-conteudo');
+
+    const fecharGavetaMenu = () => {
+        if (conteudoMenu) conteudoMenu.classList.add('-translate-x-full');
+        setTimeout(() => {
+            if (overlayMenu) overlayMenu.classList.add('hidden');
+        }, 300);
+    };
+
+    // Helper seguro para navegação direta por abas
+    const navegarParaAba = (aba) => {
+        fecharGavetaMenu();
+        if (typeof window.showTab === 'function') {
+            window.showTab(aba);
+        } else {
+            const btnNav = document.getElementById(`nav-${aba}`);
+            if (btnNav) btnNav.click();
+        }
+    };
+
+    // -------------------------------------------------------------
+    // BOTÕES DO PAINEL DE GESTÃO (NAVEGAÇÃO DIRETA SEM POPUPS)
+    // -------------------------------------------------------------
+    const itemMenuMotoristas = document.getElementById('menu-item-motoristas');
+    const itemMenuBricks = document.getElementById('menu-item-bricks');
+    const itemMenuRelatorios = document.getElementById('menu-item-relatorios');
+
+    if (itemMenuMotoristas && !itemMenuMotoristas.dataset.bound) {
+        itemMenuMotoristas.addEventListener('click', (e) => {
+            e.preventDefault();
+            navegarParaAba('motoristas');
+        });
+        itemMenuMotoristas.dataset.bound = "true";
+    }
+
+    if (itemMenuBricks && !itemMenuBricks.dataset.bound) {
+        itemMenuBricks.addEventListener('click', (e) => {
+            e.preventDefault();
+            navegarParaAba('intervalos');
+        });
+        itemMenuBricks.dataset.bound = "true";
+    }
+
+    // Ao clicar em Relatórios, abre diretamente a nova página completa
+    if (itemMenuRelatorios && !itemMenuRelatorios.dataset.bound) {
+        itemMenuRelatorios.addEventListener('click', (e) => {
+            e.preventDefault();
+            navegarParaAba('relatorios');
+        });
+        itemMenuRelatorios.dataset.bound = "true";
+    }
+
+    // -------------------------------------------------------------
+    // 1. MODAL DE NAVEGADOR PREFERIDO
+    // -------------------------------------------------------------
+    const itemMenuNav = document.getElementById('menu-item-navegador');
+    const modalNav = document.getElementById('modal-menu-navegador');
+    const btnFecharNavX = document.getElementById('btn-fechar-modal-nav');
+    const btnFecharNavOk = document.getElementById('btn-fechar-modal-nav-ok');
+    const botoesNav = document.querySelectorAll('.pref-nav-btn');
+
+    const fecharModalNav = () => {
+        if (modalNav) modalNav.classList.add('hidden');
+        atualizarSubtitulosMenu();
+    };
+
+    if (itemMenuNav && modalNav && !itemMenuNav.dataset.bound) {
+        itemMenuNav.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            atualizarEstilosModalNavegador();
+            modalNav.classList.remove('hidden');
+        });
+        itemMenuNav.dataset.bound = "true";
+    }
+
+    if (btnFecharNavX) btnFecharNavX.onclick = fecharModalNav;
+    if (btnFecharNavOk) btnFecharNavOk.onclick = fecharModalNav;
+
+    botoesNav.forEach(btn => {
+        btn.onclick = () => {
+            const navEscolha = btn.getAttribute('data-nav');
+            definirNavegadorPreferido(navEscolha);
+            atualizarEstilosModalNavegador();
+            atualizarSubtitulosMenu();
+        };
+    });
+
+    // -------------------------------------------------------------
+    // 2. MODAL DE PREFIXO PADRÃO
+    // -------------------------------------------------------------
+    const itemMenuPrefixo = document.getElementById('menu-item-prefixo');
+    const modalPrefixo = document.getElementById('modal-menu-prefixo');
+    const inputPrefixo = document.getElementById('input-modal-prefixo');
+    const btnFecharPrefX = document.getElementById('btn-fechar-modal-prefixo');
+    const btnCancelarPref = document.getElementById('btn-cancelar-modal-prefixo');
+    const btnSalvarPref = document.getElementById('btn-salvar-modal-prefixo');
+
+    const fecharModalPrefixo = () => {
+        if (modalPrefixo) modalPrefixo.classList.add('hidden');
+    };
+
+    if (itemMenuPrefixo && modalPrefixo && !itemMenuPrefixo.dataset.bound) {
+        itemMenuPrefixo.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (inputPrefixo) {
+                inputPrefixo.value = obterPrefixoPadrao();
+            }
+            modalPrefixo.classList.remove('hidden');
+            setTimeout(() => {
+                if (inputPrefixo) {
+                    inputPrefixo.focus();
+                    inputPrefixo.select();
+                }
+            }, 100);
+        });
+        itemMenuPrefixo.dataset.bound = "true";
+    }
+
+    if (btnFecharPrefX) btnFecharPrefX.onclick = fecharModalPrefixo;
+    if (btnCancelarPref) btnCancelarPref.onclick = fecharModalPrefixo;
+
+    if (btnSalvarPref && inputPrefixo) {
+        btnSalvarPref.onclick = () => {
+            const val = inputPrefixo.value.replace(/\D/g, '').substring(0, 4);
+            if (val.length !== 4) {
+                alert("Por favor, introduza exatamente 4 números para o prefixo (Ex: 2640, 2710).");
+                inputPrefixo.focus();
+                return;
+            }
+
+            definirPrefixoPadrao(val);
+            atualizarSubtitulosMenu();
+
+            const inputRotasPrefixo = document.getElementById('prefixo-manual');
+            if (inputRotasPrefixo) {
+                inputRotasPrefixo.value = val;
+            }
+
+            fecharModalPrefixo();
+        };
+    }
+}
+
+/**
+ * Inicialização principal do Menu Hambúrguer
+ */
 export function setupMenuLateral() {
     const btnAbrir = document.getElementById('btn-abrir-menu');
     const btnFechar = document.getElementById('btn-fechar-menu');
@@ -6464,18 +7558,15 @@ export function setupMenuLateral() {
     const conteudo = document.getElementById('menu-lateral-conteudo');
     const userEmailSpan = document.getElementById('menu-user-email');
     const btnLogout = document.getElementById('menu-btn-logout');
-    const inputPrefixoPadrao = document.getElementById('pref-prefixo-padrao');
 
     if (!btnAbrir || !overlay || !conteudo) return;
 
-    // Função para abrir o menu
     const abrirMenu = () => {
         overlay.classList.remove('hidden');
         setTimeout(() => {
             conteudo.classList.remove('-translate-x-full');
         }, 10);
 
-        // Atualiza o email do utilizador logado se disponível no estado global ou firebase
         if (window.currentUserEmail && userEmailSpan) {
             userEmailSpan.textContent = window.currentUserEmail;
         } else if (window.firebase && firebase.auth().currentUser && userEmailSpan) {
@@ -6484,15 +7575,9 @@ export function setupMenuLateral() {
             userEmailSpan.textContent = "Sessão Ativa";
         }
 
-        // Carrega as preferências guardadas para os campos do menu
-        if (inputPrefixoPadrao) {
-            inputPrefixoPadrao.value = obterPrefixoPadrao();
-        }
-
-        atualizarEstilosBotoesNavegador();
+        atualizarSubtitulosMenu();
     };
 
-    // Função para fechar o menu
     const fecharMenu = () => {
         conteudo.classList.add('-translate-x-full');
         setTimeout(() => {
@@ -6500,49 +7585,19 @@ export function setupMenuLateral() {
         }, 300);
     };
 
-    btnAbrir.addEventListener('click', abrirMenu);
-    if (btnFechar) btnFechar.addEventListener('click', fecharMenu);
+    btnAbrir.onclick = abrirMenu;
+    if (btnFechar) btnFechar.onclick = fecharMenu;
     
-    // Fecha ao clicar fora do painel (no fundo escuro)
-    overlay.addEventListener('click', (e) => {
+    overlay.onclick = (e) => {
         if (e.target === overlay) {
             fecharMenu();
         }
-    });
+    };
 
-    // Configuração do input de Prefixo Padrão no Menu
-    if (inputPrefixoPadrao) {
-        inputPrefixoPadrao.value = obterPrefixoPadrao();
+    configurarModaisDoMenu();
 
-        inputPrefixoPadrao.addEventListener('input', (e) => {
-            let val = e.target.value.replace(/\D/g, '').substring(0, 4);
-            e.target.value = val;
-
-            if (val.length === 4) {
-                definirPrefixoPadrao(val);
-                
-                // Atualiza dinamicamente o campo de inserção rápida na página de rotas
-                const inputRotasPrefixo = document.getElementById('prefixo-manual');
-                if (inputRotasPrefixo) {
-                    inputRotasPrefixo.value = val;
-                }
-            }
-        });
-    }
-
-    // Configuração dos botões de preferência de navegador (Google Maps vs Waze)
-    const botoesNav = document.querySelectorAll('.pref-nav-btn');
-    botoesNav.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const navEscolha = btn.getAttribute('data-nav');
-            definirNavegadorPreferido(navEscolha);
-            atualizarEstilosBotoesNavegador();
-        });
-    });
-
-    // Configuração do botão de Logout no menu
     if (btnLogout) {
-        btnLogout.addEventListener('click', () => {
+        btnLogout.onclick = () => {
             const confirmar = confirm("Tem a certeza que deseja terminar sessão?");
             if (!confirmar) return;
 
@@ -6558,26 +7613,20 @@ export function setupMenuLateral() {
                 localStorage.clear();
                 window.location.reload();
             }
-        });
+        };
     }
+
+    atualizarSubtitulosMenu();
 }
 
-// Atualiza o visual dos botões no menu para destacar o navegador ativo
-function atualizarEstilosBotoesNavegador() {
-    const navAtual = obterNavegadorPreferido();
-    const botoesNav = document.querySelectorAll('.pref-nav-btn');
-
-    botoesNav.forEach(btn => {
-        const navType = btn.getAttribute('data-nav');
-        if (navType === navAtual) {
-            // Estilo ativo (destacado em azul corporativo)
-            btn.className = "pref-nav-btn p-3 rounded-xl border-2 border-blue-600 text-xs font-black text-center flex flex-col items-center justify-center space-y-1 bg-blue-50 text-blue-700 shadow-sm transition-all cursor-pointer";
-        } else {
-            // Estilo inativo
-            btn.className = "pref-nav-btn p-3 rounded-xl border border-gray-200 text-xs font-bold text-center flex flex-col items-center justify-center space-y-1 bg-gray-50 text-gray-700 transition-all cursor-pointer";
-        }
-    });
+// AUTO-INICIALIZAÇÃO GARANTIDA
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupMenuLateral);
+} else {
+    setupMenuLateral();
 }
+
+window.setupMenuLateral = setupMenuLateral;
 
 =========================================
 ARQUIVO: js/ui.js
@@ -6585,9 +7634,9 @@ ARQUIVO: js/ui.js
 
 /**
  * ui.js
- * Faz: Controla a navegação entre abas, atualização do visor principal e os eventos do teclado numérico virtual.
- *      Despoleta automaticamente a triagem no instante em que o último dígito do código postal é inserido.
- *      NOVO: Oculta reativamente os menus de Motoristas e Bricks se o utilizador autenticado for da Role 'Motorista'.
+ * Versão v75.0 - Controlo de Navegação, Interface, Ecrã de Relatórios e Permissões
+ * Faz: Controla a alternância entre todos os ecrãs (Triagem, Motoristas, Bricks, Rotas e Relatórios),
+ *      atualização do visor principal, teclado numérico e segurança por nível de acesso (Role).
  * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
  * Depende de: Nenhuns módulos.
  */
@@ -6596,10 +7645,17 @@ ARQUIVO: js/ui.js
  * Configura os listeners dos botões de navegação inferior
  */
 export function setupNavigation(showTab) {
-    document.getElementById('nav-triagem').addEventListener('click', () => showTab('triagem'));
-    document.getElementById('nav-motoristas').addEventListener('click', () => showTab('motoristas'));
-    document.getElementById('nav-intervalos').addEventListener('click', () => showTab('intervalos'));
-    document.getElementById('nav-rotas').addEventListener('click', () => showTab('rotas'));
+    const navTriagem = document.getElementById('nav-triagem');
+    const navRotas = document.getElementById('nav-rotas');
+    const navMotoristas = document.getElementById('nav-motoristas');
+    const navIntervalos = document.getElementById('nav-intervalos');
+    const navRelatorios = document.getElementById('nav-relatorios');
+
+    if (navTriagem) navTriagem.addEventListener('click', () => showTab('triagem'));
+    if (navRotas) navRotas.addEventListener('click', () => showTab('rotas'));
+    if (navMotoristas) navMotoristas.addEventListener('click', () => showTab('motoristas'));
+    if (navIntervalos) navIntervalos.addEventListener('click', () => showTab('intervalos'));
+    if (navRelatorios) navRelatorios.addEventListener('click', () => showTab('relatorios'));
 }
 
 /**
@@ -6609,7 +7665,7 @@ export function showTab(tabName) {
     // Guarda o separador ativo para que ao reabrir/regressar, a app continue onde estava
     localStorage.setItem('cp_active_tab', tabName);
 
-    const views = ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas'];
+    const views = ['view-triagem', 'view-motoristas', 'view-intervalos', 'view-rotas', 'view-relatorios'];
     views.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.add('hidden');
@@ -6618,8 +7674,8 @@ export function showTab(tabName) {
     const activeView = document.getElementById(`view-${tabName}`);
     if (activeView) activeView.classList.remove('hidden');
     
-    // Reset dos estilos visuais dos botões do menu
-    ['triagem', 'motoristas', 'intervalos', 'rotas'].forEach(id => {
+    // Reset dos estilos visuais dos botões da barra inferior
+    ['triagem', 'rotas'].forEach(id => {
         const btn = document.getElementById(`nav-${id}`);
         if (btn) {
             btn.classList.remove('text-blue-600', 'font-bold');
@@ -6633,12 +7689,15 @@ export function showTab(tabName) {
         activeNav.classList.remove('text-gray-400', 'font-semibold');
     }
 
-    // Sincroniza e recarrega instantaneamente as listas e árvores tátil ao mudar de aba!
+    // Dispara a sincronização e carregamento de dados da respetiva aba
     if (tabName === 'intervalos' && typeof window.renderizarSetoresUI === 'function') {
         window.renderizarSetoresUI();
     }
     if (tabName === 'motoristas' && typeof window.renderizarMotoristasUI === 'function') {
         window.renderizarMotoristasUI();
+    }
+    if (tabName === 'relatorios' && typeof window.renderizarRelatoriosUI === 'function') {
+        window.renderizarRelatoriosUI();
     }
 
     // Corrige renderização do mapa Google se entrar na aba Rotas
@@ -6651,30 +7710,36 @@ export function showTab(tabName) {
         }, 200);
     }
 }
+window.showTab = showTab;
 
 /**
- * NOVO: Bloqueia e oculta os menus de administração para motoristas comuns
+ * Bloqueia e oculta os acessos de administração no Menu Hambúrguer para motoristas comuns
  */
 export function aplicarPermissoesPorRole(role) {
-    const navMotoristas = document.getElementById('nav-motoristas');
-    const navIntervalos = document.getElementById('nav-intervalos');
+    const secaoGestorMenu = document.getElementById('menu-secao-gestor');
+    const badgeRole = document.getElementById('menu-user-role-badge');
+    const roleFormatada = (role || '').toLowerCase();
     
-    if (role === 'Motorista') {
+    window.currentUserRole = role;
+    localStorage.setItem('cp_user_role', role);
+
+    if (roleFormatada === 'motorista') {
         console.log("[AUTH] A aplicar restrições de nível: Motorista.");
-        if (navMotoristas) navMotoristas.classList.add('hidden');
-        if (navIntervalos) navIntervalos.classList.add('hidden');
+        if (secaoGestorMenu) secaoGestorMenu.classList.add('hidden');
+        if (badgeRole) badgeRole.textContent = "Motorista";
         
-        // Se estiver num ecrã restrito, redireciona o utilizador para a triagem de segurança
+        // Se estiver num ecrã restrito, redireciona o utilizador para a triagem
         const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
-        if (activeTab === 'motoristas' || activeTab === 'intervalos') {
+        if (activeTab === 'motoristas' || activeTab === 'intervalos' || activeTab === 'relatorios') {
             showTab('triagem');
         }
     } else {
         console.log("[AUTH] A aplicar acessos de nível: Gestor.");
-        if (navMotoristas) navMotoristas.classList.remove('hidden');
-        if (navIntervalos) navIntervalos.classList.remove('hidden');
+        if (secaoGestorMenu) secaoGestorMenu.classList.remove('hidden');
+        if (badgeRole) badgeRole.textContent = "Gestor (Acesso Total)";
     }
 }
+window.aplicarPermissoesPorRole = aplicarPermissoesPorRole;
 
 /**
  * Atualiza o painel visor do código postal
@@ -6706,7 +7771,7 @@ export function setupKeypad() {
                 window.currentInput += val;
                 if (visorCodigo) updateVisor(window.isPrefixLocked, window.lockedPrefixValue, window.currentInput, visorCodigo);
                 
-                // Quando atinge o número total de dígitos, despoleta de imediato a triagem de forma automática!
+                // Quando atinge o número total de dígitos, despoleta de imediato a triagem
                 if (window.currentInput.length === maxDigits) {
                     const btnAnalisar = document.getElementById('btn-analisar');
                     if (btnAnalisar) {
@@ -6753,7 +7818,6 @@ export function setupPrefixLock() {
             inputPrefixo.focus();
             
             window.lockedPrefixValue = sanitizeDigits(inputPrefixo.value).substring(0, 4);
-            // Prefixo inicial adaptado para Mafra (2640) de forma centralizada
             if (!window.lockedPrefixValue) {
                 window.lockedPrefixValue = "2640";
                 inputPrefixo.value = "2640";
@@ -6981,6 +8045,207 @@ ARQUIVO: partials/motoristas.html
             <p class="text-sm text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
         </div>
     </div>
+</main>
+
+=========================================
+ARQUIVO: partials/relatorios.html
+=========================================
+
+<!--
+  partials/relatorios.html
+  Versão v75.0 - Painel de Inteligência Logística e Relatórios do Gestor (Desktop-First)
+  Faz: Ecrã completo e amplo para desktop/tablet com KPIs de telemetria, médias de carga por CP7/Brick,
+       ferramenta de pesquisa em tempo real, histórico de turnos guardados no Firestore e detalhe de eventos.
+  NÃO faz: Não inclui scripts diretos, cabeçalhos globais ou folhas de estilo estáticas.
+  Depende de: Injeção assíncrona pelo main.js no index.html e renderização por rotas-relatorios.js.
+-->
+
+<main id="view-relatorios" class="hidden flex-1 p-6 md:p-8 space-y-6 overflow-y-auto bg-gray-50/50 min-h-screen">
+    
+    <!-- CABEÇALHO DA PÁGINA (DESKTOP) -->
+    <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div class="flex items-center space-x-4">
+            <div class="w-14 h-14 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center text-2xl shadow-xs">
+                <i class="fa-solid fa-chart-pie"></i>
+            </div>
+            <div>
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-xl font-black text-gray-900 tracking-tight">Centro de Análise e Relatórios</h1>
+                    <span class="bg-purple-100 text-purple-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-purple-200">
+                        Área do Gestor
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 mt-0.5">Telemetria de turnos finalizados, médias históricas de pacotes por Código Postal e desempenho da frota.</p>
+            </div>
+        </div>
+
+        <!-- CONTROLOS DE CONCELHO E ATUALIZAÇÃO -->
+        <div class="flex items-center space-x-3">
+            <div class="relative min-w-[200px]">
+                <select id="select-concelho-relatorios" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-xl focus:ring-2 focus:ring-purple-500 p-3 pr-8 font-bold appearance-none cursor-pointer">
+                    <option value="MAFRA">Mafra, Portugal</option>
+                    <option value="SINTRA">Sintra, Portugal</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-500">
+                    <i class="fa-solid fa-chevron-down text-[10px]"></i>
+                </div>
+            </div>
+
+            <button id="btn-recarregar-dados-relatorios" class="bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white font-bold text-xs px-4 py-3 rounded-xl shadow-sm flex items-center space-x-2 transition-all cursor-pointer">
+                <i class="fa-solid fa-rotate text-xs"></i>
+                <span>Atualizar Dados</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- CARDS DE MÉTRICAS GLOBAIS DE DESEMPENHO (KPIS DESKTOP EM 4 COLUNAS) -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-gray-100 text-gray-700 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-clipboard-check"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-gray-400 tracking-wider block">Turnos Registados</span>
+                <span id="kpi-total-turnos" class="text-2xl font-black text-gray-800">0</span>
+                <span class="text-[10px] text-gray-400 block font-medium">Turnos com encerramento</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-clock"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-blue-400 tracking-wider block">Duração Média</span>
+                <span id="kpi-duracao-media" class="text-2xl font-black text-blue-600">0.0h</span>
+                <span class="text-[10px] text-blue-400 block font-medium">Tempo médio por turno</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-green-50 text-green-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-bolt-lightning"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-green-500 tracking-wider block">Eventos / Hora</span>
+                <span id="kpi-eventos-hora" class="text-2xl font-black text-green-600">0.0</span>
+                <span class="text-[10px] text-green-500 block font-medium">Produtividade horária</span>
+            </div>
+        </div>
+
+        <div class="bg-white p-5 rounded-2xl border border-gray-200 shadow-xs flex items-center space-x-4">
+            <div class="w-12 h-12 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-xl shrink-0">
+                <i class="fa-solid fa-route"></i>
+            </div>
+            <div>
+                <span class="text-[10px] font-black uppercase text-purple-500 tracking-wider block">Eventos / KM</span>
+                <span id="kpi-eventos-km" class="text-2xl font-black text-purple-600">0.0</span>
+                <span class="text-[10px] text-purple-500 block font-medium">Densidade por quilómetro</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- GRELHA PRINCIPAL DESKTOP (TABELA DE CARGA POR BRICK + HISTÓRICO DE TURNOS) -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+        
+        <!-- COLUNA ESQUERDA (8 COLUNAS): TABELA DE MÉDIAS E TOTAIS POR BRICK / CP7 -->
+        <div class="xl:col-span-8 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4">
+            
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-gray-100">
+                <div>
+                    <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center space-x-2">
+                        <i class="fa-solid fa-boxes-stacked text-purple-600"></i>
+                        <span>Média de Encomendas e Totais por Código Postal / Brick</span>
+                    </h2>
+                    <p class="text-xs text-gray-400">Consulte o volume de entregas e recolhas efetuadas em qualquer zona ou CP7 específico.</p>
+                </div>
+
+                <span id="badge-total-bricks-analisados" class="text-xs font-bold text-purple-700 bg-purple-50 px-3 py-1 rounded-xl border border-purple-200 self-start sm:self-auto">
+                    0 Zonas Mapeadas
+                </span>
+            </div>
+
+            <!-- CAMPO DE PESQUISA INTELIGENTE POR CP7 -->
+            <div class="relative">
+                <input type="text" id="filtro-pesquisa-cp7-desktop" placeholder="Pesquisar por Código Postal (Ex: 2640-401, 2640-578) ou Nome da Localidade..." 
+                       class="w-full p-3.5 pl-11 border border-purple-200 rounded-xl text-xs font-bold bg-purple-50/20 focus:bg-white focus:ring-2 focus:ring-purple-500 outline-none transition-all">
+                <div class="absolute left-3.5 top-3.5 text-purple-500 text-sm">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </div>
+            </div>
+
+            <!-- TABELA EXPANDIDA PARA MONITOR DESKTOP -->
+            <div class="border border-gray-200 rounded-xl overflow-hidden shadow-2xs max-h-[520px] overflow-y-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead class="bg-gray-100/80 text-gray-500 uppercase text-[10px] font-black tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                        <tr>
+                            <th class="p-3">Brick / Localidade</th>
+                            <th class="p-3 text-center">Concelho</th>
+                            <th class="p-3 text-center bg-green-50 text-green-800">Total Entregas</th>
+                            <th class="p-3 text-center bg-purple-50 text-purple-800">Total Recolhas</th>
+                            <th class="p-3 text-center bg-red-50 text-red-800">Total Falhas</th>
+                            <th class="p-3 text-center bg-blue-50 text-blue-800">Média / Turno</th>
+                            <th class="p-3 text-center">Turnos Atendidos</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tbody-tabela-relatorios-desktop" class="divide-y divide-gray-100 font-semibold text-gray-700">
+                        <tr>
+                            <td colspan="7" class="p-8 text-center text-gray-400 italic">
+                                <i class="fa-solid fa-spinner animate-spin text-lg block mb-2 text-purple-500"></i>
+                                A consultar dados históricos no Firestore...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- COLUNA DIREITA (4 COLUNAS): HISTÓRICO DE TURNOS GUARDADOS NA NUVEM -->
+        <div class="xl:col-span-4 bg-white p-6 rounded-2xl border border-gray-200 shadow-sm space-y-4 flex flex-col">
+            
+            <div class="pb-3 border-b border-gray-100">
+                <h2 class="text-sm font-bold text-gray-800 uppercase tracking-wider flex items-center space-x-2">
+                    <i class="fa-solid fa-clock-rotate-left text-blue-600"></i>
+                    <span>Histórico de Turnos (Nuvem)</span>
+                </h2>
+                <p class="text-xs text-gray-400">Turnos encerrados com telemetria gravada.</p>
+            </div>
+
+            <!-- LISTA DE TURNOS COM SCROLL SUAVE -->
+            <div id="lista-turnos-historico-desktop" class="flex-1 space-y-2.5 max-h-[580px] overflow-y-auto pr-1">
+                <p class="text-xs text-gray-400 italic text-center py-8">A carregar turnos do Firestore...</p>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MODAL EXPANDIDO DE DETALHE DE RELATÓRIO DO GESTOR -->
+    <div id="modal-detalhe-relatorio-desktop" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[99999]">
+        <div class="bg-white w-full max-w-2xl rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="bg-purple-600 text-white p-5 font-bold text-sm flex items-center justify-between">
+                <div class="flex items-center space-x-2">
+                    <i class="fa-solid fa-file-contract text-lg"></i>
+                    <span class="text-base font-black">Detalhes Completos do Turno</span>
+                </div>
+                <button id="btn-fechar-modal-detalhe-relatorio" class="text-white hover:text-gray-200 text-lg cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div id="conteudo-modal-detalhe-relatorio" class="p-6 space-y-5 overflow-y-auto text-xs text-gray-700">
+                <!-- Preenchido dinamicamente por rotas-relatorios.js -->
+            </div>
+
+            <div class="p-4 bg-gray-50 border-t flex justify-end">
+                <button id="btn-fechar-modal-detalhe-ok" class="bg-purple-600 hover:bg-purple-700 text-white font-bold px-6 py-2.5 rounded-xl text-xs cursor-pointer shadow-sm">
+                    Fechar Relatório
+                </button>
+            </div>
+        </div>
+    </div>
+
 </main>
 
 =========================================
@@ -7270,10 +8535,10 @@ ARQUIVO: partials/setores.html
 
 <!--
   setores.html
-  Faz: Contém a estrutura visual responsiva e moderna do ecrã de Atribuição Direta de Bricks (Localidades) aos Motoristas.
-       Suporta mapa interativo de distribuição de nuvens de calor e layout em duas colunas paralelas (split-pane) em ecrãs grandes de PC ou Tablet.
-       NOVO: Inclui o Painel de Auditoria e Cobertura Geográfica (Saldo Zero) para controlo de Bricks não alocados.
-  NÃO faz: Não inclui scripts diretos, folhas de estilo ou cabeçalhos globais do documento.
+  Versão v75.0 - Ecrã Dedicado à Atribuição de Bricks, Mapa do Gestor e Auditoria Saldo Zero
+  Faz: Contém a estrutura visual responsiva do ecrã de Atribuição Direta de Bricks aos Motoristas,
+       controlo de trava de segurança de pinos no mapa (Modo Seguro vs Calibração) e Auditoria Saldo Zero.
+  NÃO faz: Não inclui relatórios ou análises estatísticas (movidos para partials/relatorios.html).
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
 
@@ -7301,18 +8566,34 @@ ARQUIVO: partials/setores.html
         </div>
     </div>
     
-    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) -->
+    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) COM TRAVA DE SEGURANÇA -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
-        <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
-            <i class="fa-solid fa-map-location-dot text-blue-600"></i>
-            <span>Visão do Gestor: Distribuição Geográfica de Bricks (Estantes)</span>
-        </h3>
-        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
+                <i class="fa-solid fa-map-location-dot text-blue-600"></i>
+                <span>Visão do Gestor: Distribuição Geográfica de Bricks</span>
+            </h3>
+
+            <!-- BOTÃO DE ALTERNÂNCIA: MODO SEGURO (TRAVADO) VS MODO CALIBRAÇÃO (ARRASTÁVEL) -->
+            <button type="button" id="btn-toggle-modo-calibracao" 
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
+                <i id="icone-trava-calibracao" class="fa-solid fa-lock text-green-600"></i>
+                <span id="texto-trava-calibracao">Pinos Bloqueados (Modo Seguro)</span>
+            </button>
+        </div>
+
+        <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs relative">
             <div id="map-dashboard-bricks" class="w-full h-80 bg-gray-50"></div>
+            
+            <!-- Aviso visual no topo do mapa quando a calibração está ativa -->
+            <div id="aviso-calibracao-ativa" class="hidden absolute top-2 left-1/2 transform -translate-x-1/2 bg-amber-500/95 text-white font-bold text-[10px] px-3 py-1 rounded-full shadow-md flex items-center space-x-1.5 pointer-events-none z-10 animate-pulse">
+                <i class="fa-solid fa-unlock"></i>
+                <span>Modo de Calibração Ativo: Pode arrastar os pinos</span>
+            </div>
         </div>
     </div>
 
-    <!-- NOVO PAINEL: AUDITORIA E BALANÇO DE BRICKS (SALDO ZERO) -->
+    <!-- PAINEL DE AUDITORIA E BALANÇO DE BRICKS (SALDO ZERO) -->
     <div id="painel-auditoria-bricks" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
         <div class="flex items-center justify-between">
             <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
@@ -7339,19 +8620,17 @@ ARQUIVO: partials/setores.html
             </div>
         </div>
 
-        <!-- Lista colapsável de Bricks pendentes de dono (Só surge se houver falhas de alocação) -->
         <div id="container-bricks-pendentes" class="hidden border border-red-100 bg-red-50/20 p-3 rounded-xl space-y-2 animate-fade-in">
             <span class="block text-[10px] font-black text-red-700 uppercase tracking-wider flex items-center space-x-1">
                 <i class="fa-solid fa-triangle-exclamation"></i>
                 <span>Bricks Órfãos (Sem Motorista)</span>
             </span>
             <div id="lista-bricks-pendentes" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto text-[10px] text-gray-600 font-bold pr-1">
-                <!-- Preenchido dinamicamente por setores.js -->
             </div>
         </div>
     </div>
 
-    <!-- EXPLICAÇÃO DO PAINEL -->
+    <!-- EXPLICAÇÃO DO PAINEL DE ATRIBUIÇÃO -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
         <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
             <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
@@ -7362,10 +8641,10 @@ ARQUIVO: partials/setores.html
         </p>
     </div>
 
-    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet, coluna em Telemóvel) -->
+    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet) -->
     <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
         
-        <!-- COLUNA ESQUERDA: LISTAGEM E SELEÇÃO DE MOTORISTAS ATIVOS -->
+        <!-- COLUNA ESQUERDA: LISTAGEM DE MOTORISTAS -->
         <div class="md:col-span-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
             <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
                 <i class="fa-solid fa-users text-blue-500"></i>
@@ -7373,12 +8652,11 @@ ARQUIVO: partials/setores.html
             </h3>
             
             <div id="lista-atribuicao-motoristas" class="space-y-2 max-h-96 overflow-y-auto pr-1">
-                <!-- Preenchido dinamicamente por setores.js -->
                 <p class="text-xs text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
             </div>
         </div>
 
-        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS DE MAFRA OU SINTRA -->
+        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS -->
         <div class="md:col-span-8 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
             <div class="flex justify-between items-center">
                 <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
@@ -7390,7 +8668,6 @@ ARQUIVO: partials/setores.html
                 </span>
             </div>
 
-            <!-- Contentor dinâmico da árvore preenchido pelo setores.js -->
             <div id="arvore-bricks-localidades" class="border rounded-lg p-2 max-h-[500px] overflow-y-auto space-y-2 bg-gray-50/50">
                 <p class="text-xs text-gray-400 italic text-center py-8">Por favor, escolha um motorista na lista para carregar os Bricks.</p>
             </div>
@@ -7473,4 +8750,5 @@ ARQUIVO: partials/triagem.html
         Analisar Código
     </button>
 </main>
+
 
