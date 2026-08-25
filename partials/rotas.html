@@ -1,7 +1,8 @@
 <!-- 
   partials/rotas.html
-  Versão v70.9 - Com Painel de Odómetro Direto e Suporte a Rota Otimizada
-  Faz: Interface do ecrã de Gestão de Turnos, Planeador e Condução com Mapa Google e Painel de Odómetro.
+  Versão v76.1 - Com Painel de Odómetro Direto, Suporte a Rota Otimizada e Retificação de KM
+  Faz: Interface do ecrã de Gestão de Turnos, Planeador e Condução com Mapa Google,
+       Painel de Odómetro com botão de retificação/edição e Itinerário de Entregas.
   NÃO faz: Não processa chamadas de rede ou lógicas de rotas (delegado para js/rotas.js).
   Depende de: Tailwind CSS, FontAwesome e Google Maps API carregada globalmente.
 -->
@@ -24,7 +25,7 @@
                     <input type="date" id="data-rota" class="w-full mt-1 p-3 border border-gray-200 rounded-xl text-base font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 
-                <button id="btn-iniciar-rota" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center space-x-2 transition-all">
+                <button id="btn-iniciar-rota" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer">
                     <i class="fa-solid fa-play"></i>
                     <span>Iniciar Turno de Trabalho</span>
                 </button>
@@ -46,10 +47,10 @@
             </div>
             
             <div class="bg-gray-100 p-1 rounded-xl flex space-x-1 shadow-sm">
-                <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all">
+                <button id="btn-modo-planeamento" class="flex-1 py-2 text-xs font-bold rounded-lg text-center bg-white text-blue-600 shadow transition-all cursor-pointer">
                     Planeamento
                 </button>
-                <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all">
+                <button id="btn-modo-conducao" class="flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all cursor-pointer">
                     Condução
                 </button>
             </div>
@@ -65,11 +66,11 @@
                     Partida: Localização não definida
                 </div>
                 <div class="flex space-x-2">
-                    <button id="btn-gps-partida" class="flex-1 bg-blue-50 text-blue-700 font-bold text-xs py-2.5 rounded-xl border border-blue-100 flex items-center justify-center space-x-1.5 active:bg-blue-100">
+                    <button id="btn-gps-partida" class="flex-1 bg-blue-50 text-blue-700 font-bold text-xs py-2.5 rounded-xl border border-blue-100 flex items-center justify-center space-x-1.5 active:bg-blue-100 cursor-pointer">
                         <i class="fa-solid fa-location-crosshairs"></i>
                         <span>Usar GPS Atual</span>
                     </button>
-                    <button id="btn-buscar-partida" class="flex-1 bg-gray-50 text-gray-700 font-bold text-xs py-2.5 rounded-xl border border-gray-200 flex items-center justify-center space-x-1.5 active:bg-gray-100">
+                    <button id="btn-buscar-partida" class="flex-1 bg-gray-50 text-gray-700 font-bold text-xs py-2.5 rounded-xl border border-gray-200 flex items-center justify-center space-x-1.5 active:bg-gray-100 cursor-pointer">
                         <i class="fa-solid fa-magnifying-glass"></i>
                         <span>Definir Início</span>
                     </button>
@@ -88,7 +89,7 @@
                             class="w-full pl-3 pr-8 py-2.5 border border-blue-200 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <span class="absolute right-3 top-3 text-gray-400 text-xs font-bold">CP</span>
                     </div>
-                    <button id="btn-inserir-prefixo" type="button" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center space-x-1">
+                    <button id="btn-inserir-prefixo" type="button" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center space-x-1 cursor-pointer">
                         <i class="fa-solid fa-plus"></i>
                         <span>Inserir CP-</span>
                     </button>
@@ -114,7 +115,7 @@
                             class="flex-1 p-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                         
                         <!-- Botão do microfone para ditar por voz -->
-                        <button id="btn-voz" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-3 rounded-xl transition-all shadow-sm flex items-center justify-center flex-shrink-0">
+                        <button id="btn-voz" class="bg-blue-50 hover:bg-blue-100 text-blue-700 p-3 rounded-xl transition-all shadow-sm flex items-center justify-center flex-shrink-0 cursor-pointer">
                             <i id="microfone-inativo" class="fa-solid fa-microphone"></i>
                             <i id="microfone-ativo" class="fa-solid fa-microphone-lines hidden text-white animate-pulse"></i>
                         </button>
@@ -139,7 +140,7 @@
                 </div>
 
                 <!-- Botão de submissão -->
-                <button id="btn-adicionar-postal-rota" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all">
+                <button id="btn-adicionar-postal-rota" class="w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold py-3.5 rounded-xl text-sm shadow-md flex items-center justify-center space-x-2 transition-all cursor-pointer">
                     <i class="fa-solid fa-plus"></i>
                     <span>Adicionar Pacote</span>
                 </button>
@@ -149,7 +150,7 @@
             <div class="space-y-2">
                 <div class="flex items-center justify-between px-1">
                     <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Moradas Mapeadas</span>
-                    <button id="btn-limpar-enderecos" class="text-xs font-bold text-red-500 hover:text-red-700 flex items-center space-x-1">
+                    <button id="btn-limpar-enderecos" class="text-xs font-bold text-red-500 hover:text-red-700 flex items-center space-x-1 cursor-pointer">
                         <i class="fa-solid fa-trash-can"></i>
                         <span>Limpar Tudo</span>
                     </button>
@@ -163,7 +164,7 @@
 
             <!-- Botão de Otimização Inteligente -->
             <div class="pt-2">
-                <button id="btn-otimizar-rota" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
+                <button id="btn-otimizar-rota" class="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all cursor-pointer">
                     <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
                     <span>Otimizar Sequência de Rota</span>
                 </button>
@@ -237,18 +238,29 @@
             </div>
         </div>
 
-        <!-- Painel Informativo de Odómetro (Diário de Bordo) -->
+        <!-- Painel Informativo de Odómetro (Diário de Bordo) com Botão de Retificação / Edição -->
         <div id="painel-odometro-resumo" class="hidden bg-blue-50 border border-blue-200 rounded-2xl p-4 shadow-sm space-y-2.5 font-sans animate-fade-in">
-            <span class="block text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center space-x-1.5">
-                <i class="fa-solid fa-gauge-high"></i>
-                <span>Diário de Bordo do Turno</span>
-            </span>
+            <div class="flex items-center justify-between">
+                <span class="block text-xs font-bold text-blue-800 uppercase tracking-wider flex items-center space-x-1.5">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>Diário de Bordo do Turno</span>
+                </span>
+                <span class="text-[10px] text-blue-600 font-semibold italic">Clique na saída para corrigir</span>
+            </div>
             <div class="grid grid-cols-2 gap-3 text-xs">
-                <div class="bg-white p-2.5 rounded-xl border border-blue-100 flex flex-col space-y-1">
-                    <span class="font-bold text-gray-400 uppercase text-[9px]">Partida (Saída)</span>
+                <!-- Caixa de Partida / Saída com Gatilho de Correção -->
+                <div id="card-odometro-resumo-saida" class="bg-white p-2.5 rounded-xl border border-blue-200 hover:border-blue-400 hover:shadow-xs transition flex flex-col space-y-1 cursor-pointer select-none">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-gray-400 uppercase text-[9px]">Partida (Saída)</span>
+                        <button type="button" id="btn-editar-odometro-saida" title="Corrigir KM de Saída" class="text-blue-600 hover:text-blue-800 text-[10px] font-bold flex items-center gap-1">
+                            <i class="fa-solid fa-pen-to-square"></i> Corrigir
+                        </button>
+                    </div>
                     <span id="odometro-resumo-saida-km" class="font-black text-gray-800 text-sm">-- KM</span>
                     <span id="odometro-resumo-saida-hora" class="text-[10px] font-semibold text-gray-500">Hora: --:--</span>
                 </div>
+                
+                <!-- Caixa de Chegada / Fim -->
                 <div class="bg-white p-2.5 rounded-xl border border-blue-100 flex flex-col space-y-1">
                     <span class="font-bold text-gray-400 uppercase text-[9px]">Chegada (Fim)</span>
                     <span id="odometro-resumo-chegada-km" class="font-black text-gray-800 text-sm">-- KM</span>
@@ -261,13 +273,13 @@
         </div>
 
         <!-- Botão de Registar Saída / KM de Partida (Exibido quando o odómetro de saída ainda não foi preenchido) -->
-        <button id="btn-iniciar-saida-km" class="hidden w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
+        <button id="btn-iniciar-saida-km" class="hidden w-full bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all cursor-pointer">
             <i class="fa-solid fa-gauge-high"></i>
             <span>Registar KM de Saída (Início de Rota)</span>
         </button>
 
         <!-- Botão de Finalizar Turno (Exibido após o odómetro de saída já ter sido registado) -->
-        <button id="btn-finalizar-turno" class="hidden w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all">
+        <button id="btn-finalizar-turno" class="hidden w-full bg-red-600 hover:bg-red-700 active:bg-red-800 text-white font-black py-4 rounded-2xl text-base shadow-lg flex items-center justify-center space-x-2 transition-all cursor-pointer">
             <i class="fa-solid fa-flag-checkered"></i>
             <span>Finalizar Turno (Registar Chegada)</span>
         </button>

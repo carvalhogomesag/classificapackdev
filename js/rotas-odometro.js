@@ -1,9 +1,9 @@
 /**
  * js/rotas-odometro.js
- * Versão v71.1 - Módulo de Gestão de Odómetro, Diário de Bordo e Relatórios
- * Faz: Controla os modais de registo de quilometragem de saída (início do percurso)
- *      e chegada (encerramento do turno), calculando totais percorridos, gerando
- *      o relatório de desempenho por Brick e salvando no Firestore.
+ * Versão v76.1 - Módulo de Gestão de Odómetro, Diário de Bordo e Relatórios
+ * Faz: Controla os modais de registo e retificação/edição de quilometragem de saída
+ *      (início do percurso) e chegada (encerramento do turno), calculando totais
+ *      percorridos, gerando o relatório de desempenho por Brick e salvando no Firestore.
  * Depende de: ./maps.js, ./rotas.js, ./rotas-relatorios.js
  */
 
@@ -16,7 +16,7 @@ import {
 } from './rotas-relatorios.js';
 
 /**
- * Abre o modal de registo de KM de Saída (Início de Rota)
+ * Abre o modal de registo ou retificação de KM de Saída (Início / Correção de Rota)
  * @param {Function} [callback] - Função a ser executada após confirmação com sucesso
  */
 export function abrirModalOdometroSaida(callback) {
@@ -29,22 +29,45 @@ export function abrirModalOdometroSaida(callback) {
     const inputHora = document.getElementById('odometro-saida-hora');
     const inputKm = document.getElementById('odometro-saida-km');
     const txtMinimo = document.getElementById('odometro-saida-minimo');
-
-    if (inputHora) inputHora.value = horaStr;
-    if (inputKm) inputKm.value = window.lastOdometer || "";
-    if (txtMinimo) txtMinimo.textContent = `Mínimo exigido: ${window.lastOdometer || 0} KM`;
-
-    modal.classList.remove('hidden');
-
+    const modalTitulo = modal.querySelector('h3') || document.getElementById('modal-odometro-saida-titulo');
     const btnConfirmar = document.getElementById('btn-confirmar-saida-km');
     const btnCancelar = document.getElementById('btn-cancelar-saida-km');
 
+    // Verifica se é uma correção de KM já iniciado
+    const isEdicao = Boolean(window.tripStarted && window.odometerStart);
+
+    if (modalTitulo) {
+        modalTitulo.textContent = isEdicao ? "Corrigir KM de Saída" : "Registo de Odómetro (Saída)";
+    }
+
+    if (inputHora) {
+        inputHora.value = window.odometerStartHour || horaStr;
+    }
+
+    if (inputKm) {
+        inputKm.value = isEdicao ? window.odometerStart : (window.lastOdometer || "");
+    }
+
+    if (txtMinimo) {
+        txtMinimo.textContent = isEdicao 
+            ? `Valor atual registado: ${window.odometerStart} KM` 
+            : `Mínimo sugerido: ${window.lastOdometer || 0} KM`;
+    }
+
+    if (btnConfirmar) {
+        btnConfirmar.innerHTML = isEdicao 
+            ? '<i class="fa-solid fa-check mr-1.5"></i> Atualizar KM de Saída' 
+            : '<i class="fa-solid fa-play mr-1.5"></i> Confirmar Saída';
+    }
+
+    modal.classList.remove('hidden');
+
     btnConfirmar.onclick = () => {
         const kmVal = parseFloat(inputKm.value);
-        const horaVal = inputHora.value.trim();
+        const horaVal = inputHora ? inputHora.value.trim() : "";
 
-        if (isNaN(kmVal) || kmVal < (window.lastOdometer || 0)) {
-            alert(`Erro de validação: O valor de quilometragem de partida não pode ser menor do que o último registo final (${window.lastOdometer || 0} KM).`);
+        if (isNaN(kmVal) || kmVal < 0) {
+            alert("Erro de validação: Por favor, introduza um valor numérico válido para a quilometragem de saída.");
             return;
         }
         if (!horaVal) {
@@ -52,19 +75,28 @@ export function abrirModalOdometroSaida(callback) {
             return;
         }
 
-        window.tripStarted = true;
-        window.tripCompleted = false;
+        // Se for um novo início de turno
+        if (!window.tripStarted) {
+            window.tripStarted = true;
+            window.tripCompleted = false;
+            window.odometerStartTimestamp = new Date().toISOString();
+        }
+
+        // Atualização dos valores (funciona tanto para registo inicial como para correção)
         window.odometerStart = kmVal;
         window.odometerStartHour = horaVal;
-        window.odometerStartTimestamp = new Date().toISOString(); // Registo preciso de início
         window.lastOdometer = kmVal;
 
         sincronizarPersistencia();
+        sincronizarInterfaceRota();
+
         modal.classList.add('hidden');
         if (typeof callback === 'function') callback();
     };
 
-    btnCancelar.onclick = () => modal.classList.add('hidden');
+    if (btnCancelar) {
+        btnCancelar.onclick = () => modal.classList.add('hidden');
+    }
 }
 
 /**
@@ -198,5 +230,30 @@ export function abrirModalOdometroChegada() {
         }
     };
 
-    btnCancelar.onclick = () => modal.classList.add('hidden');
+    if (btnCancelar) {
+        btnCancelar.onclick = () => modal.classList.add('hidden');
+    }
+}
+
+/**
+ * Configura o gatilho de clique para edição do odómetro de saída
+ */
+export function configurarGatilhoEdicaoOdometro() {
+    const btnEditar = document.getElementById('btn-editar-odometro-saida');
+    const cardSaida = document.getElementById('card-odometro-resumo-saida');
+
+    if (btnEditar && !btnEditar.dataset.bound) {
+        btnEditar.addEventListener('click', (e) => {
+            e.stopPropagation();
+            abrirModalOdometroSaida();
+        });
+        btnEditar.dataset.bound = "true";
+    }
+
+    if (cardSaida && !cardSaida.dataset.bound) {
+        cardSaida.addEventListener('click', () => {
+            abrirModalOdometroSaida();
+        });
+        cardSaida.dataset.bound = "true";
+    }
 }
