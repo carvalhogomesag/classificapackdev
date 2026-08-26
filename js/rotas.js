@@ -1,9 +1,10 @@
 /**
  * js/rotas.js
- * Versão v74.1 - Com Componentes de Geografia, Odómetro, Modais, Inputs e UI Isolados
+ * Versão v76.1 - Com Persistência Blindada Anti-Perda, Odómetro Reativo e Gestão de Rotas
  * Faz: Gestão principal da aba de rotas, integrando os componentes 'rotas-geografia.js',
  *      'rotas-odometro.js', 'rotas-modais.js', 'rotas-inputs.js' e 'rotas-ui.js'.
- * Alteração v74.1: Ativação rigorosa do estado laranja saltitante para novas adições pós-otimização.
+ *      Garante persistência instantânea local e remota em todas as ações de condução/planeamento.
+ * Depende de: ./maps.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js
  */
 
 import { saveData } from './storage.js';
@@ -19,14 +20,18 @@ import {
 // Importa o módulo de navegação (Google Maps vs Waze)
 import { abrirNavegacao } from './navigation.js';
 
-// Importa a instância ativa do Firestore
-import { db } from './firebase-init.js';
+// Importa a instância ativa do Firestore e Auth
+import { db, auth } from './firebase-init.js';
 
 // COMPONENTE 1: Importa utilitários de resolução geográfica isolados
 import { isCatchAllLocality, obterConcelhoPorCodigoPostal, resolveBrickForZip } from './rotas-geografia.js';
 
-// COMPONENTE 2: Importa modais de odómetro isolados
-import { abrirModalOdometroSaida, abrirModalOdometroChegada } from './rotas-odometro.js';
+// COMPONENTE 2: Importa modais de odómetro isolados e ativador de retificação
+import { 
+    abrirModalOdometroSaida, 
+    abrirModalOdometroChegada, 
+    configurarGatilhoEdicaoOdometro 
+} from './rotas-odometro.js';
 
 // COMPONENTE 3: Importa modais de edição e alteração de sequência isolados
 import { 
@@ -62,9 +67,10 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
     : 'https://classificapack-backend.onrender.com';
 
 // ==========================================
-// PERSISTÊNCIA DAS ROTAS (LOCALSTORAGE + FIRESTORE)
+// PERSISTÊNCIA BLINDADA DAS ROTAS (LOCALSTORAGE + FIRESTORE)
 // ==========================================
 export function sincronizarPersistencia() {
+    // 1. Gravação local defensiva e imediata (síncrona)
     saveData(
         window.drivers, 
         [], 
@@ -78,16 +84,19 @@ export function sincronizarPersistencia() {
 
     localStorage.setItem('cp_is_route_optimized', JSON.stringify(window.isRouteOptimized || false));
     localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
-    localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
-    localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted));
-    localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart));
-    localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour));
-    localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd));
-    localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
-    localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
+    localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted || false));
+    localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted || false));
+    localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart || 0));
+    localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour || ""));
+    localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd || 0));
+    localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour || ""));
+    localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer || 0));
 
-    if (window.currentUserUid) {
-        db.collection('routes').doc(window.currentUserUid).set({
+    // 2. Resolução resiliente de UID para salvar na Cloud
+    const activeUid = window.currentUserUid || (auth && auth.currentUser ? auth.currentUser.uid : null);
+
+    if (activeUid && db) {
+        db.collection('routes').doc(activeUid).set({
             partidaLocalizacao: window.partidaLocalizacao || null,
             moradasEntregas: window.moradasEntregas || [],
             rotaOtimizada: window.rotaOtimizada || [],
@@ -105,10 +114,10 @@ export function sincronizarPersistencia() {
             lastOdometer: window.lastOdometer || 0,
 
             lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(() => {
+        }, { merge: true }).then(() => {
             console.log("[FIREBASE] Rota sincronizada no Firestore com sucesso.");
         }).catch((err) => {
-            console.error("[FIREBASE] Erro ao sincronizar rota no Firestore:", err);
+            console.warn("[FIREBASE] Aviso ao sincronizar rota no Firestore:", err);
         });
     }
 }
@@ -477,6 +486,7 @@ export function setupRotasLogic() {
     inicializarAutocompleteMorada();
     configurarEscutaCodigoPostalParaLimites();
     setupModaisEdicao();
+    configurarGatilhoEdicaoOdometro();
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
@@ -615,6 +625,16 @@ export function sincronizarInterfaceRota() {
     const statusPartida = document.getElementById('status-partida');
     const dataRotaInput = document.getElementById('data-rota');
 
+    // Elementos do Odómetro / Diário de Bordo
+    const painelOdometro = document.getElementById('painel-odometro-resumo');
+    const btnIniciarSaidaKm = document.getElementById('btn-iniciar-saida-km');
+    const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
+    const txtSaidaKm = document.getElementById('odometro-resumo-saida-km');
+    const txtSaidaHora = document.getElementById('odometro-resumo-saida-hora');
+    const txtChegadaKm = document.getElementById('odometro-resumo-chegada-km');
+    const txtChegadaHora = document.getElementById('odometro-resumo-chegada-hora');
+    const txtTotalViagem = document.getElementById('odometro-resumo-total-viagem');
+
     if (!containerSetupRota || !containerPlaneadorRota) return;
 
     if (window.rotaIniciada) {
@@ -630,6 +650,33 @@ export function sincronizarInterfaceRota() {
             }
         }
 
+        // Atualização reativa do painel de Odómetro
+        if (window.tripStarted && window.odometerStart) {
+            if (painelOdometro) painelOdometro.classList.remove('hidden');
+            if (btnIniciarSaidaKm) btnIniciarSaidaKm.classList.add('hidden');
+            if (btnFinalizarTurno) btnFinalizarTurno.classList.remove('hidden');
+
+            if (txtSaidaKm) txtSaidaKm.textContent = `${window.odometerStart} KM`;
+            if (txtSaidaHora) txtSaidaHora.textContent = `Hora: ${window.odometerStartHour || '--:--'}`;
+            
+            if (txtChegadaKm) txtChegadaKm.textContent = window.odometerEnd ? `${window.odometerEnd} KM` : '-- KM';
+            if (txtChegadaHora) txtChegadaHora.textContent = window.odometerEndHour ? `Hora: ${window.odometerEndHour}` : 'Hora: Em trânsito';
+            
+            if (txtTotalViagem) {
+                if (window.odometerEnd && window.odometerEnd > window.odometerStart) {
+                    const diff = (window.odometerEnd - window.odometerStart).toFixed(1);
+                    txtTotalViagem.textContent = `Total percorrido na rota: ${diff} KM`;
+                } else {
+                    txtTotalViagem.textContent = 'Total percorrido na rota: Em trânsito...';
+                }
+            }
+        } else {
+            if (painelOdometro) painelOdometro.classList.add('hidden');
+            if (btnIniciarSaidaKm) btnIniciarSaidaKm.classList.remove('hidden');
+            if (btnFinalizarTurno) btnFinalizarTurno.classList.add('hidden');
+        }
+
+        configurarGatilhoEdicaoOdometro();
         renderMoradasAdicionadas();
         setTimeout(inicializarAutocompleteMorada, 100);
 
