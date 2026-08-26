@@ -1,8 +1,8 @@
 /**
  * js/rotas-odometro.js
- * Versão v76.5 - Módulo de Gestão de Odómetro com Fecho de Turno Descomplicado (Modo Livre)
- * Faz: Permite registar ou corrigir KM de saída e simplifica o fecho de turno direto,
- *      sem bloqueios por pendências ou obrigatoriedades rígidas.
+ * Versão v76.6 - Módulo de Gestão de Odómetro com Fecho de Turno Atómico e Descomplicado
+ * Faz: Controla o registo e retificação do KM de saída e executa o encerramento limpo
+ *      do turno de trabalho, reinicializando a rota localmente e na nuvem de forma síncrona.
  * Depende de: ./maps.js, ./rotas.js
  */
 
@@ -79,18 +79,18 @@ export function abrirModalOdometroSaida(callback) {
 }
 
 /**
- * Encerramento Direto e Descomplicado de Turno (Modo Livre sem Bloqueios)
+ * Encerramento Direto, Limpo e Atómico do Turno de Trabalho
  */
 export function abrirModalOdometroChegada() {
     const confirmar = confirm("Deseja realmente finalizar o turno de trabalho atual e limpar o itinerário da rota?");
     if (!confirmar) return;
 
     try {
-        // Reset completo e limpo do estado do turno
-        window.tripCompleted = true;
-        window.tripStarted = false;
+        // 1. Reset das variáveis em memória
         window.rotaIniciada = false;
         window.isRouteOptimized = false;
+        window.tripStarted = false;
+        window.tripCompleted = true;
 
         window.partidaLocalizacao = null;
         window.moradasEntregas = [];
@@ -103,8 +103,18 @@ export function abrirModalOdometroChegada() {
         window.odometerEnd = 0;
         window.odometerEndHour = "";
 
+        // 2. Limpeza física forçada do LocalStorage
+        localStorage.setItem('cp_rota_iniciada', 'false');
+        localStorage.setItem('cp_entregas', '[]');
+        localStorage.setItem('cp_rota_otimizada', '[]');
+        localStorage.setItem('cp_is_route_optimized', 'false');
+        localStorage.setItem('cp_partida', 'null');
+        localStorage.setItem('cp_data_rota', '""');
+        localStorage.setItem('cp_trip_started', 'false');
+        localStorage.setItem('cp_trip_completed', 'true');
         localStorage.removeItem('cp_last_navigated_id');
         
+        // 3. Limpeza visual e sincronização na Nuvem
         limparMapaVisual();
         sincronizarPersistencia();
         sincronizarInterfaceRota();
@@ -112,7 +122,6 @@ export function abrirModalOdometroChegada() {
         alert("✅ Turno finalizado com sucesso!");
     } catch (erro) {
         console.error("Erro ao encerrar turno:", erro);
-        alert("Ocorreu um aviso ao finalizar, mas o estado local foi reinicializado.");
         sincronizarInterfaceRota();
     }
 }
