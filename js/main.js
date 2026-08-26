@@ -1,9 +1,9 @@
 /**
  * main.js
- * Versão v76.1 - Com Proteção Anti-Perda de Rota (F5 Blindado) e Gestão Segura de Roles
- * Faz: Atua como ponto de entrada principal da app. Carrega partials, restaura rotas
- *      imediatamente do armazenamento local offline-first, sincroniza Firestore em tempo real
- *      e protege o papel de Gestor contra sobregravações.
+ * Versão v76.2 - Com Proteção Anti-Wipe (F5 Blindado Definitivo) e Gestão Segura de Sessão
+ * Faz: Atua como ponto de entrada principal da app. Restaura o estado de rotas de forma
+ *      indestrutível do LocalStorage, protege a rota contra sobregravações de listas vazias
+ *      vindas do Firestore e assegura as permissões de Gestor.
  * Depende de: ./state.js, ./storage.js, ./ui.js, ./motoristas.js, ./setores.js, ./triagem.js, ./rotas.js, ./maps.js, ./pwa.js, ./ui-menu.js, ./firebase-init.js
  */
 
@@ -45,35 +45,27 @@ let unsubAssignments = null;
 let unsubRoute = null;
 
 // =========================================================================
-// RESTAURAÇÃO INSTANTÂNEA OFFLINE-FIRST (EVITA PERDA DE DADOS NO F5)
+// RESTAURAÇÃO INSTANTÂNEA E CORRETA DO LOCALSTORAGE (CHAVES EXATAS)
 // =========================================================================
 function restaurarEstadoLocalImediato() {
     try {
-        const partida = localStorage.getItem('cp_partida');
-        const entregas = localStorage.getItem('cp_entregas');
-        const rotaOtim = localStorage.getItem('cp_rota_otimizada');
-        const dataRota = localStorage.getItem('cp_data_rota');
-        const rotaInic = localStorage.getItem('cp_rota_iniciada');
-        const opt = localStorage.getItem('cp_is_route_optimized');
-        const tripStart = localStorage.getItem('cp_trip_started');
-        const tripComp = localStorage.getItem('cp_trip_completed');
-        const odoStart = localStorage.getItem('cp_odometer_start');
-        const odoStartH = localStorage.getItem('cp_odometer_start_hour');
-        const lastOdo = localStorage.getItem('cp_last_odometer');
+        window.partidaLocalizacao = safeJSONParse('cp_partida', null);
+        window.moradasEntregas = safeJSONParse('cp_entregas', []);
+        window.rotaOtimizada = safeJSONParse('cp_rota_otimizada', []);
+        window.dataRotaSelecionada = safeJSONParse('cp_data_rota', "");
+        window.rotaIniciada = safeJSONParse('cp_rota_iniciada', false);
+        window.isRouteOptimized = safeJSONParse('cp_is_route_optimized', false);
+        window.routingMethodUsed = localStorage.getItem('cp_routing_method') || 'Cloud';
 
-        if (partida) window.partidaLocalizacao = safeJSONParse(partida, null);
-        if (entregas) window.moradasEntregas = safeJSONParse(entregas, []);
-        if (rotaOtim) window.rotaOtimizada = safeJSONParse(rotaOtim, []);
-        if (dataRota) window.dataRotaSelecionada = safeJSONParse(dataRota, "");
-        if (rotaInic) window.rotaIniciada = safeJSONParse(rotaInic, false);
-        if (opt) window.isRouteOptimized = safeJSONParse(opt, false);
-        if (tripStart) window.tripStarted = safeJSONParse(tripStart, false);
-        if (tripComp) window.tripCompleted = safeJSONParse(tripComp, false);
-        if (odoStart) window.odometerStart = safeJSONParse(odoStart, 0);
-        if (odoStartH) window.odometerStartHour = safeJSONParse(odoStartH, "");
-        if (lastOdo) window.lastOdometer = safeJSONParse(lastOdo, 0);
+        window.tripStarted = safeJSONParse('cp_trip_started', false);
+        window.tripCompleted = safeJSONParse('cp_trip_completed', false);
+        window.odometerStart = safeJSONParse('cp_odometer_start', 0);
+        window.odometerStartHour = safeJSONParse('cp_odometer_start_hour', "");
+        window.odometerEnd = safeJSONParse('cp_odometer_end', 0);
+        window.odometerEndHour = safeJSONParse('cp_odometer_end_hour', "");
+        window.lastOdometer = safeJSONParse('cp_last_odometer', 0);
 
-        console.log(`[BOOT] Estado local restaurado: ${window.moradasEntregas.length} paragens em memória.`);
+        console.log(`[BOOT] Rota restaurada do disco: ${window.moradasEntregas.length} paragens carregadas.`);
     } catch (e) {
         console.warn("[BOOT] Aviso ao restaurar estado local:", e);
     }
@@ -143,23 +135,35 @@ function escutarAssignmentsEmTempoReal() {
 }
 
 // ==========================================
-// ESCUTA ATIVA EM TEMPO REAL NO FIRESTORE (ROTA ATIVA DO CONDUTOR COM PROTEÇÃO ANTI-WIPE)
+// ESCUTA ATIVA NO FIRESTORE COM PROTEÇÃO ANTI-WIPE (NUNCA APAGA PARAGENS LOCAIS)
 // ==========================================
 function escutarRotaEmTempoReal(uid) {
     if (unsubRoute) {
         unsubRoute();
     }
 
-    console.log(`[FIREBASE] A sincronizar rota pessoal em tempo real para o UID: ${uid}`);
+    console.log(`[FIREBASE] A sincronizar rota em tempo real para o UID: ${uid}`);
 
     unsubRoute = db.collection('routes').doc(uid).onSnapshot((doc) => {
+        const localQtd = Array.isArray(window.moradasEntregas) ? window.moradasEntregas.length : 0;
+
         if (doc.exists) {
             const data = doc.data();
-            
-            // Só substitui se os dados na nuvem forem válidos
+            const cloudEntregas = Array.isArray(data.moradasEntregas) ? data.moradasEntregas : [];
+
+            // 🚨 PROTEÇÃO ANTI-WIPE CRÍTICA:
+            // Se o telemóvel tem paragens adicionadas (ex: 5) e a nuvem vier com 0 paragens,
+            // NÃO podemos apagar as moradas do telemóvel! Fazemos o upload para a nuvem.
+            if (localQtd > 0 && cloudEntregas.length === 0) {
+                console.warn(`[FIREBASE] Proteção Anti-Wipe acionada: mantendo ${localQtd} paragens locais e atualizando nuvem...`);
+                sincronizarPersistencia();
+                return;
+            }
+
+            // Se a nuvem tiver dados válidos ou se ambos estiverem sincronizados
             window.partidaLocalizacao = data.partidaLocalizacao || window.partidaLocalizacao || null;
-            window.moradasEntregas = Array.isArray(data.moradasEntregas) ? data.moradasEntregas : (window.moradasEntregas || []);
-            window.rotaOtimizada = Array.isArray(data.rotaOtimizada) ? data.rotaOtimizada : (window.rotaOtimizada || []);
+            window.moradasEntregas = cloudEntregas.length > 0 ? cloudEntregas : (window.moradasEntregas || []);
+            window.rotaOtimizada = Array.isArray(data.rotaOtimizada) && data.rotaOtimizada.length > 0 ? data.rotaOtimizada : (window.rotaOtimizada || []);
             window.dataRotaSelecionada = data.dataRotaSelecionada || window.dataRotaSelecionada || "";
             window.rotaIniciada = data.rotaIniciada !== undefined ? data.rotaIniciada : (window.rotaIniciada || false);
             window.isRouteOptimized = data.isRouteOptimized !== undefined ? data.isRouteOptimized : (window.isRouteOptimized || false);
@@ -173,36 +177,40 @@ function escutarRotaEmTempoReal(uid) {
             window.odometerEndHour = data.odometerEndHour || window.odometerEndHour || "";
             window.lastOdometer = data.lastOdometer !== undefined ? data.lastOdometer : (window.lastOdometer || 0);
 
-            console.log(`[FIREBASE] Rota sincronizada da nuvem (${window.moradasEntregas.length} paragens).`);
+            console.log(`[FIREBASE] Rota sincronizada: ${window.moradasEntregas.length} paragens em memória.`);
         } else {
             console.log("[FIREBASE] Nenhum documento de rota na nuvem. Verificando estado local...");
-            // PROTEÇÃO ANTI-WIPE: Se houver moradas locais, faz o backup imediato para o Firestore
-            if (window.moradasEntregas && window.moradasEntregas.length > 0) {
-                console.log("[FIREBASE] A fazer upload do estado local para criar a rota na nuvem...");
+            if (localQtd > 0) {
+                console.log("[FIREBASE] A fazer upload das paragens locais para criar documento na nuvem...");
                 sincronizarPersistencia();
             }
         }
 
-        // Persistência local defensiva contínua
-        localStorage.setItem('cp_partida', JSON.stringify(window.partidaLocalizacao));
-        localStorage.setItem('cp_entregas', JSON.stringify(window.moradasEntregas));
-        localStorage.setItem('cp_rota_otimizada', JSON.stringify(window.rotaOtimizada));
-        localStorage.setItem('cp_data_rota', JSON.stringify(window.dataRotaSelecionada));
-        localStorage.setItem('cp_rota_iniciada', JSON.stringify(window.rotaIniciada));
-        localStorage.setItem('cp_is_route_optimized', JSON.stringify(window.isRouteOptimized));
-        localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
+        // Salva síncrono local
+        saveData(
+            window.drivers, 
+            [], 
+            window.assignments,
+            window.partidaLocalizacao,
+            window.moradasEntregas,
+            window.rotaOtimizada,
+            window.dataRotaSelecionada, 
+            window.rotaIniciada
+        );
 
-        localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted));
-        localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted));
-        localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart));
-        localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour));
-        localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd));
-        localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour));
-        localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer));
+        localStorage.setItem('cp_is_route_optimized', JSON.stringify(window.isRouteOptimized || false));
+        localStorage.setItem('cp_routing_method', window.routingMethodUsed || 'Cloud');
+        localStorage.setItem('cp_trip_started', JSON.stringify(window.tripStarted || false));
+        localStorage.setItem('cp_trip_completed', JSON.stringify(window.tripCompleted || false));
+        localStorage.setItem('cp_odometer_start', JSON.stringify(window.odometerStart || 0));
+        localStorage.setItem('cp_odometer_start_hour', JSON.stringify(window.odometerStartHour || ""));
+        localStorage.setItem('cp_odometer_end', JSON.stringify(window.odometerEnd || 0));
+        localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour || ""));
+        localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer || 0));
 
         sincronizarInterfaceRota();
     }, (err) => {
-        console.error("[FIREBASE] Erro ao sincronizar rota em nuvem:", err);
+        console.error("[FIREBASE] Erro ao escutar rota na nuvem:", err);
     });
 }
 
@@ -387,7 +395,7 @@ function inicializarMonitorizacaoAuth() {
             window.currentUserUid = user.uid;
             window.currentUserEmail = user.email;
 
-            console.log(`[AUTH] Utilizador com sessão iniciada: ${user.email} (UID: ${user.uid})`);
+            console.log(`[AUTH] Utilizador ativo: ${user.email} (UID: ${user.uid})`);
 
             if (navBarraInferior) navBarraInferior.classList.remove('hidden');
 
@@ -404,13 +412,11 @@ function inicializarMonitorizacaoAuth() {
                 if (doc.exists) {
                     const data = doc.data();
                     userRole = data.role || 'Motorista';
-                    // Atualiza o email para facilitar a identificação sem mudar o role
                     await userDocRef.set({ 
                         email: user.email,
                         lastLogin: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
                 } else {
-                    // Se o utilizador é novo e não existe, cria como Motorista por padrão
                     await userDocRef.set({
                         email: user.email,
                         role: 'Motorista',
@@ -418,10 +424,10 @@ function inicializarMonitorizacaoAuth() {
                     }, { merge: true });
                 }
 
-                console.log(`[AUTH] Permissões aplicadas com sucesso. Role: "${userRole}"`);
+                console.log(`[AUTH] Permissões aplicadas: Role "${userRole}"`);
                 aplicarPermissoesPorRole(userRole);
             } catch (err) {
-                console.warn("[AUTH] Aviso ao verificar permissões de utilizador:", err);
+                console.warn("[AUTH] Aviso ao verificar permissões:", err);
                 aplicarPermissoesPorRole('Motorista');
             }
 
@@ -447,10 +453,10 @@ function inicializarMonitorizacaoAuth() {
 // CICLO DE VIDA DO DOM
 // =========================================================================
 document.addEventListener('DOMContentLoaded', async () => {
-    // 1. Restauração imediata offline-first antes de qualquer render
+    // 1. Restauração imediata offline-first do disco antes de qualquer render
     restaurarEstadoLocalImediato();
 
-    // 2. Carregamento da interface
+    // 2. Carregamento dos componentes HTML parciais e scripts
     await carregarPartials();
     carregarGoogleMapsScript();
 
@@ -482,7 +488,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (typeof window.renderizarSetoresUI === 'function') window.renderizarSetoresUI();
     if (typeof window.atualizarSummaryUI === 'function') window.atualizarSummaryUI();
     
-    // 3. Sincroniza a interface da rota com o estado restaurado imediatamente
+    // 3. Sincroniza a interface da rota com o estado restaurado
     sincronizarInterfaceRota();
 
     const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
