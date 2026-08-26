@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v76.1 - Módulo de Atribuição de Bricks, Mapa do Gestor e Calibração
+ * Versão v76.2 - Módulo de Atribuição de Bricks, Mapa do Gestor e Calibração Direta por Coordenadas
  * Faz: Controla o ecrã de Atribuição de Bricks aos motoristas, calibração manual
- *      de pinos (Drag & Drop com trava de segurança), reatribuição instantânea
- *      no mapa e Auditoria de Saldo Zero com contagem reativa por concelho.
+ *      de pinos colando coordenadas do Google Maps (ex: 38.7574, -9.3633) ou Drag & Drop,
+ *      reatribuição instantânea no mapa e Auditoria de Saldo Zero.
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -30,10 +30,10 @@ let modoCalibracaoAtivo = false;
 let dashboardMap = null;
 let dashboardInfoWindow = null;
 
-// Mapa de reconciliação inteligente de marcadores (chave: `${driverId}_${brickId}`)
+// Mapa de reconciliação inteligente de marcadores (chave: brickId)
 let dashboardMarkersMap = new Map();
 
-// Cache local em memória RAM das coordenadas já geocodificadas
+// Cache local em memória RAM das coordenadas já geocodificadas / calibradas
 let brickCoordsCache = {};
 
 try {
@@ -113,7 +113,7 @@ const FREGUESIA_COORDS = {
 };
 
 // ==========================================
-// CÁLCULO DE COORDENADAS JITTER DETERMINÍSTICO
+// CÁLCULO DE COORDENADAS (PRIORIDADE: CALIBRADAS > BASE FREGUESIA)
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -124,6 +124,7 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 
     const defaultCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9376, lng: -9.3276 };
     const base = FREGUESIA_COORDS[normalizarBrickId(freguesia)] || FREGUESIA_COORDS[freguesia] || defaultCoords;
+    
     let hash = 0;
     for (let i = 0; i < localidade.length; i++) {
         hash = localidade.charCodeAt(i) + ((hash << 5) - hash);
@@ -138,54 +139,58 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     };
 }
 
-// ==========================================
-// GEOCÓDIGO SOB PROCURA
-// ==========================================
-function geocodificarBrickSobProcura(freguesia, localidade) {
-    const brickId = `${freguesia}|${localidade}`;
-    if (brickCoordsCache[brickId]) return;
-
-    if (typeof google !== 'undefined' && google.maps && google.maps.Geocoder) {
-        const geocoder = new google.maps.Geocoder();
-        
-        const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freguesia]) 
-            ? GEOGRAPHY[concelhoAtivo][freguesia][localidade] || [] 
-            : [];
-            
-        const queryAddress = obterEnderecoHigienizado(localidade, cpList, freguesia, concelhoAtivo);
-
-        geocoder.geocode({ address: queryAddress }, (results, status) => {
-            if (status === "OK" && results[0]) {
-                const loc = results[0].geometry.location;
-                const coordsResolvidas = { lat: loc.lat(), lng: loc.lng() };
-                brickCoordsCache[brickId] = coordsResolvidas;
-                salvarCacheCoordenadas();
-
-                db.collection('brickCoordinates').doc(brickId).set(coordsResolvidas).catch((err) => {
-                    console.warn("[PWA] Falha ao partilhar coordenada de Brick via Firestore:", err);
-                });
-
-                desenharBricksNoMapa();
-            } else {
-                console.warn(`[PWA] Não foi possível geocodificar "${queryAddress}". Caching fallback.`);
-                const fallbackCoords = obterCoordenadaPrecisaBrick(freguesia, localidade);
-                brickCoordsCache[brickId] = fallbackCoords;
-                salvarCacheCoordenadas();
-            }
-        });
+// =========================================================================
+// CALIBRAÇÃO DIRETA DE COORDENADAS MANUALMENTE (COPIADAS DO GOOGLE MAPS)
+// =========================================================================
+window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) {
+    if (!brickId || !rawCoordString) {
+        alert("Por favor, introduza ou cole as coordenadas (ex: 38.757405, -9.363379).");
+        return;
     }
-}
+
+    // Limpa parênteses, caracteres especiais e extrai os dois números decimais
+    const cleanStr = rawCoordString.replace(/[()]/g, '').trim();
+    const parts = cleanStr.split(/[\s,;]+/).filter(Boolean);
+
+    if (parts.length < 2) {
+        alert("Formato inválido. Por favor cole as coordenadas no formato:\nlatitude, longitude (ex: 38.757405, -9.363379)");
+        return;
+    }
+
+    const lat = parseFloat(parts[0]);
+    const lng = parseFloat(parts[1]);
+
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        alert("Valores de coordenadas inválidos. Verifique se copiou corretamente os números do Google Maps.");
+        return;
+    }
+
+    const novasCoords = { lat, lng };
+    brickCoordsCache[brickId] = novasCoords;
+    salvarCacheCoordenadas();
+
+    try {
+        await db.collection('brickCoordinates').doc(brickId).set(novasCoords);
+        console.log(`✅ [CALIBRAÇÃO MANUAL] Posição do Brick "${brickId}" gravada no Firestore.`);
+    } catch (err) {
+        console.warn(`[CALIBRAÇÃO MANUAL] Aviso ao gravar na nuvem:`, err);
+    }
+
+    if (dashboardInfoWindow) {
+        dashboardInfoWindow.close();
+    }
+
+    desenharBricksNoMapa();
+    alert(`📍 Posição do Brick "${brickId.replace('|', ' - ')}" fixada com sucesso!\n\nLatitude: ${lat.toFixed(6)}\nLongitude: ${lng.toFixed(6)}`);
+};
 
 // =========================================================================
 // REATRIBUIÇÃO DIRETA DE MOTORISTA A PARTIR DO BALÃO DO MAPA
 // =========================================================================
 window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
-    if (!brickId || !novoMotoristaId) return;
+    if (!brickId) return;
 
     const driversArr = Array.isArray(window.drivers) ? window.drivers : [];
-    const novoMotorista = driversArr.find(d => d.id === novoMotoristaId);
-    if (!novoMotorista) return;
-
     const normalizedBid = normalizarBrickId(brickId);
     let motoristaAnterior = null;
 
@@ -200,13 +205,19 @@ window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
         }
     });
 
-    // 2. Adicionar ao novo motorista
-    if (!Array.isArray(novoMotorista.brickIds)) {
-        novoMotorista.brickIds = [];
-    }
-    const jaPossui = novoMotorista.brickIds.some(id => normalizarBrickId(id) === normalizedBid);
-    if (!jaPossui) {
-        novoMotorista.brickIds.push(brickId);
+    // 2. Se um novo motorista foi selecionado, adicionar-lhe o Brick
+    let novoMotorista = null;
+    if (novoMotoristaId) {
+        novoMotorista = driversArr.find(d => d.id === novoMotoristaId);
+        if (novoMotorista) {
+            if (!Array.isArray(novoMotorista.brickIds)) {
+                novoMotorista.brickIds = [];
+            }
+            const jaPossui = novoMotorista.brickIds.some(id => normalizarBrickId(id) === normalizedBid);
+            if (!jaPossui) {
+                novoMotorista.brickIds.push(brickId);
+            }
+        }
     }
 
     // 3. Atualização otimista imediata na memória local
@@ -235,12 +246,14 @@ window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
             brickIds: motoristaAnterior.brickIds
         }));
     }
-    promises.push(db.collection('drivers').doc(novoMotorista.id).update({
-        brickIds: novoMotorista.brickIds
-    }));
+    if (novoMotorista) {
+        promises.push(db.collection('drivers').doc(novoMotorista.id).update({
+            brickIds: novoMotorista.brickIds
+        }));
+    }
 
     Promise.all(promises).then(() => {
-        console.log(`✅ [ATRIBUIÇÃO MAPA] Brick "${brickId}" atribuído com sucesso a "${novoMotorista.name}".`);
+        console.log(`✅ [ATRIBUIÇÃO MAPA] Brick "${brickId}" sincronizado.`);
     }).catch(err => {
         console.error("❌ Erro ao sincronizar reatribuição no Firestore:", err);
     }).finally(() => {
@@ -303,7 +316,7 @@ function inicializarMapaBricksDashboard() {
         });
 
         dashboardInfoWindow = new google.maps.InfoWindow({
-            disableAutoPan: true
+            disableAutoPan: false
         });
 
         carregarCacheCoordenadasFirestore().then(() => desenharBricksNoMapa());
@@ -333,60 +346,75 @@ function desenharBricksNoMapa() {
         return concelhos.includes(concelhoAtivo);
     });
 
+    // Mapeia qual motorista é dono de cada Brick
+    const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
         bIds.forEach(id => {
-            if (id && typeof id === 'string' && id.includes('|')) {
-                const [freg, loc] = id.split('|');
+            if (id && typeof id === 'string') {
+                localidadeParaMotorista.set(normalizarBrickId(id), drv);
+            }
+        });
+    });
 
-                if (!GEOGRAPHY[concelhoAtivo] || !GEOGRAPHY[concelhoAtivo][freg] || !GEOGRAPHY[concelhoAtivo][freg][loc]) {
-                    return; 
-                }
+    // Desenha TODOS os Bricks do concelho ativo (Atribuídos e Livres)
+    if (GEOGRAPHY[concelhoAtivo]) {
+        for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelhoAtivo])) {
+            for (const [localidade, cpList] of Object.entries(localidades)) {
+                const brickId = `${freguesia}|${localidade}`;
+                const normalizedBid = normalizarBrickId(brickId);
+                const motoristaDono = localidadeParaMotorista.get(normalizedBid);
 
-                const markerKey = `${drv.id}_${id}`;
+                const markerKey = brickId;
                 keysDesejadas.add(markerKey);
 
-                const coords = obterCoordenadaPrecisaBrick(freg, loc);
+                const coords = obterCoordenadaPrecisaBrick(freguesia, localidade);
                 bounds.extend(coords);
                 totalPontosDesenhados++;
 
-                if (!dashboardMarkersMap.has(markerKey)) {
-                    const marker = new google.maps.Marker({
+                const pinColor = motoristaDono ? motoristaDono.color : "#9CA3AF"; // Cinzento se for Livre
+                const pinStrokeColor = motoristaDono ? "#FFFFFF" : "#4B5563";
+
+                let marker = dashboardMarkersMap.get(markerKey);
+
+                if (!marker) {
+                    marker = new google.maps.Marker({
                         position: coords,
                         map: dashboardMap,
                         draggable: modoCalibracaoAtivo,
                         icon: {
                             path: pinSvgPath,
-                            fillColor: drv.color,
+                            fillColor: pinColor,
                             fillOpacity: 1.0,
-                            strokeWeight: 1,
-                            strokeColor: "#FFFFFF",
+                            strokeWeight: 1.5,
+                            strokeColor: pinStrokeColor,
                             scale: 1.2,
                             anchor: new google.maps.Point(12, 22)
                         },
-                        title: `${freg} - ${loc} (${drv.name})`
+                        title: `${freguesia} - ${localidade} ${motoristaDono ? `(${motoristaDono.name})` : '(Livre)'}`
                     });
 
+                    // Calibração por Arraste (Drag & Drop)
                     marker.addListener('dragend', (event) => {
                         const novaLat = event.latLng.lat();
                         const novaLng = event.latLng.lng();
                         const novasCoords = { lat: novaLat, lng: novaLng };
 
-                        brickCoordsCache[id] = novasCoords;
+                        brickCoordsCache[brickId] = novasCoords;
                         salvarCacheCoordenadas();
 
-                        db.collection('brickCoordinates').doc(id).set(novasCoords).then(() => {
-                            console.log(`✅ [CALIBRAÇÃO] Posição do Brick "${id}" atualizada no Firestore.`);
+                        db.collection('brickCoordinates').doc(brickId).set(novasCoords).then(() => {
+                            console.log(`✅ [CALIBRAÇÃO] Posição do Brick "${brickId}" atualizada no Firestore.`);
                         }).catch((err) => {
-                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar coordenada do Brick "${id}":`, err);
+                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar coordenada do Brick "${brickId}":`, err);
                         });
 
                         if (dashboardInfoWindow) {
                             dashboardInfoWindow.setContent(`
                                 <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 4px;">
                                     <div style="font-weight: 800; color: #10B981;">📍 Posição Calibrada!</div>
-                                    <div style="color: #374151; font-weight: 600; font-size: 10px; margin-top: 2px;">${freg} - ${loc}</div>
-                                    <div style="color: #6B7280; font-size: 9px; font-mono;">(${novaLat.toFixed(5)}, ${novaLng.toFixed(5)})</div>
+                                    <div style="color: #374151; font-weight: 600; font-size: 10px; margin-top: 2px;">${freguesia} - ${localidade}</div>
+                                    <div style="color: #6B7280; font-size: 9px; font-mono;">(${novaLat.toFixed(6)}, ${novaLng.toFixed(6)})</div>
                                 </div>
                             `);
                             dashboardInfoWindow.setPosition(novasCoords);
@@ -394,65 +422,101 @@ function desenharBricksNoMapa() {
                         }
                     });
 
-                    const exibirInfoBrick = () => {
-                        if (dashboardInfoWindow) {
-                            const cpList = (GEOGRAPHY[concelhoAtivo] && GEOGRAPHY[concelhoAtivo][freg]) 
-                                ? GEOGRAPHY[concelhoAtivo][freg][loc] || [] 
-                                : [];
-                            
-                            const cpFormatado = cpList.length > 0 
-                                ? (cpList.length === 1 ? cpList[0] : `${cpList[0]} a ${cpList[cpList.length - 1]}`)
-                                : "";
+                    dashboardMarkersMap.set(markerKey, marker);
+                } else {
+                    // Atualiza a cor e posição do marcador existente
+                    marker.setPosition(coords);
+                    marker.setDraggable(modoCalibracaoAtivo);
+                    marker.setIcon({
+                        path: pinSvgPath,
+                        fillColor: pinColor,
+                        fillOpacity: 1.0,
+                        strokeWeight: 1.5,
+                        strokeColor: pinStrokeColor,
+                        scale: 1.2,
+                        anchor: new google.maps.Point(12, 22)
+                    });
+                }
 
-                            const opcoesDriversHtml = driversDoConcelho.map(d => `
-                                <option value="${d.id}" ${d.id === drv.id ? 'selected' : ''} style="color: ${d.color}; font-weight: bold;">
+                // BALÃO INFORMATIVO COM CALIBRAÇÃO DIRETA POR COORDENADAS
+                const safeDomId = normalizedBid.replace(/[^a-zA-Z0-9]/g, '_');
+                
+                const exibirInfoBrick = () => {
+                    if (dashboardInfoWindow) {
+                        const cpFormatado = Array.isArray(cpList) && cpList.length > 0 
+                            ? (cpList.length === 1 ? cpList[0] : `${cpList[0]} a ${cpList[cpList.length - 1]}`)
+                            : "";
+
+                        const opcoesDriversHtml = `
+                            <option value="" ${!motoristaDono ? 'selected' : ''}>-- Sem Motorista (Livre) --</option>
+                            ${driversDoConcelho.map(d => `
+                                <option value="${d.id}" ${motoristaDono && d.id === motoristaDono.id ? 'selected' : ''} style="color: ${d.color}; font-weight: bold;">
                                     ${d.name}
                                 </option>
-                            `).join('');
+                            `).join('')}
+                        `;
 
-                            dashboardInfoWindow.setContent(`
-                                <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 6px; line-height: 1.4; max-width: 250px;">
-                                    <div style="font-weight: 800; color: #1F2937; font-size: 13px; margin-bottom: 2px;">
-                                        📍 ${freg}
-                                    </div>
-                                    <div style="font-weight: 700; color: #2563EB; font-size: 12px;">
-                                        Brick: ${loc}
-                                    </div>
-                                    ${cpFormatado ? `<div style="font-size: 10px; font-family: monospace; color: #6B7280; margin-top: 2px;">CPs: ${cpFormatado}</div>` : ''}
+                        const posAtual = marker.getPosition();
+                        const latAtual = posAtual ? posAtual.lat().toFixed(6) : coords.lat.toFixed(6);
+                        const lngAtual = posAtual ? posAtual.lng().toFixed(6) : coords.lng.toFixed(6);
 
-                                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E5E7EB;">
-                                        <label style="display: block; font-size: 9px; font-weight: 900; text-transform: uppercase; color: #6B7280; margin-bottom: 3px;">
-                                            Estante de (Alterar Motorista):
-                                        </label>
-                                        <div style="display: flex; align-items: center; gap: 6px;">
-                                            <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: ${drv.color}; flex-shrink: 0;"></span>
-                                            <select onchange="if(typeof window.trocarMotoristaDoBrick === 'function') window.trocarMotoristaDoBrick('${id}', this.value)"
-                                                    style="flex: 1; padding: 4px 6px; border-radius: 6px; border: 1px solid #D1D5DB; font-size: 11px; font-weight: 800; color: #1F2937; background: #F9FAFB; outline: none; cursor: pointer;">
-                                                ${opcoesDriversHtml}
-                                            </select>
-                                        </div>
-                                    </div>
+                        dashboardInfoWindow.setContent(`
+                            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 6px; line-height: 1.4; width: 260px;">
+                                <div style="font-weight: 800; color: #1F2937; font-size: 13px; margin-bottom: 2px;">
+                                    📍 ${freguesia}
+                                </div>
+                                <div style="font-weight: 700; color: #2563EB; font-size: 12px;">
+                                    Brick: ${localidade}
+                                </div>
+                                ${cpFormatado ? `<div style="font-size: 10px; font-family: monospace; color: #6B7280; margin-top: 2px;">CPs: ${cpFormatado}</div>` : ''}
 
-                                    <div style="margin-top: 6px; font-size: 9px; color: #9CA3AF; font-style: italic;">
-                                        ${modoCalibracaoAtivo 
-                                            ? '🔓 Modo Calibração: Pode arrastar este pino para o local exato.' 
-                                            : '🔒 Modo Seguro: Pinos travados contra arrasto acidental.'}
+                                <!-- 1. SELETOR DE MOTORISTA -->
+                                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E5E7EB;">
+                                    <label style="display: block; font-size: 9px; font-weight: 900; text-transform: uppercase; color: #6B7280; margin-bottom: 3px;">
+                                        Estante de (Alterar Motorista):
+                                    </label>
+                                    <div style="display: flex; align-items: center; gap: 6px;">
+                                        <span style="display: inline-block; width: 12px; height: 12px; border-radius: 50%; background-color: ${pinColor}; flex-shrink: 0;"></span>
+                                        <select onchange="if(typeof window.trocarMotoristaDoBrick === 'function') window.trocarMotoristaDoBrick('${brickId}', this.value)"
+                                                style="flex: 1; padding: 4px 6px; border-radius: 6px; border: 1px solid #D1D5DB; font-size: 11px; font-weight: 800; color: #1F2937; background: #F9FAFB; outline: none; cursor: pointer;">
+                                            ${opcoesDriversHtml}
+                                        </select>
                                     </div>
                                 </div>
-                            `);
-                            dashboardInfoWindow.setPosition(marker.getPosition());
-                            dashboardInfoWindow.open(dashboardMap, marker);
-                        }
-                    };
 
-                    marker.addListener('mouseover', exibirInfoBrick);
-                    marker.addListener('click', exibirInfoBrick);
+                                <!-- 2. CALIBRAÇÃO DIRETA: COLAR COORDENADAS DO GOOGLE MAPS -->
+                                <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E5E7EB;">
+                                    <label style="display: block; font-size: 9px; font-weight: 900; text-transform: uppercase; color: #6B7280; margin-bottom: 3px;">
+                                        🎯 Fixar Coordenada Google Maps:
+                                    </label>
+                                    <div style="display: flex; gap: 4px; align-items: center;">
+                                        <input type="text" id="input-coords-${safeDomId}" 
+                                               placeholder="Cole: 38.7574, -9.3633" 
+                                               value="${latAtual}, ${lngAtual}"
+                                               style="flex: 1; padding: 5px 6px; border-radius: 6px; border: 1px solid #D1D5DB; font-size: 10px; font-family: monospace; color: #1F2937; background: #FFFFFF; outline: none;" />
+                                        <button type="button" 
+                                                onclick="window.atualizarCoordenadaManualBrick('${brickId}', document.getElementById('input-coords-${safeDomId}').value)"
+                                                style="background: #2563EB; hover:background: #1D4ED8; color: white; border: none; border-radius: 6px; padding: 5px 9px; font-size: 10px; font-weight: 900; cursor: pointer; transition: all;">
+                                            Fixar
+                                        </button>
+                                    </div>
+                                    <div style="font-size: 8px; color: #9CA3AF; margin-top: 3px; font-style: italic;">
+                                        Copie as coordenadas no Google Maps e cole aqui para mover o pino na hora.
+                                    </div>
+                                </div>
+                            </div>
+                        `);
+                        dashboardInfoWindow.setPosition(marker.getPosition());
+                        dashboardInfoWindow.open(dashboardMap, marker);
+                    }
+                };
 
-                    dashboardMarkersMap.set(markerKey, marker);
-                }
+                // Remove escutadores anteriores para não duplicar
+                google.maps.event.clearInstanceListeners(marker);
+                marker.addListener('click', exibirInfoBrick);
             }
-        });
-    });
+        }
+    }
 
     for (const [key, marker] of dashboardMarkersMap.entries()) {
         if (!keysDesejadas.has(key)) {
@@ -461,12 +525,12 @@ function desenharBricksNoMapa() {
         }
     }
 
-    if (totalPontosDesenhados > 0) {
+    if (totalPontosDesenhados > 0 && dashboardMap) {
         dashboardMap.fitBounds(bounds);
 
         google.maps.event.addListenerOnce(dashboardMap, 'bounds_changed', function () {
-            if (dashboardMap.getZoom() > 15) {
-                dashboardMap.setZoom(15);
+            if (dashboardMap.getZoom() > 14) {
+                dashboardMap.setZoom(14);
             }
         });
     }
@@ -791,7 +855,6 @@ export function renderGeographicTree() {
                     let updatedBrickIds = [...activeDriver.brickIds];
                     if (checkedState) {
                         updatedBrickIds.push(brickId);
-                        geocodificarBrickSobProcura(freguesiaName, locName);
                     } else {
                         updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
                     }
@@ -839,7 +902,6 @@ export function renderGeographicTree() {
                 }
 
                 let updatedBrickIds = [...activeDriver.brickIds];
-                let delayPacing = 0;
 
                 allLocs.forEach(locName => {
                     const brickId = `${freguesiaName}|${locName}`;
@@ -851,11 +913,6 @@ export function renderGeographicTree() {
                         const isAlreadyOwned = updatedBrickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
                         if (!isOwnedByOther && !isAlreadyOwned) {
                             updatedBrickIds.push(brickId);
-
-                            setTimeout(() => {
-                                geocodificarBrickSobProcura(freguesiaName, locName);
-                            }, delayPacing);
-                            delayPacing += 300;
                         }
                     } else {
                         updatedBrickIds = updatedBrickIds.filter(id => normalizarBrickId(id) !== normalizedBid);
