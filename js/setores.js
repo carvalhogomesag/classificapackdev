@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v76.3 - Módulo de Atribuição de Bricks, Mapa do Gestor, Calibração e Selo de Auditoria GPS
- * Faz: Controla o ecrã de Atribuição de Bricks, calibração manual de coordenadas (Google Maps),
- *      exibe o selo visual de "Ponto Auditado & Fixado" no balão e na árvore geográfica,
- *      e gere a Auditoria de Saldo Zero.
+ * Versão v76.4 - Módulo de Atribuição de Bricks, Mapa do Gestor e Auditoria GPS Limpa
+ * Faz: Inicia todos os 292 Bricks por defeito como "Não Auditado / Pendente", permitindo
+ *      ao Gestor auditar e fixar as coordenadas exatas do Google Maps uma a uma,
+ *      marcando-as progressivamente como "Auditado & Fixado".
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -33,7 +33,7 @@ let dashboardInfoWindow = null;
 // Mapa de reconciliação inteligente de marcadores (chave: brickId)
 let dashboardMarkersMap = new Map();
 
-// Cache local em memória RAM das coordenadas já geocodificadas / calibradas
+// Cache local em memória RAM das coordenadas calibradas/auditadas
 let brickCoordsCache = {};
 
 try {
@@ -76,13 +76,15 @@ async function carregarCacheCoordenadasFirestore() {
                 brickCoordsCache[doc.id] = { 
                     lat: data.lat, 
                     lng: data.lng,
-                    auditado: true,
+                    auditado: data.auditado === true, // Apenas true se foi auditado explicitamente
                     auditadoEm: data.auditadoEm || ""
                 };
             }
         });
         salvarCacheCoordenadas();
         cacheFirestoreSincronizada = true;
+        desenharBricksNoMapa();
+        renderGeographicTree();
     } catch (e) {
         console.warn("[PWA] Não foi possível sincronizar a cache partilhada de coordenadas de Bricks:", e);
     }
@@ -118,13 +120,18 @@ const FREGUESIA_COORDS = {
 };
 
 // ==========================================
-// CÁLCULO DE COORDENADAS (PRIORIDADE: CALIBRADAS > BASE FREGUESIA)
+// CÁLCULO DE COORDENADAS (PRIORIDADE: CALIBRADAS > ESTIMADAS POR DEFEITO)
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
 
-    if (brickCoordsCache[brickId]) {
-        return brickCoordsCache[brickId];
+    if (brickCoordsCache[brickId] && typeof brickCoordsCache[brickId].lat === 'number') {
+        return {
+            lat: brickCoordsCache[brickId].lat,
+            lng: brickCoordsCache[brickId].lng,
+            auditado: brickCoordsCache[brickId].auditado === true,
+            auditadoEm: brickCoordsCache[brickId].auditadoEm || ""
+        };
     }
 
     const defaultCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9376, lng: -9.3276 };
@@ -141,7 +148,8 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     return {
         lat: base.lat + latOffset,
         lng: base.lng + lngOffset,
-        auditado: false
+        auditado: false,
+        auditadoEm: ""
     };
 }
 
@@ -171,7 +179,9 @@ window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) 
         return;
     }
 
-    const hoje = new Date().toLocaleDateString('pt-PT');
+    const agora = new Date();
+    const hoje = `${String(agora.getDate()).padStart(2, '0')}/${String(agora.getMonth() + 1).padStart(2, '0')}/${agora.getFullYear()}`;
+    
     const novasCoords = { 
         lat, 
         lng,
@@ -190,7 +200,7 @@ window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) 
             auditadoEm: hoje,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        console.log(`✅ [CALIBRAÇÃO MANUAL] Posição do Brick "${brickId}" gravada no Firestore.`);
+        console.log(`✅ [CALIBRAÇÃO MANUAL] Posição do Brick "${brickId}" gravada no Firestore como AUDITADA.`);
     } catch (err) {
         console.warn(`[CALIBRAÇÃO MANUAL] Aviso ao gravar na nuvem:`, err);
     }
@@ -389,7 +399,7 @@ function desenharBricksNoMapa() {
                 keysDesejadas.add(markerKey);
 
                 const coords = obterCoordenadaPrecisaBrick(freguesia, localidade);
-                const isAuditado = Boolean(brickCoordsCache[brickId]);
+                const isAuditado = coords.auditado === true; // Estritamente true
                 
                 bounds.extend(coords);
                 totalPontosDesenhados++;
@@ -421,7 +431,8 @@ function desenharBricksNoMapa() {
                     marker.addListener('dragend', (event) => {
                         const novaLat = event.latLng.lat();
                         const novaLng = event.latLng.lng();
-                        const hoje = new Date().toLocaleDateString('pt-PT');
+                        const agora = new Date();
+                        const hoje = `${String(agora.getDate()).padStart(2, '0')}/${String(agora.getMonth() + 1).padStart(2, '0')}/${agora.getFullYear()}`;
                         
                         const novasCoords = { 
                             lat: novaLat, 
@@ -499,7 +510,7 @@ function desenharBricksNoMapa() {
 
                         const seloAuditoriaHtml = isAuditado 
                             ? `<div style="display: inline-flex; align-items: center; gap: 4px; background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; padding: 2px 7px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-top: 4px;">
-                                   <i class="fa-solid fa-circle-check"></i> Posição Auditada & Fixada
+                                   <i class="fa-solid fa-circle-check"></i> Posição Auditada & Fixada ${coords.auditadoEm ? `(${coords.auditadoEm})` : ''}
                                </div>`
                             : `<div style="display: inline-flex; align-items: center; gap: 4px; background-color: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; padding: 2px 7px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-top: 4px;">
                                    <i class="fa-solid fa-clock"></i> Posição Estimada (Não Auditado)
@@ -849,7 +860,8 @@ export function renderGeographicTree() {
             const isAssignedToActive = Array.isArray(activeDriver.brickIds) && 
                 activeDriver.brickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
 
-            const isAuditado = Boolean(brickCoordsCache[brickId]);
+            // Apenas true se for explicitamente auditado
+            const isAuditado = Boolean(brickCoordsCache[brickId] && brickCoordsCache[brickId].auditado === true);
 
             const cpList = localidadesMap[locName] || [];
             const cpTexto = formatarIntervaloCPs(cpList);
@@ -866,7 +878,7 @@ export function renderGeographicTree() {
                         <span class="text-[9px] text-gray-400 font-mono font-normal ml-1 shrink-0">${cpTexto}</span>
                         ${isAuditado 
                             ? `<span class="text-[8px] bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.2 rounded border border-emerald-200">🎯 GPS OK</span>` 
-                            : ''}
+                            : `<span class="text-[8px] bg-gray-100 text-gray-400 font-medium px-1 py-0.2 rounded">📍 Pendente</span>`}
                     </div>
                     <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded border flex items-center space-x-1 shrink-0" style="background-color: ${motoristaDono.color}15; color: ${motoristaDono.color}; border-color: ${motoristaDono.color}30">
                         <i class="fa-solid fa-user text-[7px]"></i> <span>Com: ${motoristaDono.name}</span>
