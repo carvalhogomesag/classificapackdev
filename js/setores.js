@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v76.2 - Módulo de Atribuição de Bricks, Mapa do Gestor e Calibração Direta por Coordenadas
- * Faz: Controla o ecrã de Atribuição de Bricks aos motoristas, calibração manual
- *      de pinos colando coordenadas do Google Maps (ex: 38.7574, -9.3633) ou Drag & Drop,
- *      reatribuição instantânea no mapa e Auditoria de Saldo Zero.
+ * Versão v76.3 - Módulo de Atribuição de Bricks, Mapa do Gestor, Calibração e Selo de Auditoria GPS
+ * Faz: Controla o ecrã de Atribuição de Bricks, calibração manual de coordenadas (Google Maps),
+ *      exibe o selo visual de "Ponto Auditado & Fixado" no balão e na árvore geográfica,
+ *      e gere a Auditoria de Saldo Zero.
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -73,7 +73,12 @@ async function carregarCacheCoordenadasFirestore() {
         snapshot.forEach(doc => {
             const data = doc.data();
             if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
-                brickCoordsCache[doc.id] = { lat: data.lat, lng: data.lng };
+                brickCoordsCache[doc.id] = { 
+                    lat: data.lat, 
+                    lng: data.lng,
+                    auditado: true,
+                    auditadoEm: data.auditadoEm || ""
+                };
             }
         });
         salvarCacheCoordenadas();
@@ -135,7 +140,8 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 
     return {
         lat: base.lat + latOffset,
-        lng: base.lng + lngOffset
+        lng: base.lng + lngOffset,
+        auditado: false
     };
 }
 
@@ -165,12 +171,25 @@ window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) 
         return;
     }
 
-    const novasCoords = { lat, lng };
+    const hoje = new Date().toLocaleDateString('pt-PT');
+    const novasCoords = { 
+        lat, 
+        lng,
+        auditado: true,
+        auditadoEm: hoje
+    };
+
     brickCoordsCache[brickId] = novasCoords;
     salvarCacheCoordenadas();
 
     try {
-        await db.collection('brickCoordinates').doc(brickId).set(novasCoords);
+        await db.collection('brickCoordinates').doc(brickId).set({
+            lat: lat,
+            lng: lng,
+            auditado: true,
+            auditadoEm: hoje,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
         console.log(`✅ [CALIBRAÇÃO MANUAL] Posição do Brick "${brickId}" gravada no Firestore.`);
     } catch (err) {
         console.warn(`[CALIBRAÇÃO MANUAL] Aviso ao gravar na nuvem:`, err);
@@ -181,7 +200,8 @@ window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) 
     }
 
     desenharBricksNoMapa();
-    alert(`📍 Posição do Brick "${brickId.replace('|', ' - ')}" fixada com sucesso!\n\nLatitude: ${lat.toFixed(6)}\nLongitude: ${lng.toFixed(6)}`);
+    renderGeographicTree(); // Atualiza a árvore com o selo GPS OK
+    alert(`🎯 SUCESSO!\n\nPosição do Brick "${brickId.replace('|', ' - ')}" fixada e marcada como AUDITADA!\n\nLatitude: ${lat.toFixed(6)}\nLongitude: ${lng.toFixed(6)}`);
 };
 
 // =========================================================================
@@ -369,11 +389,14 @@ function desenharBricksNoMapa() {
                 keysDesejadas.add(markerKey);
 
                 const coords = obterCoordenadaPrecisaBrick(freguesia, localidade);
+                const isAuditado = Boolean(brickCoordsCache[brickId]);
+                
                 bounds.extend(coords);
                 totalPontosDesenhados++;
 
                 const pinColor = motoristaDono ? motoristaDono.color : "#9CA3AF"; // Cinzento se for Livre
-                const pinStrokeColor = motoristaDono ? "#FFFFFF" : "#4B5563";
+                const pinStrokeColor = isAuditado ? "#10B981" : (motoristaDono ? "#FFFFFF" : "#4B5563");
+                const pinStrokeWeight = isAuditado ? 2.5 : 1.5;
 
                 let marker = dashboardMarkersMap.get(markerKey);
 
@@ -386,33 +409,48 @@ function desenharBricksNoMapa() {
                             path: pinSvgPath,
                             fillColor: pinColor,
                             fillOpacity: 1.0,
-                            strokeWeight: 1.5,
+                            strokeWeight: pinStrokeWeight,
                             strokeColor: pinStrokeColor,
                             scale: 1.2,
                             anchor: new google.maps.Point(12, 22)
                         },
-                        title: `${freguesia} - ${localidade} ${motoristaDono ? `(${motoristaDono.name})` : '(Livre)'}`
+                        title: `${freguesia} - ${localidade} ${isAuditado ? '✅ [Auditado]' : '⏳ [Estimado]'}`
                     });
 
                     // Calibração por Arraste (Drag & Drop)
                     marker.addListener('dragend', (event) => {
                         const novaLat = event.latLng.lat();
                         const novaLng = event.latLng.lng();
-                        const novasCoords = { lat: novaLat, lng: novaLng };
+                        const hoje = new Date().toLocaleDateString('pt-PT');
+                        
+                        const novasCoords = { 
+                            lat: novaLat, 
+                            lng: novaLng,
+                            auditado: true,
+                            auditadoEm: hoje
+                        };
 
                         brickCoordsCache[brickId] = novasCoords;
                         salvarCacheCoordenadas();
 
-                        db.collection('brickCoordinates').doc(brickId).set(novasCoords).then(() => {
+                        db.collection('brickCoordinates').doc(brickId).set({
+                            lat: novaLat,
+                            lng: novaLng,
+                            auditado: true,
+                            auditadoEm: hoje,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }).then(() => {
                             console.log(`✅ [CALIBRAÇÃO] Posição do Brick "${brickId}" atualizada no Firestore.`);
                         }).catch((err) => {
-                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar coordenada do Brick "${brickId}":`, err);
+                            console.error(`❌ [CALIBRAÇÃO] Erro ao gravar coordenada:`, err);
                         });
+
+                        renderGeographicTree();
 
                         if (dashboardInfoWindow) {
                             dashboardInfoWindow.setContent(`
                                 <div style="font-family: system-ui, sans-serif; font-size: 11px; padding: 4px;">
-                                    <div style="font-weight: 800; color: #10B981;">📍 Posição Calibrada!</div>
+                                    <div style="font-weight: 800; color: #10B981;">🎯 Posição Calibrada & Auditada!</div>
                                     <div style="color: #374151; font-weight: 600; font-size: 10px; margin-top: 2px;">${freguesia} - ${localidade}</div>
                                     <div style="color: #6B7280; font-size: 9px; font-mono;">(${novaLat.toFixed(6)}, ${novaLng.toFixed(6)})</div>
                                 </div>
@@ -424,21 +462,20 @@ function desenharBricksNoMapa() {
 
                     dashboardMarkersMap.set(markerKey, marker);
                 } else {
-                    // Atualiza a cor e posição do marcador existente
                     marker.setPosition(coords);
                     marker.setDraggable(modoCalibracaoAtivo);
                     marker.setIcon({
                         path: pinSvgPath,
                         fillColor: pinColor,
                         fillOpacity: 1.0,
-                        strokeWeight: 1.5,
+                        strokeWeight: pinStrokeWeight,
                         strokeColor: pinStrokeColor,
                         scale: 1.2,
                         anchor: new google.maps.Point(12, 22)
                     });
                 }
 
-                // BALÃO INFORMATIVO COM CALIBRAÇÃO DIRETA POR COORDENADAS
+                // BALÃO INFORMATIVO COM SELO DE AUDITORIA E CALIBRAÇÃO DIRETA
                 const safeDomId = normalizedBid.replace(/[^a-zA-Z0-9]/g, '_');
                 
                 const exibirInfoBrick = () => {
@@ -460,6 +497,14 @@ function desenharBricksNoMapa() {
                         const latAtual = posAtual ? posAtual.lat().toFixed(6) : coords.lat.toFixed(6);
                         const lngAtual = posAtual ? posAtual.lng().toFixed(6) : coords.lng.toFixed(6);
 
+                        const seloAuditoriaHtml = isAuditado 
+                            ? `<div style="display: inline-flex; align-items: center; gap: 4px; background-color: #ECFDF5; color: #059669; border: 1px solid #A7F3D0; padding: 2px 7px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-top: 4px;">
+                                   <i class="fa-solid fa-circle-check"></i> Posição Auditada & Fixada
+                               </div>`
+                            : `<div style="display: inline-flex; align-items: center; gap: 4px; background-color: #FFFBEB; color: #D97706; border: 1px solid #FDE68A; padding: 2px 7px; border-radius: 6px; font-size: 9px; font-weight: 800; margin-top: 4px;">
+                                   <i class="fa-solid fa-clock"></i> Posição Estimada (Não Auditado)
+                               </div>`;
+
                         dashboardInfoWindow.setContent(`
                             <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 6px; line-height: 1.4; width: 260px;">
                                 <div style="font-weight: 800; color: #1F2937; font-size: 13px; margin-bottom: 2px;">
@@ -469,6 +514,8 @@ function desenharBricksNoMapa() {
                                     Brick: ${localidade}
                                 </div>
                                 ${cpFormatado ? `<div style="font-size: 10px; font-family: monospace; color: #6B7280; margin-top: 2px;">CPs: ${cpFormatado}</div>` : ''}
+
+                                ${seloAuditoriaHtml}
 
                                 <!-- 1. SELETOR DE MOTORISTA -->
                                 <div style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #E5E7EB;">
@@ -496,12 +543,12 @@ function desenharBricksNoMapa() {
                                                style="flex: 1; padding: 5px 6px; border-radius: 6px; border: 1px solid #D1D5DB; font-size: 10px; font-family: monospace; color: #1F2937; background: #FFFFFF; outline: none;" />
                                         <button type="button" 
                                                 onclick="window.atualizarCoordenadaManualBrick('${brickId}', document.getElementById('input-coords-${safeDomId}').value)"
-                                                style="background: #2563EB; hover:background: #1D4ED8; color: white; border: none; border-radius: 6px; padding: 5px 9px; font-size: 10px; font-weight: 900; cursor: pointer; transition: all;">
+                                                style="background: #2563EB; color: white; border: none; border-radius: 6px; padding: 5px 9px; font-size: 10px; font-weight: 900; cursor: pointer; transition: all;">
                                             Fixar
                                         </button>
                                     </div>
                                     <div style="font-size: 8px; color: #9CA3AF; margin-top: 3px; font-style: italic;">
-                                        Copie as coordenadas no Google Maps e cole aqui para mover o pino na hora.
+                                        Copie as coordenadas no Google Maps e cole aqui para auditar e fixar o pino.
                                     </div>
                                 </div>
                             </div>
@@ -511,7 +558,6 @@ function desenharBricksNoMapa() {
                     }
                 };
 
-                // Remove escutadores anteriores para não duplicar
                 google.maps.event.clearInstanceListeners(marker);
                 marker.addListener('click', exibirInfoBrick);
             }
@@ -561,7 +607,6 @@ export function renderDriversForAttribution() {
     }
 
     filteredDrivers.forEach(driver => {
-        // Contagem precisa de Bricks alocados apenas ao concelho que está ativo no ecrã
         const brickCount = (Array.isArray(driver.brickIds) ? driver.brickIds : []).filter(id => {
             if (!id || typeof id !== 'string' || !id.includes('|')) return false;
             const [freg, loc] = id.split('|');
@@ -801,9 +846,10 @@ export function renderGeographicTree() {
             const normalizedBid = normalizarBrickId(brickId);
             
             const motoristaDono = localidadeParaMotorista.get(normalizedBid);
-
             const isAssignedToActive = Array.isArray(activeDriver.brickIds) && 
                 activeDriver.brickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
+
+            const isAuditado = Boolean(brickCoordsCache[brickId]);
 
             const cpList = localidadesMap[locName] || [];
             const cpTexto = formatarIntervaloCPs(cpList);
@@ -818,6 +864,9 @@ export function renderGeographicTree() {
                         <input type="checkbox" disabled class="rounded text-gray-300 border-gray-200 w-3.5 h-3.5 cursor-not-allowed">
                         <span class="font-bold text-gray-400 line-through truncate">${locName}</span>
                         <span class="text-[9px] text-gray-400 font-mono font-normal ml-1 shrink-0">${cpTexto}</span>
+                        ${isAuditado 
+                            ? `<span class="text-[8px] bg-emerald-50 text-emerald-600 font-bold px-1.5 py-0.2 rounded border border-emerald-200">🎯 GPS OK</span>` 
+                            : ''}
                     </div>
                     <span class="text-[8px] font-black uppercase px-2 py-0.5 rounded border flex items-center space-x-1 shrink-0" style="background-color: ${motoristaDono.color}15; color: ${motoristaDono.color}; border-color: ${motoristaDono.color}30">
                         <i class="fa-solid fa-user text-[7px]"></i> <span>Com: ${motoristaDono.name}</span>
@@ -830,6 +879,9 @@ export function renderGeographicTree() {
                         <input type="checkbox" value="${brickId}" ${isAssignedToActive ? 'checked' : ''} class="brick-checkbox rounded text-blue-600 focus:ring-blue-500 border-gray-300 w-3.5 h-3.5 cursor-pointer">
                         <span class="font-bold text-gray-600 truncate">${locName}</span>
                         <span class="text-[9px] text-gray-400 font-mono font-normal ml-1 shrink-0">${cpTexto}</span>
+                        ${isAuditado 
+                            ? `<span class="text-[8px] bg-emerald-50 text-emerald-700 font-bold px-1.5 py-0.5 rounded border border-emerald-200 shrink-0">🎯 GPS OK</span>` 
+                            : `<span class="text-[8px] bg-gray-100 text-gray-400 font-medium px-1 py-0.5 rounded shrink-0">📍 Pendente</span>`}
                     </div>
                     ${isAssignedToActive 
                         ? `<span class="text-[8px] bg-blue-50 text-blue-700 font-extrabold px-1.5 py-0.5 rounded border border-blue-200 shrink-0">Associado</span>`
