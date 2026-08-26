@@ -1,11 +1,13 @@
 /**
  * ui.js
- * Versão v75.0 - Controlo de Navegação, Interface, Ecrã de Relatórios e Permissões
+ * Versão v76.2 - Controlo de Navegação, Interface, Ecrã de Relatórios e Permissões em Tempo Real
  * Faz: Controla a alternância entre todos os ecrãs (Triagem, Motoristas, Bricks, Rotas e Relatórios),
- *      atualização do visor principal, teclado numérico e segurança por nível de acesso (Role).
- * NÃO faz: Não processa lógicas de triagem de dados (triagem.js) nem grava em disco (storage.js).
- * Depende de: Nenhuns módulos.
+ *      redesenha a interface de rotas ao tocar na aba, atualiza o visor principal, teclado
+ *      numérico e segurança por nível de acesso (Role Gestor vs Motorista).
+ * Depende de: ./rotas.js
  */
+
+import { sincronizarInterfaceRota } from './rotas.js';
 
 /**
  * Configura os listeners dos botões de navegação inferior
@@ -66,14 +68,18 @@ export function showTab(tabName) {
         window.renderizarRelatoriosUI();
     }
 
-    // Corrige renderização do mapa Google se entrar na aba Rotas
-    if (tabName === 'rotas' && window.googleMapInstance) {
-        setTimeout(() => {
-            google.maps.event.trigger(window.googleMapInstance, "resize");
-            if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
-                window.ajustarLimitesMapaGoogle();
-            }
-        }, 200);
+    // 🚀 REDESENHO INSTANTÂNEO DA ABA DE ROTAS (PC E TELEMÓVEL)
+    if (tabName === 'rotas') {
+        sincronizarInterfaceRota();
+
+        if (window.googleMapInstance) {
+            setTimeout(() => {
+                google.maps.event.trigger(window.googleMapInstance, "resize");
+                if (typeof window.ajustarLimitesMapaGoogle === 'function') {
+                    window.ajustarLimitesMapaGoogle();
+                }
+            }, 200);
+        }
     }
 }
 window.showTab = showTab;
@@ -83,26 +89,37 @@ window.showTab = showTab;
  */
 export function aplicarPermissoesPorRole(role) {
     const secaoGestorMenu = document.getElementById('menu-secao-gestor');
-    const badgeRole = document.getElementById('menu-user-role-badge');
+    const badgeRole = document.getElementById('menu-user-role-badge') || document.getElementById('menu-user-role');
+    const userEmailEl = document.getElementById('menu-user-email');
     const roleFormatada = (role || '').toLowerCase();
     
     window.currentUserRole = role;
     localStorage.setItem('cp_user_role', role);
 
-    if (roleFormatada === 'motorista') {
+    if (userEmailEl && window.currentUserEmail) {
+        userEmailEl.textContent = window.currentUserEmail;
+    }
+
+    if (roleFormatada === 'gestor' || roleFormatada === 'admin' || roleFormatada === 'administrador') {
+        console.log("[AUTH] A aplicar acessos de nível: Gestor.");
+        if (secaoGestorMenu) secaoGestorMenu.classList.remove('hidden');
+        if (badgeRole) {
+            badgeRole.textContent = "GESTOR (ACESSO TOTAL)";
+            badgeRole.className = "text-[10px] font-black uppercase text-emerald-600";
+        }
+    } else {
         console.log("[AUTH] A aplicar restrições de nível: Motorista.");
         if (secaoGestorMenu) secaoGestorMenu.classList.add('hidden');
-        if (badgeRole) badgeRole.textContent = "Motorista";
+        if (badgeRole) {
+            badgeRole.textContent = "MOTORISTA";
+            badgeRole.className = "text-[10px] font-black uppercase text-blue-600";
+        }
         
         // Se estiver num ecrã restrito, redireciona o utilizador para a triagem
         const activeTab = localStorage.getItem('cp_active_tab') || 'triagem';
         if (activeTab === 'motoristas' || activeTab === 'intervalos' || activeTab === 'relatorios') {
             showTab('triagem');
         }
-    } else {
-        console.log("[AUTH] A aplicar acessos de nível: Gestor.");
-        if (secaoGestorMenu) secaoGestorMenu.classList.remove('hidden');
-        if (badgeRole) badgeRole.textContent = "Gestor (Acesso Total)";
     }
 }
 window.aplicarPermissoesPorRole = aplicarPermissoesPorRole;

@@ -1,9 +1,9 @@
 /**
  * js/firebase-init.js
- * Faz: Centraliza as credenciais de segurança e inicializa o motor do Google Firebase (Auth e Firestore) na nossa aplicação.
- *      Lê as credenciais seguras a partir do ficheiro global 'config.js' que está protegido no .gitignore.
- * NÃO faz: Não processa lógicas de triagem ou navegação direta.
- * Depende de: Bibliotecas Firebase App Compat carregadas no index.html e do objeto FIREBASE_CONFIG do config.js.
+ * Versão v76.2 - Inicializador Seguro do Firebase com Sincronização Multi-Abas
+ * Faz: Centraliza as credenciais de segurança e inicializa o motor do Google Firebase (Auth e Firestore)
+ *      com suporte a persistência offline multi-abas (synchronizeTabs: true) para evitar bloqueios de rede.
+ * Depende de: Bibliotecas Firebase App Compat carregadas no index.html e do config.js.
  */
 
 // Verifica de forma defensiva se as chaves foram devidamente carregadas do config.js
@@ -20,13 +20,13 @@ if (!firebase.apps.length) {
 export const auth = firebase.auth();
 export const db = firebase.firestore();
 
-// Sincroniza a persistência local offline no Firestore de forma defensiva
-db.enablePersistence().catch((err) => {
+// Sincroniza a persistência local offline no Firestore com suporte a múltiplas abas
+db.enablePersistence({ synchronizeTabs: true }).catch((err) => {
     if (err.code === 'failed-precondition') {
-        console.warn("[FIREBASE] A persistência offline falhou: Múltiplas abas abertas.");
+        console.warn("[FIREBASE] Persistência offline em modo de aba única.");
     } else if (err.code === 'unimplemented') {
         console.warn("[FIREBASE] O navegador atual não suporta persistência offline.");
     }
 });
 
-console.log("[FIREBASE] Sistema em Nuvem inicializado com sucesso via config.js.");
+console.log("[FIREBASE] Motor do Firebase inicializado com sucesso e sincronização multi-abas ativa.");
