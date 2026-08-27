@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v76.4 - Módulo de Atribuição de Bricks, Mapa do Gestor e Auditoria GPS Limpa
- * Faz: Inicia todos os 292 Bricks por defeito como "Não Auditado / Pendente", permitindo
- *      ao Gestor auditar e fixar as coordenadas exatas do Google Maps uma a uma,
- *      marcando-as progressivamente como "Auditado & Fixado".
+ * Versão v76.7 - Módulo de Atribuição de Bricks, Mapa do Gestor e Mapeador de Precisão CP7 (Mini-Pinos)
+ * Faz: Gere a atribuição de Bricks a motoristas, calibração manual de coordenadas,
+ *      sistema de Mapeamento de Precisão por Código Postal (CP7) com Mini-Pinos discretos,
+ *      controlo de visibilidade e Auditoria de Saldo Zero.
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -23,26 +23,37 @@ let freguesiasExpandidas = new Set();
 // Flag anti-concorrência para evitar que snapshots do Firestore revertam edições locais imediatas
 let isLocalBrickUpdating = false;
 
-// Estado da Trava de Segurança dos Pinos (Falso = Travado/Modo Seguro, Verdadeiro = Destravado para Calibração)
+// Estado da Trava de Segurança dos Pinos de Bricks (Falso = Travado/Modo Seguro, Verdadeiro = Destravado para Calibração)
 let modoCalibracaoAtivo = false;
+
+// Estado de visibilidade dos Mini-Pinos de CP7 no mapa
+let miniPinosVisiveis = true;
 
 // Instâncias internas seguras do mapa do gestor e balão de informação
 let dashboardMap = null;
 let dashboardInfoWindow = null;
 
-// Mapa de reconciliação inteligente de marcadores (chave: brickId)
-let dashboardMarkersMap = new Map();
+// Mapas de reconciliação inteligente de marcadores
+let dashboardMarkersMap = new Map(); // Pinos de Bricks
+let miniPinosMarkersMap = new Map(); // Mini-Pinos de CP7 individuais
 
-// Cache local em memória RAM das coordenadas calibradas/auditadas
+// Cache local em memória RAM das coordenadas calibradas/auditadas de Bricks
 let brickCoordsCache = {};
 
+// Cache local em memória RAM das coordenadas de CP7s individuais mapeados
+let cp7CoordsCache = {};
+
 try {
-    const cached = localStorage.getItem('cp_brick_coords');
-    if (cached) {
-        brickCoordsCache = JSON.parse(cached);
+    const cachedBricks = localStorage.getItem('cp_brick_coords');
+    if (cachedBricks) {
+        brickCoordsCache = JSON.parse(cachedBricks);
+    }
+    const cachedCp7 = localStorage.getItem('cp_cp7_coords');
+    if (cachedCp7) {
+        cp7CoordsCache = JSON.parse(cachedCp7);
     }
 } catch (e) {
-    console.warn("[PWA] Erro ao carregar cache local de coordenadas de Bricks:", e);
+    console.warn("[PWA] Erro ao carregar caches locais de coordenadas:", e);
 }
 
 function salvarCacheCoordenadas() {
@@ -50,6 +61,14 @@ function salvarCacheCoordenadas() {
         localStorage.setItem('cp_brick_coords', JSON.stringify(brickCoordsCache));
     } catch (e) {
         console.warn("[PWA] Erro ao persistir cache local de coordenadas de Bricks:", e);
+    }
+}
+
+function salvarCacheCp7() {
+    try {
+        localStorage.setItem('cp_cp7_coords', JSON.stringify(cp7CoordsCache));
+    } catch (e) {
+        console.warn("[PWA] Erro ao persistir cache local de CP7s:", e);
     }
 }
 
@@ -61,32 +80,60 @@ function normalizarBrickId(id) {
     return id.toUpperCase().trim();
 }
 
+function normalizarCP7(cp) {
+    if (!cp) return "";
+    const clean = cp.replace(/\D/g, '');
+    if (clean.length === 7) {
+        return `${clean.substring(0, 4)}-${clean.substring(4, 7)}`;
+    }
+    return cp.trim();
+}
+
 // ==========================================
-// SINCRONIZAÇÃO DA CACHE PARTILHADA DE COORDENADAS (FIRESTORE)
+// SINCRONIZAÇÃO DAS CACHES COM O FIRESTORE
 // ==========================================
 let cacheFirestoreSincronizada = false;
 
-async function carregarCacheCoordenadasFirestore() {
+async function carregarCachesFirestore() {
     if (cacheFirestoreSincronizada) return;
     try {
-        const snapshot = await db.collection('brickCoordinates').get();
-        snapshot.forEach(doc => {
+        // 1. Sincroniza coordenadas de Bricks
+        const snapshotBricks = await db.collection('brickCoordinates').get();
+        snapshotBricks.forEach(doc => {
             const data = doc.data();
             if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
                 brickCoordsCache[doc.id] = { 
                     lat: data.lat, 
                     lng: data.lng,
-                    auditado: data.auditado === true, // Apenas true se foi auditado explicitamente
+                    auditado: data.auditado === true,
                     auditadoEm: data.auditadoEm || ""
                 };
             }
         });
         salvarCacheCoordenadas();
+
+        // 2. Sincroniza coordenadas de CP7s Individuais
+        const snapshotCp7 = await db.collection('postalCodeCoordinates').get();
+        snapshotCp7.forEach(doc => {
+            const data = doc.data();
+            if (data && typeof data.lat === 'number' && typeof data.lng === 'number') {
+                cp7CoordsCache[doc.id] = {
+                    lat: data.lat,
+                    lng: data.lng,
+                    concelho: data.concelho || "",
+                    criadoEm: data.criadoEm || ""
+                };
+            }
+        });
+        salvarCacheCp7();
+
         cacheFirestoreSincronizada = true;
+        atualizarContadorCp7Mapeados();
         desenharBricksNoMapa();
+        desenharMiniPinosNoMapa();
         renderGeographicTree();
     } catch (e) {
-        console.warn("[PWA] Não foi possível sincronizar a cache partilhada de coordenadas de Bricks:", e);
+        console.warn("[PWA] Não foi possível sincronizar as caches partilhadas do Firestore:", e);
     }
 }
 
@@ -120,7 +167,7 @@ const FREGUESIA_COORDS = {
 };
 
 // ==========================================
-// CÁLCULO DE COORDENADAS (PRIORIDADE: CALIBRADAS > ESTIMADAS POR DEFEITO)
+// CÁLCULO DE COORDENADAS DE BRICKS
 // ==========================================
 function obterCoordenadaPrecisaBrick(freguesia, localidade) {
     const brickId = `${freguesia}|${localidade}`;
@@ -154,7 +201,256 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 }
 
 // =========================================================================
-// CALIBRAÇÃO DIRETA DE COORDENADAS MANUALMENTE (COPIADAS DO GOOGLE MAPS)
+// GESTÃO DO MAPEADOR DE PRECISÃO CP7 (MINI-PINOS)
+// =========================================================================
+function configurarMapeadorCP7() {
+    const inputCp7 = document.getElementById('input-novo-cp7');
+    const inputCoords = document.getElementById('input-coords-novo-cp7');
+    const btnSalvar = document.getElementById('btn-salvar-cp7-coordenada');
+    const btnToggleMiniPinos = document.getElementById('btn-toggle-mini-pinos');
+
+    // Máscara automática de CP7 (XXXX-XXX)
+    if (inputCp7 && !inputCp7.dataset.bound) {
+        inputCp7.addEventListener('input', (e) => {
+            let val = e.target.value.replace(/\D/g, '').slice(0, 7);
+            if (val.length > 4) {
+                val = `${val.slice(0, 4)}-${val.slice(4)}`;
+            }
+            e.target.value = val;
+        });
+        inputCp7.dataset.bound = "true";
+    }
+
+    // Botão de Adicionar Mini-Pino CP7
+    if (btnSalvar && !btnSalvar.dataset.bound) {
+        btnSalvar.addEventListener('click', async () => {
+            const cpRaw = inputCp7 ? inputCp7.value.trim() : "";
+            const coordsRaw = inputCoords ? inputCoords.value.trim() : "";
+
+            const cleanCp = cpRaw.replace(/\D/g, '');
+            if (cleanCp.length !== 7) {
+                alert("Por favor, introduza um Código Postal completo com 7 dígitos (ex: 2715-311).");
+                if (inputCp7) inputCp7.focus();
+                return;
+            }
+            const cpFormatado = `${cleanCp.slice(0, 4)}-${cleanCp.slice(4)}`;
+
+            if (!coordsRaw) {
+                alert("Por favor, cole as coordenadas do Google Maps (ex: 38.757405, -9.363379).");
+                if (inputCoords) inputCoords.focus();
+                return;
+            }
+
+            const cleanCoords = coordsRaw.replace(/[()]/g, '').trim();
+            const parts = cleanCoords.split(/[\s,;]+/).filter(Boolean);
+
+            if (parts.length < 2) {
+                alert("Formato de coordenadas inválido. Cole no formato: latitude, longitude (ex: 38.757405, -9.363379)");
+                return;
+            }
+
+            const lat = parseFloat(parts[0]);
+            const lng = parseFloat(parts[1]);
+
+            if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+                alert("Valores numéricos de coordenadas inválidos. Verifique o texto copiado.");
+                return;
+            }
+
+            const agora = new Date();
+            const hoje = `${String(agora.getDate()).padStart(2, '0')}/${String(agora.getMonth() + 1).padStart(2, '0')}/${agora.getFullYear()}`;
+
+            btnSalvar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A guardar...</span>';
+            btnSalvar.disabled = true;
+
+            try {
+                // Guarda na cache local e Firestore
+                cp7CoordsCache[cpFormatado] = {
+                    lat: lat,
+                    lng: lng,
+                    concelho: concelhoAtivo,
+                    criadoEm: hoje
+                };
+                salvarCacheCp7();
+
+                await db.collection('postalCodeCoordinates').doc(cpFormatado).set({
+                    lat: lat,
+                    lng: lng,
+                    concelho: concelhoAtivo,
+                    criadoEm: hoje,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                atualizarContadorCp7Mapeados();
+                desenharMiniPinosNoMapa();
+
+                if (dashboardMap) {
+                    dashboardMap.panTo({ lat, lng });
+                    dashboardMap.setZoom(15);
+                }
+
+                if (inputCp7) inputCp7.value = "";
+                if (inputCoords) inputCoords.value = "";
+
+                alert(`📍 SUCESSO!\n\nMini-Pino para o Código Postal ${cpFormatado} mapeado com precisão!\n(${lat.toFixed(6)}, ${lng.toFixed(6)})`);
+            } catch (err) {
+                console.error("Erro ao guardar CP7:", err);
+                alert("Ocorreu um aviso ao gravar na nuvem, mas o ponto foi registado localmente.");
+                desenharMiniPinosNoMapa();
+            } finally {
+                btnSalvar.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Mapear CP7</span>';
+                btnSalvar.disabled = false;
+            }
+        });
+        btnSalvar.dataset.bound = "true";
+    }
+
+    // Botão de ligar/desligar visualização de mini-pinos
+    if (btnToggleMiniPinos && !btnToggleMiniPinos.dataset.bound) {
+        btnToggleMiniPinos.addEventListener('click', () => {
+            miniPinosVisiveis = !miniPinosVisiveis;
+            const icone = document.getElementById('icone-toggle-mini-pinos');
+            const texto = document.getElementById('texto-toggle-mini-pinos');
+
+            if (miniPinosVisiveis) {
+                btnToggleMiniPinos.className = "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-indigo-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs";
+                if (icone) icone.className = "fa-solid fa-eye text-indigo-600";
+                if (texto) texto.textContent = "Ver Mini-Pinos CP7";
+            } else {
+                btnToggleMiniPinos.className = "bg-gray-100 hover:bg-gray-200 text-gray-500 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs opacity-80";
+                if (icone) icone.className = "fa-solid fa-eye-slash text-gray-500";
+                if (texto) texto.textContent = "Mini-Pinos Ocultos";
+            }
+
+            for (const marker of miniPinosMarkersMap.values()) {
+                marker.setVisible(miniPinosVisiveis);
+            }
+        });
+        btnToggleMiniPinos.dataset.bound = "true";
+    }
+
+    atualizarContadorCp7Mapeados();
+}
+
+function atualizarContadorCp7Mapeados() {
+    const badge = document.getElementById('stat-total-cp7-mapeados');
+    if (!badge) return;
+
+    const total = Object.keys(cp7CoordsCache).length;
+    badge.textContent = `${total} CP7s Mapeados`;
+}
+
+// =========================================================================
+// DESENHO DOS MINI-PINOS DE CP7 NO MAPA
+// =========================================================================
+function desenharMiniPinosNoMapa() {
+    if (!dashboardMap) return;
+
+    const keysDesejadas = new Set();
+
+    // Desenho SVG compacto de Mini-Pino (Menor que os Bricks)
+    const miniPinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
+
+    for (const [cpFormatado, data] of Object.entries(cp7CoordsCache)) {
+        if (!data || typeof data.lat !== 'number' || typeof data.lng !== 'number') continue;
+
+        const markerKey = `cp7_${cpFormatado}`;
+        keysDesejadas.add(markerKey);
+
+        let marker = miniPinosMarkersMap.get(markerKey);
+
+        if (!marker) {
+            marker = new google.maps.Marker({
+                position: { lat: data.lat, lng: data.lng },
+                map: dashboardMap,
+                visible: miniPinosVisiveis,
+                zIndex: 50, // Fica ligeiramente abaixo dos pinos de Bricks
+                icon: {
+                    path: miniPinSvgPath,
+                    fillColor: "#4F46E5", // Cor Índigo distinta
+                    fillOpacity: 0.95,
+                    strokeWeight: 1,
+                    strokeColor: "#FFFFFF",
+                    scale: 0.8, // 🎯 PROPOSITADAMENTE MENOR QUE OS PINOS DE BRICKS
+                    anchor: new google.maps.Point(12, 22)
+                },
+                title: `CP7: ${cpFormatado}`
+            });
+
+            marker.addListener('click', () => {
+                if (dashboardInfoWindow) {
+                    dashboardInfoWindow.setContent(`
+                        <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; padding: 6px; line-height: 1.4; width: 220px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                                <span style="font-weight: 900; font-size: 13px; color: #312E81; font-family: monospace;">
+                                    📮 ${cpFormatado}
+                                </span>
+                                <span style="font-size: 8px; font-weight: 800; background: #EEF2FF; color: #4338CA; padding: 2px 5px; border-radius: 4px; border: 1px solid #C7D2FE;">
+                                    MINI-PINO CP7
+                                </span>
+                            </div>
+                            <div style="font-size: 10px; color: #4B5563; font-family: monospace; margin-bottom: 6px;">
+                                Lat: ${data.lat.toFixed(6)}<br>Lng: ${data.lng.toFixed(6)}
+                            </div>
+                            <div style="font-size: 9px; color: #9CA3AF; margin-bottom: 6px;">
+                                Mapeado em: ${data.criadoEm || 'Registo Manual'}
+                            </div>
+                            <button type="button" 
+                                    onclick="window.removerMiniPinoCP7('${cpFormatado}')"
+                                    style="width: 100%; background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 6px; padding: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">
+                                <i class="fa-solid fa-trash-can mr-1"></i> Remover Ponto
+                            </button>
+                        </div>
+                    `);
+                    dashboardInfoWindow.setPosition(marker.getPosition());
+                    dashboardInfoWindow.open(dashboardMap, marker);
+                }
+            });
+
+            miniPinosMarkersMap.set(markerKey, marker);
+        } else {
+            marker.setPosition({ lat: data.lat, lng: data.lng });
+            marker.setVisible(miniPinosVisiveis);
+        }
+    }
+
+    for (const [key, marker] of miniPinosMarkersMap.entries()) {
+        if (!keysDesejadas.has(key)) {
+            marker.setMap(null);
+            miniPinosMarkersMap.delete(key);
+        }
+    }
+}
+
+// =========================================================================
+// REMOÇÃO DE MINI-PINO CP7
+// =========================================================================
+window.removerMiniPinoCP7 = async function(cpFormatado) {
+    if (!cpFormatado) return;
+
+    const confirmar = confirm(`Tem a certeza que deseja eliminar o Mini-Pino do Código Postal "${cpFormatado}"?`);
+    if (!confirmar) return;
+
+    delete cp7CoordsCache[cpFormatado];
+    salvarCacheCp7();
+
+    try {
+        await db.collection('postalCodeCoordinates').doc(cpFormatado).delete();
+        console.log(`[CP7] Ponto ${cpFormatado} eliminado do Firestore.`);
+    } catch (err) {
+        console.warn("[CP7] Aviso ao eliminar na nuvem:", err);
+    }
+
+    if (dashboardInfoWindow) {
+        dashboardInfoWindow.close();
+    }
+
+    atualizarContadorCp7Mapeados();
+    desenharMiniPinosNoMapa();
+};
+
+// =========================================================================
+// CALIBRAÇÃO DIRETA DE BRICKS MANUALMENTE (COPIADAS DO GOOGLE MAPS)
 // =========================================================================
 window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) {
     if (!brickId || !rawCoordString) {
@@ -162,7 +458,6 @@ window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) 
         return;
     }
 
-    // Limpa parênteses, caracteres especiais e extrai os dois números decimais
     const cleanStr = rawCoordString.replace(/[()]/g, '').trim();
     const parts = cleanStr.split(/[\s,;]+/).filter(Boolean);
 
@@ -210,7 +505,7 @@ window.atualizarCoordenadaManualBrick = async function(brickId, rawCoordString) 
     }
 
     desenharBricksNoMapa();
-    renderGeographicTree(); // Atualiza a árvore com o selo GPS OK
+    renderGeographicTree();
     alert(`🎯 SUCESSO!\n\nPosição do Brick "${brickId.replace('|', ' - ')}" fixada e marcada como AUDITADA!\n\nLatitude: ${lat.toFixed(6)}\nLongitude: ${lng.toFixed(6)}`);
 };
 
@@ -224,7 +519,6 @@ window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
     const normalizedBid = normalizarBrickId(brickId);
     let motoristaAnterior = null;
 
-    // 1. Remover o Brick do dono anterior
     driversArr.forEach(d => {
         if (Array.isArray(d.brickIds)) {
             const hasBrick = d.brickIds.some(id => normalizarBrickId(id) === normalizedBid);
@@ -235,7 +529,6 @@ window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
         }
     });
 
-    // 2. Se um novo motorista foi selecionado, adicionar-lhe o Brick
     let novoMotorista = null;
     if (novoMotoristaId) {
         novoMotorista = driversArr.find(d => d.id === novoMotoristaId);
@@ -250,7 +543,6 @@ window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
         }
     }
 
-    // 3. Atualização otimista imediata na memória local
     isLocalBrickUpdating = true;
     saveData(
         window.drivers, 
@@ -263,13 +555,11 @@ window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
         window.rotaIniciada
     );
 
-    // 4. Re-renderizar interface visual e marcadores no mapa
     renderDriversForAttribution();
     renderGeographicTree();
     atualizarAuditoriaBricks();
     desenharBricksNoMapa();
 
-    // 5. Persistir as alterações no Firestore
     const promises = [];
     if (motoristaAnterior) {
         promises.push(db.collection('drivers').doc(motoristaAnterior.id).update({
@@ -292,7 +582,7 @@ window.trocarMotoristaDoBrick = function(brickId, novoMotoristaId) {
 };
 
 // =========================================================================
-// CONTROLO DO BOTÃO DE TRAVA / MODO DE CALIBRAÇÃO DE PINOS
+// CONTROLO DO BOTÃO DE TRAVA / MODO DE CALIBRAÇÃO DE PINOS DE BRICKS
 // =========================================================================
 function configurarControloModoCalibracao() {
     const btnToggle = document.getElementById('btn-toggle-modo-calibracao');
@@ -333,6 +623,7 @@ function inicializarMapaBricksDashboard() {
     if (!mapEl || typeof google === 'undefined') return;
 
     configurarControloModoCalibracao();
+    configurarMapeadorCP7();
 
     const centerCoords = concelhoAtivo === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9500, lng: -9.3000 };
 
@@ -349,17 +640,21 @@ function inicializarMapaBricksDashboard() {
             disableAutoPan: false
         });
 
-        carregarCacheCoordenadasFirestore().then(() => desenharBricksNoMapa());
+        carregarCachesFirestore().then(() => {
+            desenharBricksNoMapa();
+            desenharMiniPinosNoMapa();
+        });
     } else {
         dashboardMap.setCenter(centerCoords);
         google.maps.event.trigger(dashboardMap, 'resize');
     }
 
     desenharBricksNoMapa();
+    desenharMiniPinosNoMapa();
 }
 
 // =========================================================================
-// DESENHO, CALIBRAÇÃO E REATRIBUIÇÃO DE BRICKS NO MAPA DO GESTOR
+// DESENHO DOS BRICKS NO MAPA DO GESTOR
 // =========================================================================
 function desenharBricksNoMapa() {
     if (!dashboardMap) return;
@@ -376,7 +671,6 @@ function desenharBricksNoMapa() {
         return concelhos.includes(concelhoAtivo);
     });
 
-    // Mapeia qual motorista é dono de cada Brick
     const localidadeParaMotorista = new Map();
     driversArr.forEach(drv => {
         const bIds = Array.isArray(drv.brickIds) ? drv.brickIds : [];
@@ -387,7 +681,6 @@ function desenharBricksNoMapa() {
         });
     });
 
-    // Desenha TODOS os Bricks do concelho ativo (Atribuídos e Livres)
     if (GEOGRAPHY[concelhoAtivo]) {
         for (const [freguesia, localidades] of Object.entries(GEOGRAPHY[concelhoAtivo])) {
             for (const [localidade, cpList] of Object.entries(localidades)) {
@@ -399,12 +692,12 @@ function desenharBricksNoMapa() {
                 keysDesejadas.add(markerKey);
 
                 const coords = obterCoordenadaPrecisaBrick(freguesia, localidade);
-                const isAuditado = coords.auditado === true; // Estritamente true
+                const isAuditado = coords.auditado === true;
                 
                 bounds.extend(coords);
                 totalPontosDesenhados++;
 
-                const pinColor = motoristaDono ? motoristaDono.color : "#9CA3AF"; // Cinzento se for Livre
+                const pinColor = motoristaDono ? motoristaDono.color : "#9CA3AF";
                 const pinStrokeColor = isAuditado ? "#10B981" : (motoristaDono ? "#FFFFFF" : "#4B5563");
                 const pinStrokeWeight = isAuditado ? 2.5 : 1.5;
 
@@ -415,6 +708,7 @@ function desenharBricksNoMapa() {
                         position: coords,
                         map: dashboardMap,
                         draggable: modoCalibracaoAtivo,
+                        zIndex: 100,
                         icon: {
                             path: pinSvgPath,
                             fillColor: pinColor,
@@ -427,7 +721,6 @@ function desenharBricksNoMapa() {
                         title: `${freguesia} - ${localidade} ${isAuditado ? '✅ [Auditado]' : '⏳ [Estimado]'}`
                     });
 
-                    // Calibração por Arraste (Drag & Drop)
                     marker.addListener('dragend', (event) => {
                         const novaLat = event.latLng.lat();
                         const novaLng = event.latLng.lng();
@@ -486,7 +779,6 @@ function desenharBricksNoMapa() {
                     });
                 }
 
-                // BALÃO INFORMATIVO COM SELO DE AUDITORIA E CALIBRAÇÃO DIRETA
                 const safeDomId = normalizedBid.replace(/[^a-zA-Z0-9]/g, '_');
                 
                 const exibirInfoBrick = () => {
@@ -860,7 +1152,6 @@ export function renderGeographicTree() {
             const isAssignedToActive = Array.isArray(activeDriver.brickIds) && 
                 activeDriver.brickIds.map(id => normalizarBrickId(id)).includes(normalizedBid);
 
-            // Apenas true se for explicitamente auditado
             const isAuditado = Boolean(brickCoordsCache[brickId] && brickCoordsCache[brickId].auditado === true);
 
             const cpList = localidadesMap[locName] || [];
@@ -1053,6 +1344,7 @@ window.renderizarSetoresUI = () => {
     }
 
     configurarControloModoCalibracao();
+    configurarMapeadorCP7();
 
     renderDriversForAttribution();
     renderGeographicTree();
