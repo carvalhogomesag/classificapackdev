@@ -1,9 +1,10 @@
 /**
  * setores.js
- * Versão v76.7 - Módulo de Atribuição de Bricks, Mapa do Gestor e Mapeador de Precisão CP7 (Mini-Pinos)
+ * Versão v76.8 - Módulo de Atribuição de Bricks, Mapa do Gestor e Controlo de Camadas (Bricks + CP7)
  * Faz: Gere a atribuição de Bricks a motoristas, calibração manual de coordenadas,
  *      sistema de Mapeamento de Precisão por Código Postal (CP7) com Mini-Pinos discretos,
- *      controlo de visibilidade e Auditoria de Saldo Zero.
+ *      controlos independentes de visibilidade para Pinos de Bricks e Mini-Pinos,
+ *      trava de calibração e Auditoria de Saldo Zero.
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -26,7 +27,8 @@ let isLocalBrickUpdating = false;
 // Estado da Trava de Segurança dos Pinos de Bricks (Falso = Travado/Modo Seguro, Verdadeiro = Destravado para Calibração)
 let modoCalibracaoAtivo = false;
 
-// Estado de visibilidade dos Mini-Pinos de CP7 no mapa
+// Estados de visibilidade das camadas no mapa
+let brickPinosVisiveis = true;
 let miniPinosVisiveis = true;
 
 // Instâncias internas seguras do mapa do gestor e balão de informação
@@ -208,6 +210,7 @@ function configurarMapeadorCP7() {
     const inputCoords = document.getElementById('input-coords-novo-cp7');
     const btnSalvar = document.getElementById('btn-salvar-cp7-coordenada');
     const btnToggleMiniPinos = document.getElementById('btn-toggle-mini-pinos');
+    const btnToggleBrickPinos = document.getElementById('btn-toggle-brick-pinos');
 
     // Máscara automática de CP7 (XXXX-XXX)
     if (inputCp7 && !inputCp7.dataset.bound) {
@@ -264,7 +267,6 @@ function configurarMapeadorCP7() {
             btnSalvar.disabled = true;
 
             try {
-                // Guarda na cache local e Firestore
                 cp7CoordsCache[cpFormatado] = {
                     lat: lat,
                     lng: lng,
@@ -305,7 +307,31 @@ function configurarMapeadorCP7() {
         btnSalvar.dataset.bound = "true";
     }
 
-    // Botão de ligar/desligar visualização de mini-pinos
+    // 1. Botão de ligar/desligar visualização de Pinos de Bricks
+    if (btnToggleBrickPinos && !btnToggleBrickPinos.dataset.bound) {
+        btnToggleBrickPinos.addEventListener('click', () => {
+            brickPinosVisiveis = !brickPinosVisiveis;
+            const icone = document.getElementById('icone-toggle-brick-pinos');
+            const texto = document.getElementById('texto-toggle-brick-pinos');
+
+            if (brickPinosVisiveis) {
+                btnToggleBrickPinos.className = "bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-blue-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs";
+                if (icone) icone.className = "fa-solid fa-eye text-blue-600";
+                if (texto) texto.textContent = "Ver Pinos Bricks";
+            } else {
+                btnToggleBrickPinos.className = "bg-gray-100 hover:bg-gray-200 text-gray-500 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs opacity-80";
+                if (icone) icone.className = "fa-solid fa-eye-slash text-gray-500";
+                if (texto) texto.textContent = "Pinos Bricks Ocultos";
+            }
+
+            for (const marker of dashboardMarkersMap.values()) {
+                marker.setVisible(brickPinosVisiveis);
+            }
+        });
+        btnToggleBrickPinos.dataset.bound = "true";
+    }
+
+    // 2. Botão de ligar/desligar visualização de Mini-Pinos CP7
     if (btnToggleMiniPinos && !btnToggleMiniPinos.dataset.bound) {
         btnToggleMiniPinos.addEventListener('click', () => {
             miniPinosVisiveis = !miniPinosVisiveis;
@@ -347,8 +373,6 @@ function desenharMiniPinosNoMapa() {
     if (!dashboardMap) return;
 
     const keysDesejadas = new Set();
-
-    // Desenho SVG compacto de Mini-Pino (Menor que os Bricks)
     const miniPinSvgPath = "M12 2C8.14 2 5 5.14 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.86-3.14-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z";
 
     for (const [cpFormatado, data] of Object.entries(cp7CoordsCache)) {
@@ -364,14 +388,14 @@ function desenharMiniPinosNoMapa() {
                 position: { lat: data.lat, lng: data.lng },
                 map: dashboardMap,
                 visible: miniPinosVisiveis,
-                zIndex: 50, // Fica ligeiramente abaixo dos pinos de Bricks
+                zIndex: 50,
                 icon: {
                     path: miniPinSvgPath,
-                    fillColor: "#4F46E5", // Cor Índigo distinta
+                    fillColor: "#4F46E5",
                     fillOpacity: 0.95,
                     strokeWeight: 1,
                     strokeColor: "#FFFFFF",
-                    scale: 0.8, // 🎯 PROPOSITADAMENTE MENOR QUE OS PINOS DE BRICKS
+                    scale: 0.8,
                     anchor: new google.maps.Point(12, 22)
                 },
                 title: `CP7: ${cpFormatado}`
@@ -707,6 +731,7 @@ function desenharBricksNoMapa() {
                     marker = new google.maps.Marker({
                         position: coords,
                         map: dashboardMap,
+                        visible: brickPinosVisiveis,
                         draggable: modoCalibracaoAtivo,
                         zIndex: 100,
                         icon: {
@@ -767,6 +792,7 @@ function desenharBricksNoMapa() {
                     dashboardMarkersMap.set(markerKey, marker);
                 } else {
                     marker.setPosition(coords);
+                    marker.setVisible(brickPinosVisiveis);
                     marker.setDraggable(modoCalibracaoAtivo);
                     marker.setIcon({
                         path: pinSvgPath,

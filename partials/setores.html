@@ -1,8 +1,8 @@
 <!--
   setores.html
-  Versão v76.7 - Com Mapeador de Precisão CP7 (Mini-Pinos), Mapa do Gestor e Auditoria Saldo Zero
-  Faz: Contém a estrutura visual do ecrã de Atribuição de Bricks, controlo de visualização
-       e registo de Mini-Pinos por Código Postal (CP7), controlo de trava de segurança e Auditoria Saldo Zero.
+  Versão v76.8 - Com Controlo Total de Visibilidade (Pinos de Bricks + Mini-Pinos CP7)
+  Faz: Contém a estrutura visual do ecrã de Atribuição de Bricks, Mapeador de Precisão CP7,
+       botões independentes para ligar/desligar Pinos de Bricks e Mini-Pinos, trava de segurança e Auditoria Saldo Zero.
   NÃO faz: Não inclui relatórios estatísticos (movidos para partials/relatorios.html).
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -72,23 +72,30 @@
         </div>
     </div>
     
-    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) COM TRAVA DE SEGURANÇA E CONTROLO DE MINI-PINOS -->
+    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) COM CONTROLOS INDEPENDENTES DE VISIBILIDADE -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
             <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
                 <i class="fa-solid fa-map-location-dot text-blue-600"></i>
-                <span>Visão do Gestor: Distribuição Geográfica de Bricks</span>
+                <span>Visão do Gestor: Distribuição Geográfica</span>
             </h3>
 
-            <div class="flex items-center space-x-2">
-                <!-- BOTÃO DE ALTERNÂNCIA DE MINI-PINOS CP7 -->
+            <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+                <!-- 1. BOTÃO DE ALTERNÂNCIA DE PINOS DE BRICKS -->
+                <button type="button" id="btn-toggle-brick-pinos" 
+                        class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-blue-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
+                    <i id="icone-toggle-brick-pinos" class="fa-solid fa-eye text-blue-600"></i>
+                    <span id="texto-toggle-brick-pinos">Ver Pinos Bricks</span>
+                </button>
+
+                <!-- 2. BOTÃO DE ALTERNÂNCIA DE MINI-PINOS CP7 -->
                 <button type="button" id="btn-toggle-mini-pinos" 
                         class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-indigo-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
                     <i id="icone-toggle-mini-pinos" class="fa-solid fa-eye text-indigo-600"></i>
                     <span id="texto-toggle-mini-pinos">Ver Mini-Pinos CP7</span>
                 </button>
 
-                <!-- BOTÃO DE ALTERNÂNCIA: MODO SEGURO (TRAVADO) VS MODO CALIBRAÇÃO (ARRASTÁVEL) -->
+                <!-- 3. BOTÃO DE ALTERNÂNCIA: MODO SEGURO (TRAVADO) VS MODO CALIBRAÇÃO (ARRASTÁVEL) -->
                 <button type="button" id="btn-toggle-modo-calibracao" 
                         class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
                     <i id="icone-trava-calibracao" class="fa-solid fa-lock text-green-600"></i>
