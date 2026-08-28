@@ -1,10 +1,9 @@
 /**
  * setores.js
- * Versão v76.8 - Módulo de Atribuição de Bricks, Mapa do Gestor e Controlo de Camadas (Bricks + CP7)
+ * Versão v76.9 - Módulo de Atribuição de Bricks, Consulta de CP7s e Controlo de Camadas
  * Faz: Gere a atribuição de Bricks a motoristas, calibração manual de coordenadas,
- *      sistema de Mapeamento de Precisão por Código Postal (CP7) com Mini-Pinos discretos,
- *      controlos independentes de visibilidade para Pinos de Bricks e Mini-Pinos,
- *      trava de calibração e Auditoria de Saldo Zero.
+ *      sistema de Mapeamento e Consulta com barra de pesquisa em tempo real de CP7s,
+ *      controlos independentes de visibilidade de pinos e Auditoria de Saldo Zero.
  * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -30,6 +29,9 @@ let modoCalibracaoAtivo = false;
 // Estados de visibilidade das camadas no mapa
 let brickPinosVisiveis = true;
 let miniPinosVisiveis = true;
+
+// Estado de expansão da gaveta de consulta de CP7s
+let drawerCp7Aberto = false;
 
 // Instâncias internas seguras do mapa do gestor e balão de informação
 let dashboardMap = null;
@@ -131,6 +133,7 @@ async function carregarCachesFirestore() {
 
         cacheFirestoreSincronizada = true;
         atualizarContadorCp7Mapeados();
+        renderListaCp7Consultados();
         desenharBricksNoMapa();
         desenharMiniPinosNoMapa();
         renderGeographicTree();
@@ -203,7 +206,7 @@ function obterCoordenadaPrecisaBrick(freguesia, localidade) {
 }
 
 // =========================================================================
-// GESTÃO DO MAPEADOR DE PRECISÃO CP7 (MINI-PINOS)
+// GESTÃO DO MAPEADOR DE PRECISÃO CP7 (MINI-PINOS & CONSULTA)
 // =========================================================================
 function configurarMapeadorCP7() {
     const inputCp7 = document.getElementById('input-novo-cp7');
@@ -211,8 +214,13 @@ function configurarMapeadorCP7() {
     const btnSalvar = document.getElementById('btn-salvar-cp7-coordenada');
     const btnToggleMiniPinos = document.getElementById('btn-toggle-mini-pinos');
     const btnToggleBrickPinos = document.getElementById('btn-toggle-brick-pinos');
+    const btnToggleDrawer = document.getElementById('btn-toggle-drawer-cp7');
+    const inputBuscaCp7 = document.getElementById('input-busca-cp7-mapeados');
+    const avisoDuplicado = document.getElementById('aviso-cp7-duplicado');
+    const textoAvisoDuplicado = document.getElementById('texto-aviso-cp7-duplicado');
+    const btnFocarDuplicado = document.getElementById('btn-focar-cp7-duplicado');
 
-    // Máscara automática de CP7 (XXXX-XXX)
+    // 1. Máscara e Verificação de Duplicados em Tempo Real no Input
     if (inputCp7 && !inputCp7.dataset.bound) {
         inputCp7.addEventListener('input', (e) => {
             let val = e.target.value.replace(/\D/g, '').slice(0, 7);
@@ -220,11 +228,25 @@ function configurarMapeadorCP7() {
                 val = `${val.slice(0, 4)}-${val.slice(4)}`;
             }
             e.target.value = val;
+
+            // Se completou 7 dígitos, verifica se já existe na base
+            if (val.length === 8 && cp7CoordsCache[val]) {
+                const item = cp7CoordsCache[val];
+                if (avisoDuplicado && textoAvisoDuplicado) {
+                    textoAvisoDuplicado.textContent = `Atenção: O CP7 ${val} já está mapeado em (${item.lat.toFixed(5)}, ${item.lng.toFixed(5)})`;
+                    avisoDuplicado.classList.remove('hidden');
+                }
+                if (btnFocarDuplicado) {
+                    btnFocarDuplicado.onclick = () => window.focarMiniPinoCP7(val);
+                }
+            } else {
+                if (avisoDuplicado) avisoDuplicado.classList.add('hidden');
+            }
         });
         inputCp7.dataset.bound = "true";
     }
 
-    // Botão de Adicionar Mini-Pino CP7
+    // 2. Botão de Adicionar Mini-Pino CP7
     if (btnSalvar && !btnSalvar.dataset.bound) {
         btnSalvar.addEventListener('click', async () => {
             const cpRaw = inputCp7 ? inputCp7.value.trim() : "";
@@ -284,21 +306,24 @@ function configurarMapeadorCP7() {
                 });
 
                 atualizarContadorCp7Mapeados();
+                renderListaCp7Consultados();
                 desenharMiniPinosNoMapa();
+
+                if (avisoDuplicado) avisoDuplicado.classList.add('hidden');
+                if (inputCp7) inputCp7.value = "";
+                if (inputCoords) inputCoords.value = "";
 
                 if (dashboardMap) {
                     dashboardMap.panTo({ lat, lng });
-                    dashboardMap.setZoom(15);
+                    dashboardMap.setZoom(16);
                 }
-
-                if (inputCp7) inputCp7.value = "";
-                if (inputCoords) inputCoords.value = "";
 
                 alert(`📍 SUCESSO!\n\nMini-Pino para o Código Postal ${cpFormatado} mapeado com precisão!\n(${lat.toFixed(6)}, ${lng.toFixed(6)})`);
             } catch (err) {
                 console.error("Erro ao guardar CP7:", err);
                 alert("Ocorreu um aviso ao gravar na nuvem, mas o ponto foi registado localmente.");
                 desenharMiniPinosNoMapa();
+                renderListaCp7Consultados();
             } finally {
                 btnSalvar.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Mapear CP7</span>';
                 btnSalvar.disabled = false;
@@ -307,7 +332,32 @@ function configurarMapeadorCP7() {
         btnSalvar.dataset.bound = "true";
     }
 
-    // 1. Botão de ligar/desligar visualização de Pinos de Bricks
+    // 3. Botão de Alternância da Gaveta de Consulta de CP7s
+    if (btnToggleDrawer && !btnToggleDrawer.dataset.bound) {
+        btnToggleDrawer.addEventListener('click', () => {
+            drawerCp7Aberto = !drawerCp7Aberto;
+            const secaoConsulta = document.getElementById('secao-consulta-cp7');
+            if (secaoConsulta) {
+                if (drawerCp7Aberto) {
+                    secaoConsulta.classList.remove('hidden');
+                    renderListaCp7Consultados();
+                } else {
+                    secaoConsulta.classList.add('hidden');
+                }
+            }
+        });
+        btnToggleDrawer.dataset.bound = "true";
+    }
+
+    // 4. Barra de Pesquisa de CP7s Mapeados
+    if (inputBuscaCp7 && !inputBuscaCp7.dataset.bound) {
+        inputBuscaCp7.addEventListener('input', () => {
+            renderListaCp7Consultados();
+        });
+        inputBuscaCp7.dataset.bound = "true";
+    }
+
+    // 5. Botão de alternância de Pinos de Bricks
     if (btnToggleBrickPinos && !btnToggleBrickPinos.dataset.bound) {
         btnToggleBrickPinos.addEventListener('click', () => {
             brickPinosVisiveis = !brickPinosVisiveis;
@@ -331,7 +381,7 @@ function configurarMapeadorCP7() {
         btnToggleBrickPinos.dataset.bound = "true";
     }
 
-    // 2. Botão de ligar/desligar visualização de Mini-Pinos CP7
+    // 6. Botão de alternância de Mini-Pinos CP7
     if (btnToggleMiniPinos && !btnToggleMiniPinos.dataset.bound) {
         btnToggleMiniPinos.addEventListener('click', () => {
             miniPinosVisiveis = !miniPinosVisiveis;
@@ -360,11 +410,124 @@ function configurarMapeadorCP7() {
 
 function atualizarContadorCp7Mapeados() {
     const badge = document.getElementById('stat-total-cp7-mapeados');
-    if (!badge) return;
-
+    const btnBadge = document.getElementById('stat-total-cp7-btn');
     const total = Object.keys(cp7CoordsCache).length;
-    badge.textContent = `${total} CP7s Mapeados`;
+
+    if (badge) badge.textContent = `${total} CP7s Mapeados`;
+    if (btnBadge) btnBadge.textContent = `${total}`;
 }
+
+// =========================================================================
+// RENDERIZADOR DA LISTA DE CONSULTA E PESQUISA DE CP7s
+// =========================================================================
+export function renderListaCp7Consultados() {
+    const container = document.getElementById('lista-cp7-mapeados-container');
+    const inputBusca = document.getElementById('input-busca-cp7-mapeados');
+    const contador = document.getElementById('contador-pesquisa-cp7');
+    if (!container) return;
+
+    const termo = (inputBusca ? inputBusca.value : "").trim().toLowerCase();
+    const todosCp7 = Object.entries(cp7CoordsCache).sort(([a], [b]) => a.localeCompare(b));
+    const totalGeral = todosCp7.length;
+
+    const filtrados = todosCp7.filter(([cp]) => {
+        if (!termo) return true;
+        const cpLimpo = cp.toLowerCase().replace(/\D/g, '');
+        const termoLimpo = termo.replace(/\D/g, '');
+        return cp.toLowerCase().includes(termo) || (termoLimpo && cpLimpo.includes(termoLimpo));
+    });
+
+    if (contador) {
+        contador.textContent = termo 
+            ? `A mostrar ${filtrados.length} de ${totalGeral} registos` 
+            : `A mostrar todos os ${totalGeral} registos`;
+    }
+
+    if (filtrados.length === 0) {
+        container.innerHTML = `
+            <div class="col-span-full py-6 text-center text-xs text-gray-400 italic">
+                <i class="fa-solid fa-magnifying-glass text-gray-300 text-lg mb-1 block"></i>
+                ${termo ? 'Nenhum CP7 encontrado para o filtro pesquisado.' : 'Nenhum Código Postal mapeado até ao momento.'}
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtrados.map(([cp, data]) => `
+        <div class="p-2.5 bg-white rounded-lg border border-indigo-100 shadow-2xs hover:border-indigo-300 hover:shadow-xs transition flex flex-col justify-between space-y-1.5">
+            <div class="flex items-center justify-between">
+                <span class="font-mono font-black text-xs text-indigo-950">${cp}</span>
+                <span class="text-[8px] font-semibold text-gray-400">${data.criadoEm || ''}</span>
+            </div>
+            <div class="text-[9px] font-mono text-gray-500 truncate" title="${data.lat.toFixed(6)}, ${data.lng.toFixed(6)}">
+                📍 ${data.lat.toFixed(5)}, ${data.lng.toFixed(5)}
+            </div>
+            <div class="flex items-center space-x-1.5 pt-1 border-t border-gray-100">
+                <button type="button" 
+                        onclick="window.focarMiniPinoCP7('${cp}')"
+                        class="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] py-1 rounded transition cursor-pointer flex items-center justify-center space-x-1">
+                    <i class="fa-solid fa-crosshairs text-[9px]"></i>
+                    <span>Ver no Mapa</span>
+                </button>
+                <button type="button" 
+                        onclick="window.removerMiniPinoCP7('${cp}')"
+                        class="bg-red-50 hover:bg-red-100 text-red-600 font-bold text-[10px] px-2 py-1 rounded transition cursor-pointer"
+                        title="Eliminar este ponto">
+                    <i class="fa-solid fa-trash-can text-[9px]"></i>
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// =========================================================================
+// FOCAR E CENTRAR O MAPA NUM MINI-PINO CP7
+// =========================================================================
+window.focarMiniPinoCP7 = function(cpFormatado) {
+    if (!cpFormatado || !cp7CoordsCache[cpFormatado] || !dashboardMap) return;
+
+    const data = cp7CoordsCache[cpFormatado];
+
+    // Se os mini-pinos estiverem ocultos, liga a visibilidade automaticamente
+    if (!miniPinosVisiveis) {
+        const btnToggleMiniPinos = document.getElementById('btn-toggle-mini-pinos');
+        if (btnToggleMiniPinos) btnToggleMiniPinos.click();
+    }
+
+    dashboardMap.panTo({ lat: data.lat, lng: data.lng });
+    dashboardMap.setZoom(16);
+
+    const markerKey = `cp7_${cpFormatado}`;
+    const marker = miniPinosMarkersMap.get(markerKey);
+
+    if (marker && dashboardInfoWindow) {
+        dashboardInfoWindow.setContent(`
+            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; padding: 6px; line-height: 1.4; width: 220px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                    <span style="font-weight: 900; font-size: 13px; color: #312E81; font-family: monospace;">
+                        📮 ${cpFormatado}
+                    </span>
+                    <span style="font-size: 8px; font-weight: 800; background: #EEF2FF; color: #4338CA; padding: 2px 5px; border-radius: 4px; border: 1px solid #C7D2FE;">
+                        MINI-PINO CP7
+                    </span>
+                </div>
+                <div style="font-size: 10px; color: #4B5563; font-family: monospace; margin-bottom: 6px;">
+                    Lat: ${data.lat.toFixed(6)}<br>Lng: ${data.lng.toFixed(6)}
+                </div>
+                <div style="font-size: 9px; color: #9CA3AF; margin-bottom: 6px;">
+                    Mapeado em: ${data.criadoEm || 'Registo Manual'}
+                </div>
+                <button type="button" 
+                        onclick="window.removerMiniPinoCP7('${cpFormatado}')"
+                        style="width: 100%; background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 6px; padding: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">
+                    <i class="fa-solid fa-trash-can mr-1"></i> Remover Ponto
+                </button>
+            </div>
+        `);
+        dashboardInfoWindow.setPosition(marker.getPosition());
+        dashboardInfoWindow.open(dashboardMap, marker);
+    }
+};
 
 // =========================================================================
 // DESENHO DOS MINI-PINOS DE CP7 NO MAPA
@@ -402,33 +565,7 @@ function desenharMiniPinosNoMapa() {
             });
 
             marker.addListener('click', () => {
-                if (dashboardInfoWindow) {
-                    dashboardInfoWindow.setContent(`
-                        <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 11px; padding: 6px; line-height: 1.4; width: 220px;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-                                <span style="font-weight: 900; font-size: 13px; color: #312E81; font-family: monospace;">
-                                    📮 ${cpFormatado}
-                                </span>
-                                <span style="font-size: 8px; font-weight: 800; background: #EEF2FF; color: #4338CA; padding: 2px 5px; border-radius: 4px; border: 1px solid #C7D2FE;">
-                                    MINI-PINO CP7
-                                </span>
-                            </div>
-                            <div style="font-size: 10px; color: #4B5563; font-family: monospace; margin-bottom: 6px;">
-                                Lat: ${data.lat.toFixed(6)}<br>Lng: ${data.lng.toFixed(6)}
-                            </div>
-                            <div style="font-size: 9px; color: #9CA3AF; margin-bottom: 6px;">
-                                Mapeado em: ${data.criadoEm || 'Registo Manual'}
-                            </div>
-                            <button type="button" 
-                                    onclick="window.removerMiniPinoCP7('${cpFormatado}')"
-                                    style="width: 100%; background: #FEE2E2; color: #DC2626; border: 1px solid #FCA5A5; border-radius: 6px; padding: 4px; font-size: 10px; font-weight: bold; cursor: pointer;">
-                                <i class="fa-solid fa-trash-can mr-1"></i> Remover Ponto
-                            </button>
-                        </div>
-                    `);
-                    dashboardInfoWindow.setPosition(marker.getPosition());
-                    dashboardInfoWindow.open(dashboardMap, marker);
-                }
+                window.focarMiniPinoCP7(cpFormatado);
             });
 
             miniPinosMarkersMap.set(markerKey, marker);
@@ -470,6 +607,7 @@ window.removerMiniPinoCP7 = async function(cpFormatado) {
     }
 
     atualizarContadorCp7Mapeados();
+    renderListaCp7Consultados();
     desenharMiniPinosNoMapa();
 };
 

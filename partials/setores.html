@@ -1,8 +1,9 @@
 <!--
   setores.html
-  Versão v76.8 - Com Controlo Total de Visibilidade (Pinos de Bricks + Mini-Pinos CP7)
-  Faz: Contém a estrutura visual do ecrã de Atribuição de Bricks, Mapeador de Precisão CP7,
-       botões independentes para ligar/desligar Pinos de Bricks e Mini-Pinos, trava de segurança e Auditoria Saldo Zero.
+  Versão v76.9 - Com Central de Consulta de CP7s Mapeados, Mini-Pinos e Auditoria Saldo Zero
+  Faz: Contém a estrutura visual do ecrã de Atribuição de Bricks, Mapeador de Precisão CP7 com
+       painel de consulta e pesquisa em tempo real de CP7s já mapeados, controlos independentes
+       de visibilidade para Pinos de Bricks e Mini-Pinos, trava de calibração e Auditoria Saldo Zero.
   NÃO faz: Não inclui relatórios estatísticos (movidos para partials/relatorios.html).
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -31,7 +32,7 @@
         </div>
     </div>
 
-    <!-- FERRAMENTA DE MAPEAMENTO DE PRECISÃO CP7 (MINI-PINOS) -->
+    <!-- FERRAMENTA DE MAPEAMENTO E CONSULTA DE PRECISÃO CP7 (MINI-PINOS) -->
     <div class="bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-white p-4 rounded-xl border border-indigo-100 shadow-sm space-y-3">
         <div class="flex items-center justify-between flex-wrap gap-2">
             <div class="flex items-center space-x-2">
@@ -43,9 +44,14 @@
                     <p class="text-[10px] text-indigo-600">Registe pontos GPS exatos por código postal para criar mini-pinos de alta precisão</p>
                 </div>
             </div>
-            <span id="stat-total-cp7-mapeados" class="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
-                0 CP7s Mapeados
-            </span>
+            
+            <div class="flex items-center space-x-2">
+                <button type="button" id="btn-toggle-drawer-cp7" 
+                        class="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-lg shadow-xs flex items-center space-x-1.5 transition cursor-pointer">
+                    <i class="fa-solid fa-list-check"></i>
+                    <span>Consultar Mapeados (<span id="stat-total-cp7-btn">0</span>)</span>
+                </button>
+            </div>
         </div>
 
         <!-- Formulário de inserção rápida de CP7 e Coordenadas -->
@@ -68,6 +74,36 @@
                     <i class="fa-solid fa-plus"></i>
                     <span>Mapear CP7</span>
                 </button>
+            </div>
+        </div>
+
+        <!-- Alerta dinâmico se o CP7 digitado já existe -->
+        <div id="aviso-cp7-duplicado" class="hidden p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center justify-between animate-fade-in">
+            <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
+                <span id="texto-aviso-cp7-duplicado">Este Código Postal já foi mapeado anteriormente.</span>
+            </div>
+            <button type="button" id="btn-focar-cp7-duplicado" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer">
+                Ver no Mapa
+            </button>
+        </div>
+
+        <!-- PAINEL EXPANSÍVEL DE CONSULTA E PESQUISA DE CP7s MAPEADOS -->
+        <div id="secao-consulta-cp7" class="hidden pt-3 border-t border-indigo-100 space-y-3 animate-fade-in">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div class="relative flex-1">
+                    <input type="text" id="input-busca-cp7-mapeados" placeholder="Filtrar por CP7 (ex: 2715-311, 2640)..." 
+                           class="w-full pl-8 pr-3 py-2 bg-white border border-indigo-200 rounded-lg text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-gray-400 text-xs"></i>
+                </div>
+                <span id="contador-pesquisa-cp7" class="text-[10px] font-bold text-gray-500 whitespace-nowrap">
+                    A mostrar todos os registos
+                </span>
+            </div>
+
+            <!-- Grelha de cartões dos CP7s já mapeados -->
+            <div id="lista-cp7-mapeados-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1">
+                <p class="col-span-full text-center text-xs text-gray-400 py-4 italic">Nenhum CP7 registado.</p>
             </div>
         </div>
     </div>
