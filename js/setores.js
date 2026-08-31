@@ -1,13 +1,15 @@
 /**
  * setores.js
- * Versão v76.9 - Módulo de Atribuição de Bricks, Consulta de CP7s e Controlo de Camadas
+ * Versão v77.0 - Módulo de Atribuição de Bricks, Consulta de CP7s e Fusão com CP7_DATABASE
  * Faz: Gere a atribuição de Bricks a motoristas, calibração manual de coordenadas,
- *      sistema de Mapeamento e Consulta com barra de pesquisa em tempo real de CP7s,
- *      controlos independentes de visibilidade de pinos e Auditoria de Saldo Zero.
- * Depende de: ./geografia-data.js, ./storage.js, ./firebase-init.js
+ *      combina automaticamente a base estática de 225 CP7s com os pontos manuais do Firestore,
+ *      sistema de Consulta com barra de pesquisa em tempo real, controlos independentes
+ *      de visibilidade e Auditoria de Saldo Zero.
+ * Depende de: ./geografia-data.js, ./cp7-data.js, ./storage.js, ./firebase-init.js
  */
 
 import { GEOGRAPHY, obterEnderecoHigienizado } from './geografia-data.js';
+import { CP7_DATABASE } from './cp7-data.js';
 import { saveData } from './storage.js';
 import { db } from './firebase-init.js';
 
@@ -44,8 +46,8 @@ let miniPinosMarkersMap = new Map(); // Mini-Pinos de CP7 individuais
 // Cache local em memória RAM das coordenadas calibradas/auditadas de Bricks
 let brickCoordsCache = {};
 
-// Cache local em memória RAM das coordenadas de CP7s individuais mapeados
-let cp7CoordsCache = {};
+// Cache local em memória RAM dos CP7s (Inicia combinando a base estática do Excel com a cache local)
+let cp7CoordsCache = { ...(CP7_DATABASE || {}) };
 
 try {
     const cachedBricks = localStorage.getItem('cp_brick_coords');
@@ -54,7 +56,9 @@ try {
     }
     const cachedCp7 = localStorage.getItem('cp_cp7_coords');
     if (cachedCp7) {
-        cp7CoordsCache = JSON.parse(cachedCp7);
+        const parsedCp7 = JSON.parse(cachedCp7);
+        // Fusão: Base Excel + Pontos Manuais Anteriores
+        cp7CoordsCache = { ...cp7CoordsCache, ...parsedCp7 };
     }
 } catch (e) {
     console.warn("[PWA] Erro ao carregar caches locais de coordenadas:", e);
@@ -116,7 +120,7 @@ async function carregarCachesFirestore() {
         });
         salvarCacheCoordenadas();
 
-        // 2. Sincroniza coordenadas de CP7s Individuais
+        // 2. Sincroniza coordenadas de CP7s Individuais (Preserva 100% dos manuais)
         const snapshotCp7 = await db.collection('postalCodeCoordinates').get();
         snapshotCp7.forEach(doc => {
             const data = doc.data();
@@ -229,7 +233,6 @@ function configurarMapeadorCP7() {
             }
             e.target.value = val;
 
-            // Se completou 7 dígitos, verifica se já existe na base
             if (val.length === 8 && cp7CoordsCache[val]) {
                 const item = cp7CoordsCache[val];
                 if (avisoDuplicado && textoAvisoDuplicado) {
@@ -246,7 +249,7 @@ function configurarMapeadorCP7() {
         inputCp7.dataset.bound = "true";
     }
 
-    // 2. Botão de Adicionar Mini-Pino CP7
+    // 2. Botão de Adicionar Mini-Pino CP7 Manual
     if (btnSalvar && !btnSalvar.dataset.bound) {
         btnSalvar.addEventListener('click', async () => {
             const cpRaw = inputCp7 ? inputCp7.value.trim() : "";
