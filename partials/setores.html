@@ -1,141 +1,131 @@
 <!--
   setores.html
-  Versão v76.9 - Com Central de Consulta de CP7s Mapeados, Mini-Pinos e Auditoria Saldo Zero
-  Faz: Contém a estrutura visual do ecrã de Atribuição de Bricks, Mapeador de Precisão CP7 com
-       painel de consulta e pesquisa em tempo real de CP7s já mapeados, controlos independentes
-       de visibilidade para Pinos de Bricks e Mini-Pinos, trava de calibração e Auditoria Saldo Zero.
+  Versão v77.0 - Construtor de Bricks Dinâmicos por Agrupamento de CP7s, Mapa do Gestor e Auditoria Saldo Zero
+  Faz: Contém a interface do Construtor de Bricks baseado em Códigos Postais (CP7),
+       painel de seleção múltipla de pinos no mapa, gestão/edição de Bricks personalizados,
+       atribuição de motoristas e Auditoria de Saldo Zero de CP7s.
   NÃO faz: Não inclui relatórios estatísticos (movidos para partials/relatorios.html).
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
 
 <main id="view-intervalos" class="hidden flex-1 p-4 space-y-4 overflow-y-auto">
     
-    <!-- SELETOR DE CONCELHO (MAFRA VS SINTRA) -->
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+    <!-- 1. SELETOR DE CONCELHO E BARRA DE AÇÕES PRINCIPAIS -->
+    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div class="flex items-center space-x-2.5">
             <div class="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
                 <i class="fa-solid fa-earth-europe text-sm"></i>
             </div>
             <div>
                 <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider">Concelho de Operação</h3>
-                <p class="text-[11px] text-gray-400">Selecione a área geográfica para gerir os bricks</p>
+                <p class="text-[11px] text-gray-400">Selecione a área para criar e gerir os Bricks</p>
             </div>
         </div>
-        <div class="relative min-w-[220px]">
-            <select id="select-concelho-setores" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 pr-8 appearance-none font-semibold cursor-pointer">
-                <option value="MAFRA">Mafra, Portugal</option>
-                <option value="SINTRA">Sintra, Portugal</option>
-            </select>
-            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-500">
-                <i class="fa-solid fa-chevron-down text-[10px]"></i>
-            </div>
-        </div>
-    </div>
 
-    <!-- FERRAMENTA DE MAPEAMENTO E CONSULTA DE PRECISÃO CP7 (MINI-PINOS) -->
-    <div class="bg-gradient-to-r from-indigo-50/70 via-blue-50/50 to-white p-4 rounded-xl border border-indigo-100 shadow-sm space-y-3">
-        <div class="flex items-center justify-between flex-wrap gap-2">
-            <div class="flex items-center space-x-2">
-                <div class="w-7 h-7 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs shadow-xs">
-                    <i class="fa-solid fa-location-crosshairs"></i>
-                </div>
-                <div>
-                    <h3 class="text-xs font-black uppercase text-indigo-950 tracking-wider">Mapeador de Precisão CP7</h3>
-                    <p class="text-[10px] text-indigo-600">Registe pontos GPS exatos por código postal para criar mini-pinos de alta precisão</p>
+        <div class="flex items-center space-x-2 flex-wrap gap-y-2">
+            <div class="relative min-w-[180px]">
+                <select id="select-concelho-setores" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-xs rounded-lg focus:ring-blue-500 focus:border-blue-500 p-2.5 pr-8 appearance-none font-semibold cursor-pointer">
+                    <option value="SINTRA">Sintra, Portugal</option>
+                    <option value="MAFRA">Mafra, Portugal</option>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-gray-500">
+                    <i class="fa-solid fa-chevron-down text-[10px]"></i>
                 </div>
             </div>
-            
-            <div class="flex items-center space-x-2">
-                <button type="button" id="btn-toggle-drawer-cp7" 
-                        class="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white text-[11px] font-extrabold px-3 py-1.5 rounded-lg shadow-xs flex items-center space-x-1.5 transition cursor-pointer">
-                    <i class="fa-solid fa-list-check"></i>
-                    <span>Consultar Mapeados (<span id="stat-total-cp7-btn">0</span>)</span>
-                </button>
-            </div>
-        </div>
 
-        <!-- Formulário de inserção rápida de CP7 e Coordenadas -->
-        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 pt-1">
-            <div class="sm:col-span-3">
-                <label class="block text-[9px] font-bold text-gray-500 uppercase mb-1">Código Postal (7 Dígitos) *</label>
-                <input type="text" id="input-novo-cp7" inputmode="numeric" placeholder="Ex: 2715-311" maxlength="8"
-                       class="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-xs font-mono font-bold text-gray-800 uppercase focus:ring-2 focus:ring-indigo-500 focus:outline-none tracking-wider">
-            </div>
-
-            <div class="sm:col-span-6">
-                <label class="block text-[9px] font-bold text-gray-500 uppercase mb-1">Coordenadas Google Maps (Lat, Lng) *</label>
-                <input type="text" id="input-coords-novo-cp7" placeholder="Ex: 38.757405, -9.363379"
-                       class="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-xs font-mono text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-            </div>
-
-            <div class="sm:col-span-3 flex items-end">
-                <button type="button" id="btn-salvar-cp7-coordenada" 
-                        class="w-full bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-bold py-2.5 px-3 rounded-lg text-xs shadow-sm flex items-center justify-center space-x-1.5 transition-all cursor-pointer">
-                    <i class="fa-solid fa-plus"></i>
-                    <span>Mapear CP7</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Alerta dinâmico se o CP7 digitado já existe -->
-        <div id="aviso-cp7-duplicado" class="hidden p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold flex items-center justify-between animate-fade-in">
-            <div class="flex items-center space-x-2">
-                <i class="fa-solid fa-triangle-exclamation text-amber-500"></i>
-                <span id="texto-aviso-cp7-duplicado">Este Código Postal já foi mapeado anteriormente.</span>
-            </div>
-            <button type="button" id="btn-focar-cp7-duplicado" class="text-xs text-indigo-600 hover:text-indigo-800 font-bold underline cursor-pointer">
-                Ver no Mapa
+            <!-- Botão de Iniciar Modo de Criação de Brick -->
+            <button type="button" id="btn-iniciar-criacao-brick"
+                    class="bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-extrabold text-xs px-3.5 py-2.5 rounded-lg shadow-sm flex items-center space-x-1.5 transition cursor-pointer">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>+ Criar Novo Brick</span>
             </button>
         </div>
+    </div>
 
-        <!-- PAINEL EXPANSÍVEL DE CONSULTA E PESQUISA DE CP7s MAPEADOS -->
-        <div id="secao-consulta-cp7" class="hidden pt-3 border-t border-indigo-100 space-y-3 animate-fade-in">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div class="relative flex-1">
-                    <input type="text" id="input-busca-cp7-mapeados" placeholder="Filtrar por CP7 (ex: 2715-311, 2640)..." 
-                           class="w-full pl-8 pr-3 py-2 bg-white border border-indigo-200 rounded-lg text-xs font-semibold text-gray-800 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
-                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-gray-400 text-xs"></i>
+    <!-- 2. CONSTRUTOR DINÂMICO DE BRICK (Ativado ao clicar em "+ Criar Novo Brick" ou "Editar Brick") -->
+    <div id="painel-construtor-brick" class="hidden bg-gradient-to-r from-emerald-50/80 via-blue-50/50 to-white p-4 rounded-xl border-2 border-emerald-300 shadow-md space-y-3.5 animate-fade-in">
+        <div class="flex items-center justify-between flex-wrap gap-2 border-b border-emerald-200 pb-2">
+            <div class="flex items-center space-x-2">
+                <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs shadow-xs">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
                 </div>
-                <span id="contador-pesquisa-cp7" class="text-[10px] font-bold text-gray-500 whitespace-nowrap">
-                    A mostrar todos os registos
-                </span>
+                <div>
+                    <h3 id="titulo-painel-construtor" class="text-xs font-black uppercase text-emerald-950 tracking-wider">
+                        Modo Construtor de Brick (Agrupamento de CP7s)
+                    </h3>
+                    <p class="text-[10px] text-emerald-700">Clique nos pinos de CP7 no mapa ou marque na lista para incluir neste Brick</p>
+                </div>
             </div>
 
-            <!-- Grelha de cartões dos CP7s já mapeados -->
-            <div id="lista-cp7-mapeados-container" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1">
-                <p class="col-span-full text-center text-xs text-gray-400 py-4 italic">Nenhum CP7 registado.</p>
+            <span id="badge-cp7-selecionados-count" class="text-xs font-black uppercase px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                0 CP7s Selecionados
+            </span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+            <!-- Nome do Brick -->
+            <div class="sm:col-span-4">
+                <label class="block text-[10px] font-bold text-gray-600 uppercase mb-1">Nome do Brick *</label>
+                <input type="text" id="input-brick-nome" placeholder="Ex: Portela de Sintra Sul"
+                       class="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+            </div>
+
+            <!-- Motorista Designado (Opcional) -->
+            <div class="sm:col-span-4">
+                <label class="block text-[10px] font-bold text-gray-600 uppercase mb-1">Motorista Designado</label>
+                <select id="select-brick-motorista" class="w-full p-2.5 bg-white border border-gray-300 rounded-lg text-xs font-bold text-gray-800 focus:ring-2 focus:ring-emerald-500 focus:outline-none cursor-pointer">
+                    <option value="">-- Sem Motorista (Apenas Agrupar) --</option>
+                </select>
+            </div>
+
+            <!-- Escolha de Cor do Brick -->
+            <div class="sm:col-span-4">
+                <label class="block text-[10px] font-bold text-gray-600 uppercase mb-1">Cor do Brick</label>
+                <div id="palette-brick-colors" class="flex items-center space-x-1.5 pt-0.5 overflow-x-auto">
+                    <!-- Gerado dinamicamente via JS -->
+                </div>
             </div>
         </div>
+
+        <!-- Botões de Ação do Construtor -->
+        <div class="flex items-center justify-end space-x-2 pt-1 border-t border-emerald-100">
+            <button type="button" id="btn-cancelar-construtor" 
+                    class="bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold px-3 py-2 rounded-lg text-xs transition cursor-pointer">
+                Cancelar
+            </button>
+            <button type="button" id="btn-limpar-selecao-cp7" 
+                    class="bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold px-3 py-2 rounded-lg text-xs border border-amber-200 transition cursor-pointer">
+                Limpar Seleção
+            </button>
+            <button type="button" id="btn-gravar-novo-brick" 
+                    class="bg-emerald-600 hover:bg-emerald-700 text-white font-black px-4 py-2 rounded-lg text-xs shadow-sm flex items-center space-x-1.5 transition cursor-pointer">
+                <i class="fa-solid fa-check"></i>
+                <span id="btn-gravar-brick-texto">Gravar Brick</span>
+            </button>
+        </div>
     </div>
-    
-    <!-- MAPA DE DISTRIBUIÇÃO GERAL (VISÃO DO GESTOR) COM CONTROLOS INDEPENDENTES DE VISIBILIDADE -->
+
+    <!-- 3. MAPA INTERATIVO DO GESTOR COM CAMADAS E SELEÇÃO -->
     <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2.5">
         <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
             <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
                 <i class="fa-solid fa-map-location-dot text-blue-600"></i>
-                <span>Visão do Gestor: Distribuição Geográfica</span>
+                <span>Mapa Geográfico: Bricks e Pontos CP7</span>
             </h3>
 
             <div class="flex items-center space-x-2 flex-wrap gap-y-2">
-                <!-- 1. BOTÃO DE ALTERNÂNCIA DE PINOS DE BRICKS -->
-                <button type="button" id="btn-toggle-brick-pinos" 
-                        class="bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-blue-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
-                    <i id="icone-toggle-brick-pinos" class="fa-solid fa-eye text-blue-600"></i>
-                    <span id="texto-toggle-brick-pinos">Ver Pinos Bricks</span>
+                <!-- BOTÃO DE ALTERNÂNCIA: VER TODOS VS APENAS ÓRFÃOS -->
+                <button type="button" id="btn-filtro-mapa-orfaos" 
+                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition cursor-pointer shadow-xs">
+                    <i class="fa-solid fa-filter text-gray-500"></i>
+                    <span id="texto-filtro-mapa-orfaos">Mostrar Todos os CP7s</span>
                 </button>
 
-                <!-- 2. BOTÃO DE ALTERNÂNCIA DE MINI-PINOS CP7 -->
+                <!-- BOTÃO DE ALTERNÂNCIA DE MINI-PINOS CP7 -->
                 <button type="button" id="btn-toggle-mini-pinos" 
-                        class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-indigo-200 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
+                        class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-indigo-200 flex items-center justify-center space-x-1.5 transition cursor-pointer shadow-xs">
                     <i id="icone-toggle-mini-pinos" class="fa-solid fa-eye text-indigo-600"></i>
-                    <span id="texto-toggle-mini-pinos">Ver Mini-Pinos CP7</span>
-                </button>
-
-                <!-- 3. BOTÃO DE ALTERNÂNCIA: MODO SEGURO (TRAVADO) VS MODO CALIBRAÇÃO (ARRASTÁVEL) -->
-                <button type="button" id="btn-toggle-modo-calibracao" 
-                        class="bg-gray-100 hover:bg-gray-200 text-gray-700 text-[11px] font-extrabold px-3 py-1.5 rounded-xl border border-gray-300 flex items-center justify-center space-x-1.5 transition-all cursor-pointer shadow-xs">
-                    <i id="icone-trava-calibracao" class="fa-solid fa-lock text-green-600"></i>
-                    <span id="texto-trava-calibracao">Pinos Bloqueados (Modo Seguro)</span>
+                    <span id="texto-toggle-mini-pinos">Mini-Pinos CP7</span>
                 </button>
             </div>
         </div>
@@ -143,20 +133,20 @@
         <div class="border border-gray-200 rounded-xl overflow-hidden shadow-xs relative">
             <div id="map-dashboard-bricks" class="w-full h-80 bg-gray-50"></div>
             
-            <!-- Aviso visual no topo do mapa quando a calibração está ativa -->
-            <div id="aviso-calibracao-ativa" class="hidden absolute top-2 left-1/2 transform -translate-x-1/2 bg-amber-500/95 text-white font-bold text-[10px] px-3 py-1 rounded-full shadow-md flex items-center space-x-1.5 pointer-events-none z-10 animate-pulse">
-                <i class="fa-solid fa-unlock"></i>
-                <span>Modo de Calibração Ativo: Pode arrastar os pinos</span>
+            <!-- Aviso quando o modo de seleção do construtor está ativo -->
+            <div id="aviso-modo-selecao-mapa" class="hidden absolute top-2 left-1/2 transform -translate-x-1/2 bg-emerald-600/95 text-white font-bold text-[10px] px-4 py-1.5 rounded-full shadow-md flex items-center space-x-1.5 pointer-events-none z-10 animate-pulse">
+                <i class="fa-solid fa-arrow-pointer"></i>
+                <span>Modo de Seleção Ativo: Clique nos pinos para adicionar ao Brick</span>
             </div>
         </div>
     </div>
 
-    <!-- PAINEL DE AUDITORIA E BALANÇO DE BRICKS (SALDO ZERO) -->
+    <!-- 4. AUDITORIA DE COBERTURA 100% (SALDO DE CP7s) -->
     <div id="painel-auditoria-bricks" class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
         <div class="flex items-center justify-between">
             <h3 class="text-xs font-black uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
                 <i class="fa-solid fa-scale-balanced text-blue-600"></i>
-                <span>Auditoria de Cobertura: Saldo de Bricks</span>
+                <span>Auditoria de Cobertura: Saldo de Códigos Postais (CP7)</span>
             </h3>
             <span id="badge-saldo-status" class="text-[9px] font-black uppercase px-2 py-0.5 rounded border bg-gray-100 text-gray-600 border-gray-200">
                 A calcular...
@@ -164,70 +154,68 @@
         </div>
         
         <div class="grid grid-cols-3 gap-3 text-center">
-            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-150">
-                <span id="stat-total-bricks" class="block text-base font-black text-gray-800">0</span>
-                <span class="text-[9px] font-bold text-gray-400 uppercase">Total Bricks</span>
+            <div class="bg-gray-50 p-2.5 rounded-xl border border-gray-200">
+                <span id="stat-total-cp7" class="block text-base font-black text-gray-800">0</span>
+                <span class="text-[9px] font-bold text-gray-400 uppercase">Total CP7s</span>
             </div>
-            <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100/50">
-                <span id="stat-alocados-bricks" class="block text-base font-black text-blue-600">0</span>
-                <span class="text-[9px] font-bold text-blue-500 uppercase">Alocados</span>
+            <div class="bg-emerald-50 p-2.5 rounded-xl border border-emerald-200">
+                <span id="stat-alocados-cp7" class="block text-base font-black text-emerald-600">0</span>
+                <span class="text-[9px] font-bold text-emerald-500 uppercase">Em Bricks</span>
             </div>
-            <div id="card-saldo-bricks" class="bg-green-50 p-2.5 rounded-xl border border-green-200 transition-colors">
-                <span id="stat-saldo-bricks" class="block text-base font-black text-green-600">0</span>
-                <span id="label-saldo-bricks" class="text-[9px] font-bold text-green-500 uppercase">Sem Alocar</span>
+            <div id="card-saldo-cp7" class="bg-red-50 p-2.5 rounded-xl border border-red-200 transition-colors">
+                <span id="stat-saldo-cp7" class="block text-base font-black text-red-600">0</span>
+                <span id="label-saldo-cp7" class="text-[9px] font-bold text-red-500 uppercase">Sem Brick (Órfãos)</span>
             </div>
         </div>
 
-        <div id="container-bricks-pendentes" class="hidden border border-red-100 bg-red-50/20 p-3 rounded-xl space-y-2 animate-fade-in">
-            <span class="block text-[10px] font-black text-red-700 uppercase tracking-wider flex items-center space-x-1">
-                <i class="fa-solid fa-triangle-exclamation"></i>
-                <span>Bricks Órfãos (Sem Motorista)</span>
-            </span>
-            <div id="lista-bricks-pendentes" class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-40 overflow-y-auto text-[10px] text-gray-600 font-bold pr-1">
+        <!-- Lista colapsável de CP7s Órfãos (Ainda não agrupados) -->
+        <div id="container-cp7-pendentes" class="hidden border border-red-100 bg-red-50/20 p-3 rounded-xl space-y-2 animate-fade-in">
+            <div class="flex items-center justify-between">
+                <span class="text-[10px] font-black text-red-700 uppercase tracking-wider flex items-center space-x-1">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Códigos Postais Livres (Faltam Agrupar em Bricks)</span>
+                </span>
+                <span class="text-[9px] text-gray-500">Clique num CP7 para centrar no mapa</span>
+            </div>
+            <div id="lista-cp7-pendentes" class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-1.5 max-h-36 overflow-y-auto text-[10px] text-gray-700 font-mono font-bold pr-1">
             </div>
         </div>
     </div>
 
-    <!-- EXPLICAÇÃO DO PAINEL DE ATRIBUIÇÃO -->
-    <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-2">
-        <h2 class="text-sm font-bold text-gray-800 flex items-center space-x-2">
-            <i class="fa-solid fa-boxes-stacked text-blue-600"></i>
-            <span>Painel de Atribuição Direta</span>
-        </h2>
-        <p class="text-xs text-gray-500 leading-relaxed">
-            Selecione um motorista na lista à esquerda (ou topo) e assinale na árvore à direita as localidades que pretende entregar a essa estante de arrumação.
-        </p>
-    </div>
-
-    <!-- GRELHA RESPONSIVA DUPLA (Split-Pane em PC/Tablet) -->
+    <!-- 5. GRELHA PRINCIPAL: BRICKS CRIADOS & DETALHES DE CP7 -->
     <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
         
-        <!-- COLUNA ESQUERDA: LISTAGEM DE MOTORISTAS -->
-        <div class="md:col-span-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-            <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
-                <i class="fa-solid fa-users text-blue-500"></i>
-                <span>Passo 1: Escolher Motorista</span>
-            </h3>
+        <!-- COLUNA ESQUERDA: LISTA DE BRICKS CRIADOS -->
+        <div class="md:col-span-5 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+            <div class="flex items-center justify-between">
+                <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
+                    <i class="fa-solid fa-boxes-stacked text-blue-500"></i>
+                    <span>Bricks Configurados (<span id="stat-total-bricks-count">0</span>)</span>
+                </h3>
+            </div>
             
-            <div id="lista-atribuicao-motoristas" class="space-y-2 max-h-96 overflow-y-auto pr-1">
-                <p class="text-xs text-gray-400 italic text-center py-4">Nenhum motorista registado.</p>
+            <div id="lista-bricks-criados" class="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+                <p class="text-xs text-gray-400 italic text-center py-8">Nenhum Brick configurado neste concelho. Clique em "+ Criar Novo Brick".</p>
             </div>
         </div>
 
-        <!-- COLUNA DIREITA: ÁRVORE GEOGRÁFICA INTERATIVA DE BRICKS -->
-        <div class="md:col-span-8 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
-            <div class="flex justify-between items-center">
-                <h3 class="text-xs font-bold uppercase text-gray-400 tracking-wider flex items-center space-x-1.5">
-                    <i class="fa-solid fa-city text-blue-500"></i>
-                    <span>Passo 2: Assinalar Localidades</span>
+        <!-- COLUNA DIREITA: DETALHE DO BRICK SELECIONADO & ATRIBUIÇÃO A MOTORISTA -->
+        <div class="md:col-span-7 bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3">
+            <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                <h3 class="text-xs font-bold uppercase text-gray-500 tracking-wider flex items-center space-x-1.5">
+                    <i class="fa-solid fa-circle-info text-blue-500"></i>
+                    <span>Detalhes do Brick</span>
                 </h3>
-                <span id="label-motorista-selecionado" class="text-[10px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded border border-dashed">
+                <span id="label-brick-detalhe-nome" class="text-[10px] font-black uppercase bg-gray-100 text-gray-500 px-2.5 py-0.5 rounded border">
                     Nenhum Selecionado
                 </span>
             </div>
 
-            <div id="arvore-bricks-localidades" class="border rounded-lg p-2 max-h-[500px] overflow-y-auto space-y-2 bg-gray-50/50">
-                <p class="text-xs text-gray-400 italic text-center py-8">Por favor, escolha um motorista na lista para carregar os Bricks.</p>
+            <div id="container-detalhes-brick-selecionado" class="space-y-3">
+                <div class="text-center py-12 space-y-2">
+                    <i class="fa-solid fa-hand-pointer text-gray-300 text-3xl"></i>
+                    <p class="text-xs text-gray-400 font-bold italic">Selecione um Brick na lista à esquerda para gerir os seus códigos postais ou alterar o motorista.</p>
+                </div>
             </div>
         </div>
 
