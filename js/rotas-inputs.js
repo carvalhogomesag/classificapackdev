@@ -1,9 +1,9 @@
 /**
  * js/rotas-inputs.js
- * Versão v77.7 - Módulo de Formatação de Inputs, Autocomplete, Filtro Estrito Multi-Artérias CTT
- * Faz: Controla a formatação e máscara de Código Postal (CP7), botão de prefixo rápido,
- *      filtro ESTREITO e instantâneo de Ruas por Código Postal da base oficial CTT (CP7_DATABASE),
- *      supressão total do Google Places quando há CP e envio de morada completa para navegação.
+ * Versão v78.0 - Módulo de Inputs de Rota com Google Places Autocomplete Otimizado e Preview Multi-Linha
+ * Faz: Controla o formato e máscara de Código Postal (CP7), botão de prefixo rápido,
+ *      ancoragem geográfica estrita do Google Places a Sintra/Mafra, suporte a teclado Enter,
+ *      e Card de Pré-visualização em 2 linhas para moradas longas sem cortes horizontais.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -12,11 +12,10 @@ import { obterConcelhoPorCodigoPostal } from './rotas-geografia.js';
 import { CP7_DATABASE } from './cp7-data.js';
 
 let autocompleteInstancia = null;
-let itemSugeridoAtivoIndex = -1;
 
 /**
  * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
- * Retorna os dados oficiais da rua/ruas, localidade, concelho e coordenadas (se disponíveis).
+ * Retorna os dados oficiais da rua, localidade, concelho e coordenadas (se disponíveis).
  */
 export function consultarDadosOficiaisCP7(cp7) {
     if (!cp7 || typeof cp7 !== 'string') return null;
@@ -28,230 +27,89 @@ export function consultarDadosOficiaisCP7(cp7) {
 }
 
 /**
- * Filtra e retorna as artérias oficiais dos CTT.
- * - Se o utilizador digitou os 7 dígitos (ex: 2710-416), filtra ESTRITAMENTE para esse CP7.
- * - Se o utilizador digitou apenas 4 dígitos (ex: 2710-), filtra as artérias do concelho/zona 2710.
+ * Limpa e divide uma morada longa em Artéria/Porta e Localidade/CP
  */
-export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
-    if (!CP7_DATABASE) return [];
+export function formatarMoradaLegivel(moradaCompleta, codigoPostal = "") {
+    if (!moradaCompleta) return { linhaPrincipal: "", linhaSecundaria: "" };
+
+    // Remove ", Portugal" ou ", PT" redundantes do fim
+    let textoLimpo = moradaCompleta.replace(/,\s*Portugal$/i, '').replace(/,\s*PT$/i, '').trim();
+
+    // Divide por vírgulas para separar artéria/número da localidade
+    const partes = textoLimpo.split(',').map(p => p.trim()).filter(Boolean);
+
+    if (partes.length <= 1) {
+        return {
+            linhaPrincipal: textoLimpo,
+            linhaSecundaria: codigoPostal ? `${codigoPostal}` : ""
+        };
+    }
+
+    const linhaPrincipal = partes[0] + (partes[1] && (/^\d+/.test(partes[1]) || /^(nº|lote|bloco|n|lt|andar|r\/c)/i.test(partes[1])) ? `, ${partes[1]}` : '');
+    const restantesPartes = partes.slice(linhaPrincipal.includes(partes[1]) ? 2 : 1);
     
-    const cleanCP = (codigoPostal || "").trim().toUpperCase();
-    const termo = (termoBusca || "").trim().toLowerCase();
-    const resultados = [];
-    const chavesVistas = new Set();
-
-    const numerosApenas = cleanCP.replace(/\D/g, '');
-    const isCPCompleto = numerosApenas.length === 7;
-    const cp7Formatado = isCPCompleto ? `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}` : cleanCP;
-    const prefixo4 = numerosApenas.substring(0, 4);
-
-    // 1. SE É UM CÓDIGO POSTAL DE 7 DÍGITOS COMPLETO (FILTRO ESTRITO)
-    if (isCPCompleto) {
-        if (CP7_DATABASE[cp7Formatado]) {
-            const item = CP7_DATABASE[cp7Formatado];
-            const listaRuas = Array.isArray(item.ruas) && item.ruas.length > 0 
-                ? item.ruas 
-                : [item.rua || item.street || item.nome || ""];
-
-            listaRuas.filter(Boolean).forEach(r => {
-                const key = `${r.toLowerCase()}_${item.localidade || ''}`;
-                if (!chavesVistas.has(key)) {
-                    chavesVistas.add(key);
-                    resultados.push({
-                        rua: r.trim(),
-                        localidade: item.localidade || item.cpalf || "",
-                        concelho: item.concelho || obterConcelhoPorCodigoPostal(cp7Formatado) || "",
-                        cp7: cp7Formatado,
-                        lat: item.lat,
-                        lng: item.lng
-                    });
-                }
-            });
-        }
-    } else if (prefixo4 && prefixo4.length === 4) {
-        // 2. SE TEM APENAS O PREFIXO DE 4 DÍGITOS (ex: 2710-)
-        for (const [cp, item] of Object.entries(CP7_DATABASE)) {
-            if (!item || !cp.startsWith(prefixo4)) continue;
-
-            const listaRuas = Array.isArray(item.ruas) && item.ruas.length > 0 
-                ? item.ruas 
-                : [item.rua || item.street || item.nome || ""];
-
-            listaRuas.filter(Boolean).forEach(r => {
-                const key = `${r.toLowerCase()}_${item.localidade || ''}`;
-                if (!chavesVistas.has(key)) {
-                    chavesVistas.add(key);
-                    resultados.push({
-                        rua: r.trim(),
-                        localidade: item.localidade || item.cpalf || "",
-                        concelho: item.concelho || obterConcelhoPorCodigoPostal(cp) || "",
-                        cp7: cp,
-                        lat: item.lat,
-                        lng: item.lng
-                    });
-                }
-            });
-        }
+    let linhaSecundaria = restantesPartes.join(', ');
+    if (codigoPostal && !linhaSecundaria.includes(codigoPostal)) {
+        linhaSecundaria = `${codigoPostal} ${linhaSecundaria}`.trim();
     }
 
-    // 3. Aplica o filtro de pesquisa por texto digitado pelo estafeta
-    if (termo) {
-        return resultados.filter(item => 
-            item.rua.toLowerCase().includes(termo) || 
-            item.localidade.toLowerCase().includes(termo) ||
-            item.cp7.toLowerCase().includes(termo)
-        ).slice(0, 40);
-    }
-
-    return resultados.slice(0, 40);
+    return {
+        linhaPrincipal: linhaPrincipal || textoLimpo,
+        linhaSecundaria: linhaSecundaria || (codigoPostal ? `${codigoPostal}` : "")
+    };
 }
 
 /**
- * Controla a visibilidade do popup nativo do Google Places (.pac-container)
+ * Cria ou atualiza o Card de Pré-visualização Multi-Linha abaixo do campo de morada
  */
-function alternarVisibilidadeGooglePlaces(mostrar) {
-    const pacContainers = document.querySelectorAll('.pac-container');
-    pacContainers.forEach(container => {
-        if (!mostrar) {
-            container.style.display = 'none';
-            container.style.visibility = 'hidden';
-            container.style.opacity = '0';
-            container.style.pointerEvents = 'none';
-        } else {
-            container.style.display = '';
-            container.style.visibility = '';
-            container.style.opacity = '';
-            container.style.pointerEvents = '';
-        }
-    });
-}
-
-/**
- * Cria ou obtém o contentor da lista suspensa de sugestões de moradas oficiais CTT
- */
-function obterContentorSugestoesMorada() {
+export function atualizarPreviewMorada(moradaTexto, codigoPostalTexto = "") {
     const inputMorada = document.getElementById('rota-morada-completa');
-    if (!inputMorada) return null;
+    if (!inputMorada) return;
 
-    let dropdown = document.getElementById('dropdown-sugestoes-ruas-ctt');
-    if (!dropdown) {
+    let previewContainer = document.getElementById('card-preview-morada-selecionada');
+    if (!previewContainer) {
         if (inputMorada.parentElement) {
             inputMorada.parentElement.classList.add('relative');
         }
-
-        dropdown = document.createElement('div');
-        dropdown.id = 'dropdown-sugestoes-ruas-ctt';
-        dropdown.className = 'absolute z-[99999] left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-2xl max-h-64 overflow-y-auto divide-y divide-gray-100 hidden transition-all';
-        inputMorada.parentElement.appendChild(dropdown);
-
-        document.addEventListener('click', (e) => {
-            if (!inputMorada.contains(e.target) && !dropdown.contains(e.target)) {
-                fecharSugestoesRuas();
-            }
-        });
+        previewContainer = document.createElement('div');
+        previewContainer.id = 'card-preview-morada-selecionada';
+        previewContainer.className = 'mt-1.5 p-2 bg-blue-50/70 border border-blue-200 rounded-xl transition-all hidden';
+        inputMorada.parentElement.appendChild(previewContainer);
     }
-    return dropdown;
-}
 
-/**
- * Fecha e limpa o menu de sugestões de ruas
- */
-export function fecharSugestoesRuas() {
-    const dropdown = document.getElementById('dropdown-sugestoes-ruas-ctt');
-    if (dropdown) {
-        dropdown.classList.add('hidden');
-        dropdown.innerHTML = '';
-        itemSugeridoAtivoIndex = -1;
-    }
-    const inputCP = document.getElementById('rota-codigo-postal');
-    if (!inputCP || inputCP.value.trim().length < 4) {
-        alternarVisibilidadeGooglePlaces(true);
-    }
-}
+    const textoVal = moradaTexto || inputMorada.value.trim();
+    const cpVal = codigoPostalTexto || document.getElementById('rota-codigo-postal')?.value.trim() || "";
 
-/**
- * Renderiza as sugestões de ruas filtradas para o Código Postal
- */
-export function renderizarSugestoesRuas(termoFiltro = "") {
-    const inputCP = document.getElementById('rota-codigo-postal');
-    const inputMorada = document.getElementById('rota-morada-completa');
-    const dropdown = obterContentorSugestoesMorada();
-
-    if (!inputCP || !inputMorada || !dropdown) return;
-
-    const cpAtual = inputCP.value.trim();
-    if (!cpAtual || cpAtual.length < 4) {
-        fecharSugestoesRuas();
+    if (!textoVal && !cpVal) {
+        previewContainer.classList.add('hidden');
+        previewContainer.innerHTML = '';
         return;
     }
 
-    alternarVisibilidadeGooglePlaces(false);
+    const { linhaPrincipal, linhaSecundaria } = formatarMoradaLegivel(textoVal, cpVal);
 
-    const ruasCorrespondentes = obterRuasPorCodigoPostal(cpAtual, termoFiltro);
-
-    if (ruasCorrespondentes.length === 0) {
-        fecharSugestoesRuas();
-        return;
-    }
-
-    itemSugeridoAtivoIndex = -1;
-    dropdown.innerHTML = `
-        <div class="px-3 py-1.5 bg-blue-50/90 border-b border-blue-100 flex items-center justify-between text-[11px] font-bold text-blue-800">
-            <span><i class="fa-solid fa-map-location-dot mr-1 text-blue-600"></i> Artérias Oficiais CTT (${ruasCorrespondentes.length})</span>
-            <span class="text-[10px] text-gray-500 font-normal">Clique para selecionar</span>
+    previewContainer.innerHTML = `
+        <div class="flex items-start justify-between gap-2">
+            <div class="flex-1 min-w-0">
+                <div class="text-xs font-black text-gray-900 leading-snug break-words">
+                    <i class="fa-solid fa-location-dot text-blue-600 mr-1"></i>
+                    <span>${linhaPrincipal || textoVal}</span>
+                </div>
+                ${linhaSecundaria ? `
+                    <div class="text-[11px] font-bold text-blue-700 leading-tight mt-0.5 break-words">
+                        <i class="fa-solid fa-map-pin text-blue-400 mr-1 text-[10px]"></i>
+                        <span>${linhaSecundaria}</span>
+                    </div>
+                ` : ''}
+            </div>
+            <button type="button" onclick="document.getElementById('card-preview-morada-selecionada')?.classList.add('hidden')"
+                    class="text-gray-400 hover:text-gray-600 p-0.5 text-xs cursor-pointer border-none bg-transparent" title="Fechar visualização">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
     `;
 
-    ruasCorrespondentes.forEach((item, idx) => {
-        const itemBtn = document.createElement('button');
-        itemBtn.type = 'button';
-        itemBtn.className = 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/80 focus:bg-blue-100 transition-colors flex items-center justify-between group cursor-pointer border-none bg-transparent';
-        itemBtn.dataset.index = idx;
-
-        itemBtn.innerHTML = `
-            <div class="flex items-center space-x-2 truncate">
-                <i class="fa-solid fa-road text-gray-400 group-hover:text-blue-600 transition-colors text-[11px]"></i>
-                <div class="truncate">
-                    <span class="font-bold text-gray-800 group-hover:text-blue-700">${item.rua}</span>
-                    <span class="text-[10px] text-gray-500 ml-1">(${item.localidade || item.concelho})</span>
-                </div>
-            </div>
-            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 group-hover:bg-blue-600 group-hover:text-white transition-all ml-2 shrink-0 font-mono">
-                ${item.cp7}
-            </span>
-        `;
-
-        itemBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            selecionarRuaSugerida(item);
-        });
-
-        dropdown.appendChild(itemBtn);
-    });
-
-    dropdown.classList.remove('hidden');
-}
-
-/**
- * Seleciona a rua escolhida, preenche os campos e foca para digitação do número da porta
- */
-function selecionarRuaSugerida(item) {
-    const inputCP = document.getElementById('rota-codigo-postal');
-    const inputMorada = document.getElementById('rota-morada-completa');
-
-    if (inputCP && item.cp7) {
-        inputCP.value = item.cp7;
-    }
-
-    if (inputMorada) {
-        inputMorada.value = `${item.rua}, `;
-        inputMorada.focus();
-        const pos = inputMorada.value.length;
-        inputMorada.setSelectionRange(pos, pos);
-    }
-
-    fecharSugestoesRuas();
+    previewContainer.classList.remove('hidden');
 }
 
 /**
@@ -265,9 +123,8 @@ export function aplicarPrefixoNoCampo(prefixo) {
     const comprimentoTexto = inputCP.value.length;
     inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
 
-    setTimeout(() => {
-        renderizarSugestoesRuas("");
-    }, 50);
+    // Dispara a calibração de limites para o Google Places
+    inputCP.dispatchEvent(new Event('input'));
 }
 
 /**
@@ -304,19 +161,11 @@ export function configurarTeclasEnterAdicao() {
 
     const dispararAdicao = (e) => {
         if (e.key === 'Enter') {
-            const dropdown = document.getElementById('dropdown-sugestoes-ruas-ctt');
-            const dropdownAberto = dropdown && !dropdown.classList.contains('hidden');
-
-            if (dropdownAberto) {
-                const items = dropdown.querySelectorAll('button[data-index]');
-                if (items.length > 0) {
-                    e.preventDefault();
-                    const alvo = itemSugeridoAtivoIndex >= 0 && itemSugeridoAtivoIndex < items.length 
-                        ? items[itemSugeridoAtivoIndex] 
-                        : items[0];
-                    alvo.click();
-                    return;
-                }
+            // Se o utilizador estiver a selecionar no Google Places com setas, não dispara adição prematura
+            const pacContainer = document.querySelector('.pac-container');
+            const pacItemSelecionado = pacContainer && pacContainer.querySelector('.pac-item-selected');
+            if (pacItemSelecionado) {
+                return;
             }
 
             e.preventDefault();
@@ -333,45 +182,13 @@ export function configurarTeclasEnterAdicao() {
     }
 
     if (inputMorada && inputMorada.dataset.enterBound !== "true") {
-        inputMorada.addEventListener('keydown', (e) => {
-            const dropdown = document.getElementById('dropdown-sugestoes-ruas-ctt');
-            const dropdownAberto = dropdown && !dropdown.classList.contains('hidden');
-
-            if (dropdownAberto) {
-                const items = dropdown.querySelectorAll('button[data-index]');
-                if (e.key === 'ArrowDown') {
-                    e.preventDefault();
-                    itemSugeridoAtivoIndex = Math.min(itemSugeridoAtivoIndex + 1, items.length - 1);
-                    items.forEach((btn, idx) => {
-                        btn.className = idx === itemSugeridoAtivoIndex 
-                            ? 'w-full text-left px-3 py-2 text-xs bg-blue-100 transition-colors flex items-center justify-between font-bold text-blue-800 cursor-pointer border-none' 
-                            : 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/80 transition-colors flex items-center justify-between cursor-pointer border-none bg-transparent';
-                    });
-                    return;
-                } else if (e.key === 'ArrowUp') {
-                    e.preventDefault();
-                    itemSugeridoAtivoIndex = Math.max(itemSugeridoAtivoIndex - 1, 0);
-                    items.forEach((btn, idx) => {
-                        btn.className = idx === itemSugeridoAtivoIndex 
-                            ? 'w-full text-left px-3 py-2 text-xs bg-blue-100 transition-colors flex items-center justify-between font-bold text-blue-800 cursor-pointer border-none' 
-                            : 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/80 transition-colors flex items-center justify-between cursor-pointer border-none bg-transparent';
-                    });
-                    return;
-                } else if (e.key === 'Escape') {
-                    fecharSugestoesRuas();
-                    return;
-                }
-            }
-
-            dispararAdicao(e);
-        });
+        inputMorada.addEventListener('keydown', dispararAdicao);
         inputMorada.dataset.enterBound = "true";
     }
 }
 
 /**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
- * e dispara o filtro estrito de artérias oficiais CTT
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -389,28 +206,18 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
-        if (valor.length >= 4) {
-            alternarVisibilidadeGooglePlaces(false);
-            const termoMorada = inputMorada ? inputMorada.value : "";
-            renderizarSugestoesRuas(termoMorada);
-        } else {
-            fecharSugestoesRuas();
-            alternarVisibilidadeGooglePlaces(true);
+        if (inputMorada && inputMorada.value) {
+            atualizarPreviewMorada(inputMorada.value, inputCP.value);
         }
     });
 
     if (inputMorada) {
         inputMorada.addEventListener('input', () => {
-            if (inputCP.value.length >= 4) {
-                alternarVisibilidadeGooglePlaces(false);
-                renderizarSugestoesRuas(inputMorada.value);
-            }
-        });
-
-        inputMorada.addEventListener('focus', () => {
-            if (inputCP.value.length >= 4) {
-                alternarVisibilidadeGooglePlaces(false);
-                renderizarSugestoesRuas(inputMorada.value);
+            if (inputMorada.value.trim().length > 3) {
+                atualizarPreviewMorada(inputMorada.value, inputCP.value);
+            } else {
+                const preview = document.getElementById('card-preview-morada-selecionada');
+                if (preview) preview.classList.add('hidden');
             }
         });
     }
@@ -419,7 +226,7 @@ export function configurarFormatacaoCodigoPostal() {
 }
 
 /**
- * Ajusta dinamicamente o centro e limite do Autocomplete do Google
+ * Ajusta dinamicamente os limites geográficos (Bounds) do Google Places com base no Código Postal inserido
  */
 export function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -427,42 +234,42 @@ export function configurarEscutaCodigoPostalParaLimites() {
 
     inputCP.addEventListener('input', async () => {
         const valor = inputCP.value.trim();
-        const padraoCP = /^\d{4}-\d{3}$/;
+        const numerosApenas = valor.replace(/\D/g, '');
 
-        if (valor.length === 0 && autocompleteInstancia) {
-            const centroMafra = { lat: 38.9369, lng: -9.3282 };
-            const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 20000 });
-            autocompleteInstancia.setBounds(circuloMafra.getBounds());
+        if (!autocompleteInstancia) return;
+
+        // Se o campo for limpo, define área padrão para a região de Mafra/Sintra
+        if (numerosApenas.length < 4) {
+            const centroGeral = { lat: 38.8700, lng: -9.3500 };
+            const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 25000 });
+            autocompleteInstancia.setBounds(circuloGeral.getBounds());
             autocompleteInstancia.setOptions({ strictBounds: false });
-            alternarVisibilidadeGooglePlaces(true);
             return;
         }
 
-        if (padraoCP.test(valor)) {
-            const dadosCtt = consultarDadosOficiaisCP7(valor);
+        // Se tem 4 ou 7 dígitos, ancora com precisão cirúrgica
+        const concelhoDetectado = (obterConcelhoPorCodigoPostal(valor) || "SINTRA").toUpperCase();
+        let centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
+        let raioBusca = 12000;
 
-            if (dadosCtt && autocompleteInstancia) {
-                let centroAlvo = null;
-                let raioBusca = 15000;
-
-                if (typeof dadosCtt.lat === 'number' && typeof dadosCtt.lng === 'number' && dadosCtt.lat !== null) {
-                    centroAlvo = { lat: dadosCtt.lat, lng: dadosCtt.lng };
-                    raioBusca = 4000;
-                } else {
-                    const concelhoDetectado = (dadosCtt.concelho || obterConcelhoPorCodigoPostal(valor) || "SINTRA").toUpperCase();
-                    centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
-                }
-
-                const circuloAlvo = new google.maps.Circle({ center: centroAlvo, radius: raioBusca });
-                autocompleteInstancia.setBounds(circuloAlvo.getBounds());
-                autocompleteInstancia.setOptions({ strictBounds: false });
+        // Se for um CP7 completo com coordenadas calibradas na base CTT, foca ainda mais
+        if (numerosApenas.length === 7) {
+            const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
+            const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
+            if (dadosCtt && typeof dadosCtt.lat === 'number' && typeof dadosCtt.lng === 'number' && dadosCtt.lat !== 0) {
+                centroAlvo = { lat: dadosCtt.lat, lng: dadosCtt.lng };
+                raioBusca = 5000; // Raio focado de 5km
             }
         }
+
+        const circuloAlvo = new google.maps.Circle({ center: centroAlvo, radius: raioBusca });
+        autocompleteInstancia.setBounds(circuloAlvo.getBounds());
+        autocompleteInstancia.setOptions({ strictBounds: false });
     });
 }
 
 /**
- * Inicializa o Autocomplete do Google Places no campo de morada detalhada
+ * Inicializa o Google Places Autocomplete nativo com extração de morada e preview visual
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -473,49 +280,53 @@ export function inicializarAutocompleteMorada() {
     if (inputMorada.dataset.autocompleteBound === "true") return;
 
     if (typeof google === 'undefined' || !google.maps || !google.maps.places) {
-        setTimeout(inicializarAutocompleteMorada, 500);
+        setTimeout(inicializarAutocompleteMorada, 400);
         return;
     }
 
     try {
-        const centroMafra = { lat: 38.9369, lng: -9.3282 };
-        const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 20000 });
-        const limitesMafra = circuloMafra.getBounds();
+        const centroPadrao = { lat: 38.8700, lng: -9.3500 };
+        const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 25000 });
 
         autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
             componentRestrictions: { country: 'pt' },
             fields: ['address_components', 'geometry', 'formatted_address', 'name'],
-            bounds: limitesMafra,
+            bounds: circuloPadrao.getBounds(),
             strictBounds: false
         });
 
         inputMorada.dataset.autocompleteBound = "true";
 
         autocompleteInstancia.addListener('place_changed', () => {
-            const localSelecionado = autocompleteInstancia.getPlace();
-            if (!localSelecionado || !localSelecionado.address_components) return;
+            const place = autocompleteInstancia.getPlace();
+            if (!place || (!place.formatted_address && !place.name)) return;
 
             const inputCP = document.getElementById('rota-codigo-postal');
-            const cpDigitado = inputCP ? inputCP.value.trim() : "";
-            const padraoCP7 = /^\d{4}-\d{3}$/;
+            let moradaFormatada = place.formatted_address || place.name || "";
 
-            if (padraoCP7.test(cpDigitado)) {
-                return;
-            }
+            // Limpa o sufixo redundante ", Portugal"
+            moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
+            inputMorada.value = moradaFormatada;
 
-            const componenteCP = localSelecionado.address_components.find(c => c.types.includes('postal_code'));
-            if (componenteCP && inputCP) {
-                const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
-                if (cpLimpo.length === 7) {
-                    inputCP.value = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
-                    inputCP.dispatchEvent(new Event('input'));
-                } else if (cpLimpo.length === 4) {
-                    inputCP.value = `${cpLimpo}-`;
-                    inputCP.focus();
+            // Extrai o Código Postal retornado pelo Google Places se o campo do CP estiver vazio
+            if (place.address_components) {
+                const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
+                if (componenteCP && inputCP && !inputCP.value.trim()) {
+                    const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
+                    if (cpLimpo.length === 7) {
+                        inputCP.value = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
+                        inputCP.dispatchEvent(new Event('input'));
+                    } else if (cpLimpo.length === 4) {
+                        inputCP.value = `${cpLimpo}-`;
+                    }
                 }
             }
+
+            // Renderiza o card de pré-visualização em 2 linhas estruturadas
+            atualizarPreviewMorada(moradaFormatada, inputCP ? inputCP.value : "");
         });
+
     } catch (err) {
-        console.warn("Não foi possível iniciar o Autocomplete do Google Places neste ecrã:", err);
+        console.warn("[PLACES] Aviso ao inicializar Autocomplete do Google Maps:", err);
     }
 }
