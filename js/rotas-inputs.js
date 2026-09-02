@@ -1,10 +1,9 @@
 /**
  * js/rotas-inputs.js
- * Versão v77.6 - Módulo de Formatação de Inputs, Autocomplete, Filtro Inteligente Multi-Artérias CTT
+ * Versão v77.7 - Módulo de Formatação de Inputs, Autocomplete, Filtro Estrito Multi-Artérias CTT
  * Faz: Controla a formatação e máscara de Código Postal (CP7), botão de prefixo rápido,
- *      filtro instantâneo de Ruas/Praças/Avenidas por Código Postal da base oficial CTT (CP7_DATABASE)
- *      com suporte a múltiplas artérias por CP7 (relação 1-N), supressão inteligente do popup Google Places
- *      e envio de morada completa oficial para a navegação GPS.
+ *      filtro ESTREITO e instantâneo de Ruas por Código Postal da base oficial CTT (CP7_DATABASE),
+ *      supressão total do Google Places quando há CP e envio de morada completa para navegação.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -29,8 +28,9 @@ export function consultarDadosOficiaisCP7(cp7) {
 }
 
 /**
- * Filtra e retorna TODAS as artérias (Ruas, Praças, Largos, etc.) existentes
- * para um dado Código Postal (ou prefixo de 4 dígitos) na base oficial CTT.
+ * Filtra e retorna as artérias oficiais dos CTT.
+ * - Se o utilizador digitou os 7 dígitos (ex: 2710-416), filtra ESTRITAMENTE para esse CP7.
+ * - Se o utilizador digitou apenas 4 dígitos (ex: 2710-), filtra as artérias do concelho/zona 2710.
  */
 export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
     if (!CP7_DATABASE) return [];
@@ -41,37 +41,38 @@ export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
     const chavesVistas = new Set();
 
     const numerosApenas = cleanCP.replace(/\D/g, '');
+    const isCPCompleto = numerosApenas.length === 7;
+    const cp7Formatado = isCPCompleto ? `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}` : cleanCP;
     const prefixo4 = numerosApenas.substring(0, 4);
-    const cp7Formatado = cleanCP.length >= 8 ? cleanCP : (numerosApenas.length === 7 ? `${numerosApenas.substring(0,4)}-${numerosApenas.substring(4,7)}` : cleanCP);
 
-    // 1. Procura correspondência exata do CP7
-    if (CP7_DATABASE[cp7Formatado]) {
-        const item = CP7_DATABASE[cp7Formatado];
-        const listaRuas = Array.isArray(item.ruas) && item.ruas.length > 0 
-            ? item.ruas 
-            : [item.rua || item.street || item.nome || ""];
+    // 1. SE É UM CÓDIGO POSTAL DE 7 DÍGITOS COMPLETO (FILTRO ESTRITO)
+    if (isCPCompleto) {
+        if (CP7_DATABASE[cp7Formatado]) {
+            const item = CP7_DATABASE[cp7Formatado];
+            const listaRuas = Array.isArray(item.ruas) && item.ruas.length > 0 
+                ? item.ruas 
+                : [item.rua || item.street || item.nome || ""];
 
-        listaRuas.filter(Boolean).forEach(r => {
-            const key = `${r.toLowerCase()}_${item.localidade || ''}`;
-            if (!chavesVistas.has(key)) {
-                chavesVistas.add(key);
-                resultados.push({
-                    rua: r.trim(),
-                    localidade: item.localidade || item.cpalf || "",
-                    concelho: item.concelho || obterConcelhoPorCodigoPostal(cp7Formatado) || "",
-                    cp7: cp7Formatado,
-                    lat: item.lat,
-                    lng: item.lng
-                });
-            }
-        });
-    }
+            listaRuas.filter(Boolean).forEach(r => {
+                const key = `${r.toLowerCase()}_${item.localidade || ''}`;
+                if (!chavesVistas.has(key)) {
+                    chavesVistas.add(key);
+                    resultados.push({
+                        rua: r.trim(),
+                        localidade: item.localidade || item.cpalf || "",
+                        concelho: item.concelho || obterConcelhoPorCodigoPostal(cp7Formatado) || "",
+                        cp7: cp7Formatado,
+                        lat: item.lat,
+                        lng: item.lng
+                    });
+                }
+            });
+        }
+    } else if (prefixo4 && prefixo4.length === 4) {
+        // 2. SE TEM APENAS O PREFIXO DE 4 DÍGITOS (ex: 2710-)
+        for (const [cp, item] of Object.entries(CP7_DATABASE)) {
+            if (!item || !cp.startsWith(prefixo4)) continue;
 
-    // 2. Procura em todos os CP7s que partilhem o mesmo código ou prefixo de 4 dígitos
-    for (const [cp, item] of Object.entries(CP7_DATABASE)) {
-        if (!item) continue;
-        const matchesCP = cleanCP ? (cp === cleanCP || (prefixo4 && cp.startsWith(prefixo4))) : true;
-        if (matchesCP) {
             const listaRuas = Array.isArray(item.ruas) && item.ruas.length > 0 
                 ? item.ruas 
                 : [item.rua || item.street || item.nome || ""];
@@ -93,7 +94,7 @@ export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
         }
     }
 
-    // 3. Aplica o filtro de texto se o utilizador estiver a digitar a rua
+    // 3. Aplica o filtro de pesquisa por texto digitado pelo estafeta
     if (termo) {
         return resultados.filter(item => 
             item.rua.toLowerCase().includes(termo) || 
@@ -107,7 +108,6 @@ export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
 
 /**
  * Controla a visibilidade do popup nativo do Google Places (.pac-container)
- * para que não interfira nem mostre locais de Cascais/Trafaria quando há um CP ativo.
  */
 function alternarVisibilidadeGooglePlaces(mostrar) {
     const pacContainers = document.querySelectorAll('.pac-container');
@@ -163,7 +163,6 @@ export function fecharSugestoesRuas() {
         dropdown.innerHTML = '';
         itemSugeridoAtivoIndex = -1;
     }
-    // Restaura a visibilidade do Google Places apenas se não houver CP ativo
     const inputCP = document.getElementById('rota-codigo-postal');
     if (!inputCP || inputCP.value.trim().length < 4) {
         alternarVisibilidadeGooglePlaces(true);
@@ -186,7 +185,6 @@ export function renderizarSugestoesRuas(termoFiltro = "") {
         return;
     }
 
-    // Silencia imediatamente o popup nativo do Google Places
     alternarVisibilidadeGooglePlaces(false);
 
     const ruasCorrespondentes = obterRuasPorCodigoPostal(cpAtual, termoFiltro);
@@ -247,7 +245,6 @@ function selecionarRuaSugerida(item) {
     }
 
     if (inputMorada) {
-        // Preenche o nome da artéria com vírgula para inserção imediata do número da porta
         inputMorada.value = `${item.rua}, `;
         inputMorada.focus();
         const pos = inputMorada.value.length;
@@ -374,7 +371,7 @@ export function configurarTeclasEnterAdicao() {
 
 /**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
- * e dispara o filtro de artérias oficiais CTT silenciando o Google Places
+ * e dispara o filtro estrito de artérias oficiais CTT
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
