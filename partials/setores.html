@@ -1,9 +1,9 @@
 <!--
   setores.html
-  Versão v77.0 - Construtor de Bricks Dinâmicos por Agrupamento de CP7s, Mapa do Gestor e Auditoria Saldo Zero
+  Versão v77.2 - Construtor de Bricks Dinâmicos por CP7, Auditoria Saldo Zero e Importador Oficial CTT
   Faz: Contém a interface do Construtor de Bricks baseado em Códigos Postais (CP7),
        painel de seleção múltipla de pinos no mapa, gestão/edição de Bricks personalizados,
-       atribuição de motoristas e Auditoria de Saldo Zero de CP7s.
+       atribuição de motoristas, Auditoria de Saldo Zero e Modal de Importação e Processamento do ficheiro oficial dos CTT (todos_cp.txt).
   NÃO faz: Não inclui relatórios estatísticos (movidos para partials/relatorios.html).
   Depende de: Injeção assíncrona pelo main.js no index.html.
 -->
@@ -32,6 +32,13 @@
                     <i class="fa-solid fa-chevron-down text-[10px]"></i>
                 </div>
             </div>
+
+            <!-- Botão Importar Ficheiro Oficial CTT -->
+            <button type="button" id="btn-abrir-importador-ctt"
+                    class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-xs px-3.5 py-2.5 rounded-lg border border-indigo-200 shadow-xs flex items-center space-x-1.5 transition cursor-pointer">
+                <i class="fa-solid fa-file-import text-indigo-600"></i>
+                <span>Importar CTT (todos_cp.txt)</span>
+            </button>
 
             <!-- Botão de Iniciar Modo de Criação de Brick -->
             <button type="button" id="btn-iniciar-criacao-brick"
@@ -219,6 +226,129 @@
             </div>
         </div>
 
+    </div>
+
+    <!-- 6. MODAL DO IMPORTADOR OFICIAL CTT (todos_cp.txt) -->
+    <div id="modal-importador-ctt" class="hidden fixed inset-0 z-50 bg-gray-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+        <div class="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[90vh]">
+            
+            <!-- Cabeçalho do Modal -->
+            <div class="bg-slate-900 text-white p-4 flex items-center justify-between border-b border-slate-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-base shadow-sm">
+                        <i class="fa-solid fa-file-arrow-up"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-black uppercase tracking-wider text-white">Importador Oficial CTT (todos_cp.txt)</h3>
+                        <p class="text-[11px] text-slate-300">Carregue a base nacional e filtre os CP7s para Sintra e Mafra</p>
+                    </div>
+                </div>
+                <button type="button" id="btn-fechar-modal-ctt" class="text-slate-400 hover:text-white transition p-1 text-lg cursor-pointer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Corpo do Modal -->
+            <div class="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+                
+                <!-- Área de Drag & Drop do Ficheiro -->
+                <div id="dropzone-ctt" class="border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/40 hover:bg-indigo-50/70 transition-all rounded-2xl p-6 text-center cursor-pointer space-y-2">
+                    <input type="file" id="input-file-ctt" accept=".txt,.csv" class="hidden">
+                    <div class="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center mx-auto text-xl">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-extrabold text-indigo-950 block">Clique para selecionar ou arraste o ficheiro aqui</span>
+                        <span class="text-[10px] text-gray-500 font-semibold block">Suporta ficheiros oficiais <span class="font-mono text-indigo-700 font-bold">todos_cp.txt</span> ou <span class="font-mono text-indigo-700 font-bold">.csv</span></span>
+                    </div>
+                    <div id="ctt-file-selected-badge" class="hidden inline-flex items-center space-x-1.5 bg-indigo-600 text-white text-[11px] font-bold px-3 py-1 rounded-full shadow-xs">
+                        <i class="fa-solid fa-file-lines"></i>
+                        <span id="ctt-file-selected-name">ficheiro.txt</span>
+                    </div>
+                </div>
+
+                <!-- Filtro de Concelhos a Processar -->
+                <div class="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-600 block">Concelhos a Extrair do Ficheiro:</span>
+                    <div class="flex items-center space-x-4 flex-wrap gap-y-2 text-xs font-bold text-gray-800">
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" id="chk-filtro-sintra" checked class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
+                            <span>Sintra (Distrito 11, Concelho 11)</span>
+                        </label>
+                        <label class="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" id="chk-filtro-mafra" checked class="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500">
+                            <span>Mafra (Distrito 11, Concelho 09)</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Barra de Progresso e Métricas em Tempo Real -->
+                <div id="container-progresso-ctt" class="hidden space-y-3 animate-fade-in">
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px] font-bold text-gray-700">
+                            <span id="ctt-progresso-label">A ler e filtrar ficheiro...</span>
+                            <span id="ctt-progresso-percent">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                            <div id="ctt-progresso-bar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-150" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Cartões com Resultados do Processamento -->
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-xs">
+                        <div class="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                            <span id="stat-ctt-total-linhas" class="block text-sm font-black text-gray-800">0</span>
+                            <span class="text-[9px] font-bold text-gray-500 uppercase">Linhas Lidas</span>
+                        </div>
+                        <div class="bg-blue-50 p-2 rounded-lg border border-blue-200">
+                            <span id="stat-ctt-sintra" class="block text-sm font-black text-blue-600">0</span>
+                            <span class="text-[9px] font-bold text-blue-500 uppercase">Sintra</span>
+                        </div>
+                        <div class="bg-amber-50 p-2 rounded-lg border border-amber-200">
+                            <span id="stat-ctt-mafra" class="block text-sm font-black text-amber-600">0</span>
+                            <span class="text-[9px] font-bold text-amber-500 uppercase">Mafra</span>
+                        </div>
+                        <div class="bg-emerald-50 p-2 rounded-lg border border-emerald-200">
+                            <span id="stat-ctt-cp7-unicos" class="block text-sm font-black text-emerald-600">0</span>
+                            <span class="text-[9px] font-bold text-emerald-500 uppercase">CP7s Únicos</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pré-visualização das Ruas Processadas -->
+                <div id="container-preview-ctt" class="hidden space-y-1.5 animate-fade-in">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-600 block">Exemplo de Registos Identificados:</span>
+                    <div id="lista-preview-ctt" class="bg-gray-900 text-emerald-400 p-2.5 rounded-xl font-mono text-[10px] max-h-32 overflow-y-auto space-y-1">
+                        <!-- Gerado dinamicamente -->
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Rodapé do Modal com Botões de Ação -->
+            <div class="bg-gray-50 p-3.5 sm:p-4 border-t border-gray-200 flex items-center justify-between flex-wrap gap-2">
+                <button type="button" id="btn-cancelar-modal-ctt" 
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold px-3.5 py-2 rounded-lg text-xs transition cursor-pointer">
+                    Fechar
+                </button>
+
+                <div class="flex items-center space-x-2">
+                    <!-- Botão Processar Ficheiro -->
+                    <button type="button" id="btn-processar-ctt" disabled
+                            class="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-black px-4 py-2 rounded-lg text-xs shadow-xs flex items-center space-x-1.5 transition cursor-pointer">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>Processar Ficheiro</span>
+                    </button>
+
+                    <!-- Botão Descarregar Novo cp7-data.js -->
+                    <button type="button" id="btn-download-cp7-data" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white font-black px-4 py-2 rounded-lg text-xs shadow-xs flex items-center space-x-1.5 transition cursor-pointer">
+                        <i class="fa-solid fa-download"></i>
+                        <span>Descarregar cp7-data.js</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
     </div>
 
 </main>

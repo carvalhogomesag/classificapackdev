@@ -1,9 +1,9 @@
 /**
  * setores.js
- * Versão v77.1 - Módulo Integral de Bricks Dinâmicos, Mapeamento CP7 e Auditoria de Cobertura
+ * Versão v77.2 - Módulo Integral de Bricks Dinâmicos, Mapeamento CP7, Auditoria e Importador Oficial CTT
  * Faz: Gere a criação, agrupamento visual no mapa, edição e eliminação de Bricks personalizados;
  *      integra a base de dados de Códigos Postais (CP7), mapeamento manual de coordenadas,
- *      atribuição de motoristas e Auditoria de Saldo Zero de CP7s.
+ *      atribuição de motoristas, Auditoria de Saldo Zero e Motor de Processamento Oficial dos CTT (todos_cp.txt).
  * Depende de: ./geografia-data.js, ./cp7-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -138,7 +138,7 @@ async function sincronizarBricksFirestore() {
 }
 
 // =========================================================================
-// CONFIGURAÇÃO DOS EVENTOS DO CONSTRUTOR E MAPA
+// CONFIGURAÇÃO DOS EVENTOS DO CONSTRUTOR, MAPA E IMPORTADOR CTT
 // =========================================================================
 function configurarEventosConstrutor() {
     const btnIniciar = document.getElementById('btn-iniciar-criacao-brick');
@@ -148,6 +148,11 @@ function configurarEventosConstrutor() {
     const btnFiltroOrfaos = document.getElementById('btn-filtro-mapa-orfaos');
     const btnToggleMiniPinos = document.getElementById('btn-toggle-mini-pinos');
     const seletorConcelho = document.getElementById('select-concelho-setores');
+
+    // Botões do Importador CTT
+    const btnAbrirCtt = document.getElementById('btn-abrir-importador-ctt');
+    const btnFecharCtt = document.getElementById('btn-fechar-modal-ctt');
+    const btnCancelarCtt = document.getElementById('btn-cancelar-modal-ctt');
 
     if (seletorConcelho && !seletorConcelho.dataset.listenerAtivo) {
         seletorConcelho.value = concelhoAtivo;
@@ -233,6 +238,25 @@ function configurarEventosConstrutor() {
         btnToggleMiniPinos.dataset.bound = "true";
     }
 
+    // Modal Importador CTT
+    if (btnAbrirCtt && !btnAbrirCtt.dataset.bound) {
+        btnAbrirCtt.addEventListener('click', () => {
+            abrirModalImportadorCTT();
+        });
+        btnAbrirCtt.dataset.bound = "true";
+    }
+
+    if (btnFecharCtt && !btnFecharCtt.dataset.bound) {
+        btnFecharCtt.addEventListener('click', fecharModalImportadorCTT);
+        btnFecharCtt.dataset.bound = "true";
+    }
+
+    if (btnCancelarCtt && !btnCancelarCtt.dataset.bound) {
+        btnCancelarCtt.addEventListener('click', fecharModalImportadorCTT);
+        btnCancelarCtt.dataset.bound = "true";
+    }
+
+    configurarUploadCTT();
     renderColorPalette();
     popularSelectMotoristas();
 }
@@ -355,7 +379,6 @@ async function gravarBrickConstrutor() {
     const cp7Array = Array.from(selectedCP7s);
 
     if (editingBrickId) {
-        // Atualiza brick existente
         const index = customBricks.findIndex(b => b.id === editingBrickId);
         if (index !== -1) {
             customBricks[index].nome = nome;
@@ -367,7 +390,6 @@ async function gravarBrickConstrutor() {
             removerCP7sDeOutrosBricks(cp7Array, editingBrickId);
         }
     } else {
-        // Cria novo brick
         const novoBrick = {
             id: `brick_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`,
             nome: nome,
@@ -850,7 +872,6 @@ function desenharPinosMapa() {
 
         const brickDono = cpToBrickMap.get(cp7);
 
-        // Filtro: Apenas órfãos
         if (apenasOrfaos && brickDono && !isConstructorMode) continue;
 
         const isSelectedInConstructor = selectedCP7s.has(cp7);
@@ -860,7 +881,7 @@ function desenharPinosMapa() {
         bounds.extend(coords);
         totalPontos++;
 
-        let pinColor = "#9CA3AF"; // Cinzento se Livre
+        let pinColor = "#9CA3AF";
         let pinStroke = "#4B5563";
         let pinScale = 0.8;
 
@@ -974,6 +995,283 @@ function desenharPinosMapa() {
             }
         });
     }
+}
+
+// =========================================================================
+// MÓDULO IMPORTADOR OFICIAL DOS CTT (todos_cp.txt)
+// =========================================================================
+let cttFileSelected = null;
+let cttParsedResults = {
+    totalLinhas: 0,
+    sintraCount: 0,
+    mafraCount: 0,
+    cp7sUnicos: new Set(),
+    registos: [] // { cp7, rua, localidade, concelho }
+};
+
+function abrirModalImportadorCTT() {
+    const modal = document.getElementById('modal-importador-ctt');
+    if (modal) modal.classList.remove('hidden');
+}
+
+function fecharModalImportadorCTT() {
+    const modal = document.getElementById('modal-importador-ctt');
+    if (modal) modal.classList.add('hidden');
+}
+
+function configurarUploadCTT() {
+    const dropzone = document.getElementById('dropzone-ctt');
+    const inputFile = document.getElementById('input-file-ctt');
+    const badgeName = document.getElementById('ctt-file-selected-name');
+    const badgeContainer = document.getElementById('ctt-file-selected-badge');
+    const btnProcessar = document.getElementById('btn-processar-ctt');
+    const btnDownload = document.getElementById('btn-download-cp7-data');
+
+    if (dropzone && !dropzone.dataset.bound) {
+        dropzone.addEventListener('click', () => {
+            if (inputFile) inputFile.click();
+        });
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-indigo-600', 'bg-indigo-100/50');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-indigo-600', 'bg-indigo-100/50');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-indigo-600', 'bg-indigo-100/50');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleSelectedFileCTT(e.dataTransfer.files[0]);
+            }
+        });
+        dropzone.dataset.bound = "true";
+    }
+
+    if (inputFile && !inputFile.dataset.bound) {
+        inputFile.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleSelectedFileCTT(e.target.files[0]);
+            }
+        });
+        inputFile.dataset.bound = "true";
+    }
+
+    if (btnProcessar && !btnProcessar.dataset.bound) {
+        btnProcessar.addEventListener('click', () => {
+            iniciarProcessamentoFicheiroCTT();
+        });
+        btnProcessar.dataset.bound = "true";
+    }
+
+    if (btnDownload && !btnDownload.dataset.bound) {
+        btnDownload.addEventListener('click', () => {
+            descarregarNovoCp7DataJs();
+        });
+        btnDownload.dataset.bound = "true";
+    }
+}
+
+function handleSelectedFileCTT(file) {
+    cttFileSelected = file;
+    const badgeName = document.getElementById('ctt-file-selected-name');
+    const badgeContainer = document.getElementById('ctt-file-selected-badge');
+    const btnProcessar = document.getElementById('btn-processar-ctt');
+
+    if (badgeName) badgeName.textContent = file.name;
+    if (badgeContainer) badgeContainer.classList.remove('hidden');
+    if (btnProcessar) btnProcessar.removeAttribute('disabled');
+}
+
+async function iniciarProcessamentoFicheiroCTT() {
+    if (!cttFileSelected) {
+        alert("Por favor, selecione primeiro o ficheiro todos_cp.txt.");
+        return;
+    }
+
+    const chkSintra = document.getElementById('chk-filtro-sintra');
+    const chkMafra = document.getElementById('chk-filtro-mafra');
+    const aceitarSintra = chkSintra ? chkSintra.checked : true;
+    const aceitarMafra = chkMafra ? chkMafra.checked : true;
+
+    const containerProgresso = document.getElementById('container-progresso-ctt');
+    const labelProgresso = document.getElementById('ctt-progresso-label');
+    const percentProgresso = document.getElementById('ctt-progresso-percent');
+    const barProgresso = document.getElementById('ctt-progresso-bar');
+    const btnProcessar = document.getElementById('btn-processar-ctt');
+    const btnDownload = document.getElementById('btn-download-cp7-data');
+    const containerPreview = document.getElementById('container-preview-ctt');
+    const listaPreview = document.getElementById('lista-preview-ctt');
+
+    if (containerProgresso) containerProgresso.classList.remove('hidden');
+    if (btnProcessar) btnProcessar.setAttribute('disabled', 'true');
+
+    cttParsedResults = {
+        totalLinhas: 0,
+        sintraCount: 0,
+        mafraCount: 0,
+        cp7sUnicos: new Set(),
+        registos: []
+    };
+
+    const statTotal = document.getElementById('stat-ctt-total-linhas');
+    const statSintra = document.getElementById('stat-ctt-sintra');
+    const statMafra = document.getElementById('stat-ctt-mafra');
+    const statCp7 = document.getElementById('stat-ctt-cp7-unicos');
+
+    try {
+        const textContent = await cttFileSelected.text();
+        const linhas = textContent.split(/\r?\n/);
+        const totalLinhas = linhas.length;
+
+        let processadas = 0;
+        const chunkSize = 5000;
+
+        for (let i = 0; i < totalLinhas; i += chunkSize) {
+            const batch = linhas.slice(i, i + chunkSize);
+
+            for (let j = 0; j < batch.length; j++) {
+                const linha = batch[j].trim();
+                if (!linha) continue;
+
+                cttParsedResults.totalLinhas++;
+                const col = linha.split(';');
+
+                if (col.length < 16) continue;
+
+                const dd = col[0].trim();
+                const cc = col[1].trim();
+                const localidade = col[3] ? col[3].trim() : "";
+                const artTipo = col[5] ? col[5].trim() : "";
+                const priPrep = col[6] ? col[6].trim() : "";
+                const artTitulo = col[7] ? col[7].trim() : "";
+                const segPrep = col[8] ? col[8].trim() : "";
+                const artDesig = col[9] ? col[9].trim() : "";
+                const artLocal = col[10] ? col[10].trim() : "";
+                const cp4 = col[14] ? col[14].trim() : "";
+                const cp3 = col[15] ? col[15].trim() : "";
+                const cpalf = col[16] ? col[16].trim() : "";
+
+                if (!cp4 || !cp3) continue;
+
+                const isSintra = (dd === "11" && cc === "11");
+                const isMafra = (dd === "11" && cc === "09");
+
+                if ((isSintra && aceitarSintra) || (isMafra && aceitarMafra)) {
+                    const concelhoNome = isSintra ? "Sintra" : "Mafra";
+                    const cp7 = `${cp4}-${cp3}`;
+
+                    const ruaPartes = [artTipo, priPrep, artTitulo, segPrep, artDesig].filter(Boolean);
+                    let ruaCompleta = ruaPartes.join(' ').replace(/\s+/g, ' ').trim();
+                    if (artLocal) {
+                        ruaCompleta += ` (${artLocal})`;
+                    }
+
+                    cttParsedResults.cp7sUnicos.add(cp7);
+                    if (isSintra) cttParsedResults.sintraCount++;
+                    if (isMafra) cttParsedResults.mafraCount++;
+
+                    cttParsedResults.registos.push({
+                        cp7: cp7,
+                        rua: ruaCompleta || localidade || cpalf,
+                        localidade: localidade || cpalf,
+                        concelho: concelhoNome,
+                        cpalf: cpalf
+                    });
+                }
+            }
+
+            processadas += batch.length;
+            const pct = Math.min(100, Math.round((processadas / totalLinhas) * 100));
+
+            if (barProgresso) barProgresso.style.width = `${pct}%`;
+            if (percentProgresso) percentProgresso.textContent = `${pct}%`;
+            if (statTotal) statTotal.textContent = cttParsedResults.totalLinhas.toLocaleString('pt-PT');
+            if (statSintra) statSintra.textContent = cttParsedResults.sintraCount.toLocaleString('pt-PT');
+            if (statMafra) statMafra.textContent = cttParsedResults.mafraCount.toLocaleString('pt-PT');
+            if (statCp7) statCp7.textContent = cttParsedResults.cp7sUnicos.size.toLocaleString('pt-PT');
+
+            // Cede execução ao navegador para não travar a UI
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+
+        if (labelProgresso) {
+            labelProgresso.textContent = `✅ Processamento Concluído! Encontrados ${cttParsedResults.registos.length.toLocaleString('pt-PT')} registos oficiais.`;
+            labelProgresso.className = "text-emerald-700 font-black";
+        }
+
+        // Amostra de Preview
+        if (containerPreview && listaPreview) {
+            containerPreview.classList.remove('hidden');
+            const amostra = cttParsedResults.registos.slice(0, 15);
+            listaPreview.innerHTML = amostra.map(r => `
+                <div class="flex items-center justify-between border-b border-gray-800 pb-0.5">
+                    <span class="text-white font-bold">${r.cp7}</span>
+                    <span class="text-gray-300 truncate max-w-[280px]">${r.rua}</span>
+                    <span class="text-emerald-400 uppercase text-[9px]">${r.concelho}</span>
+                </div>
+            `).join('');
+        }
+
+        if (btnDownload) btnDownload.classList.remove('hidden');
+
+    } catch (err) {
+        console.error("[SETORES] Erro ao processar ficheiro CTT:", err);
+        alert("Ocorreu um erro ao processar o ficheiro. Verifique se o formato é válido.");
+    } finally {
+        if (btnProcessar) btnProcessar.removeAttribute('disabled');
+    }
+}
+
+function descarregarNovoCp7DataJs() {
+    if (cttParsedResults.registos.length === 0) {
+        alert("Nenhum registo processado para gerar o ficheiro.");
+        return;
+    }
+
+    // Agrupa registos por CP7
+    const databaseExport = {};
+
+    cttParsedResults.registos.forEach(r => {
+        if (!databaseExport[r.cp7]) {
+            // Se já tínhamos coordenadas calibradas na cache, preserva-as!
+            const coordsExistentes = cp7CoordsCache[r.cp7];
+            databaseExport[r.cp7] = {
+                rua: r.rua,
+                localidade: r.localidade,
+                concelho: r.concelho,
+                cpalf: r.cpalf,
+                lat: coordsExistentes ? coordsExistentes.lat : null,
+                lng: coordsExistentes ? coordsExistentes.lng : null
+            };
+        }
+    });
+
+    const fileHeader = `/**
+ * cp7-data.js
+ * Base Oficial de Códigos Postais (CP7) - Sintra e Mafra
+ * Gerado automaticamente a partir da Base Oficial dos CTT (todos_cp.txt)
+ * Data de Geração: ${new Date().toLocaleString('pt-PT')}
+ * Total de CP7s Únicos: ${Object.keys(databaseExport).length}
+ */
+
+export const CP7_DATABASE = ${JSON.stringify(databaseExport, null, 2)};
+`;
+
+    const blob = new Blob([fileHeader], { type: 'text/javascript;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'cp7-data.js';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    alert(`🎉 Ficheiro "cp7-data.js" gerado com sucesso!\n\nSubstitua o ficheiro js/cp7-data.js pelo ficheiro descarregado.`);
 }
 
 // =========================================================================
