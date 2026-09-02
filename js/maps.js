@@ -1,9 +1,11 @@
 /**
- * maps.js
- * Versão v74.0 - Com Pinos Laranjas, Borda Preta e Bouncing para Novas Paragens por Confirmar
+ * js/maps.js
+ * Versão v77.4 - Com Integração da Base Oficial CTT (CP7_DATABASE) como Verdade Absoluta,
+ *                Pinos Laranjas, Borda Preta e Bouncing para Novas Paragens por Confirmar
  * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos,
- *      dispersão em espiral, pino saltitante laranja com bordas pretas para novas adições e balões de informação).
- * Depende de: Nenhuns módulos (comunicação direta com o SDK do Google Maps).
+ *      dispersão em espiral, validação de CP7 contra a base oficial CTT, pino saltitante laranja com bordas
+ *      pretas para novas adições e balões de informação ricos).
+ * Depende de: Nenhuns módulos externos (comunicação direta com o SDK do Google Maps e window.CP7_DATABASE).
  */
 
 let googleMap = null;
@@ -14,14 +16,33 @@ let autocompleteWidgetTriagem = null;
 let googleInfoWindow = null;
 
 /**
+ * Utilitário interno: extrai o CP7 de uma lista de address_components do Google Maps
+ */
+function extrairCodigoPostalGoogle(components) {
+    if (!Array.isArray(components)) return "";
+    for (const comp of components) {
+        if (comp.types && comp.types.includes('postal_code')) {
+            const raw = comp.long_name || comp.short_name || "";
+            const clean = raw.replace(/\D/g, '');
+            if (clean.length === 7) {
+                return `${clean.substring(0, 4)}-${clean.substring(4, 7)}`;
+            }
+            return raw;
+        }
+    }
+    return "";
+}
+
+/**
  * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha (Rotas)
+ * Cruza o resultado com a base oficial CTT (window.CP7_DATABASE) para máxima precisão.
  */
 export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
 
     autocompleteWidget = new google.maps.places.Autocomplete(buscaMoradaInput, {
         componentRestrictions: { country: ['pt', 'es'] },
-        fields: ['geometry', 'formatted_address']
+        fields: ['geometry', 'formatted_address', 'address_components']
     });
 
     autocompleteWidget.addListener('place_changed', () => {
@@ -31,9 +52,32 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
             return;
         }
 
-        const lat = place.geometry.location.lat();
-        const lng = place.geometry.location.lng();
-        const address = place.formatted_address;
+        let lat = place.geometry.location.lat();
+        let lng = place.geometry.location.lng();
+        let address = place.formatted_address;
+
+        // Verificação contra a Verdade Absoluta CTT
+        const cp7 = extrairCodigoPostalGoogle(place.address_components);
+        if (cp7 && window.CP7_DATABASE && window.CP7_DATABASE[cp7]) {
+            const officialData = window.CP7_DATABASE[cp7];
+            const ruaOficial = officialData.rua || officialData.street || officialData.nome || "";
+            const locOficial = officialData.localidade || officialData.locality || "";
+            const concelhoOficial = officialData.concelho || officialData.municipality || "";
+
+            if (ruaOficial) {
+                // Se o Google não tiver rua detalhada ou houver divergência, padroniza com a artéria oficial CTT
+                if (!address.toLowerCase().includes(ruaOficial.toLowerCase())) {
+                    address = `${ruaOficial}, ${cp7} ${locOficial || concelhoOficial}`.trim();
+                }
+            }
+
+            // Se existirem coordenadas calibradas oficiais e o Place for genérico, assegura a precisão
+            if (typeof officialData.lat === 'number' && typeof officialData.lng === 'number' && officialData.lat !== 0 && officialData.lng !== 0) {
+                // Preserva a precisão da artéria calibrada
+                lat = officialData.lat;
+                lng = officialData.lng;
+            }
+        }
 
         callback({ id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5), lat, lng, address });
     });
@@ -41,6 +85,7 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
 
 /**
  * Inicializa o widget do Google Places Autocomplete para procurar Códigos Postais por moradas (Triagem)
+ * Garante enriquecimento oficial CTT em 0ms.
  */
 export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
@@ -57,20 +102,26 @@ export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback)
             return;
         }
 
-        let postalCode = "";
-        for (const component of place.address_components) {
-            if (component.types.includes('postal_code')) {
-                postalCode = component.long_name;
-                break;
+        let postalCode = extrairCodigoPostalGoogle(place.address_components);
+        let address = place.formatted_address || "";
+
+        // Se encontrou CP7, valida na base oficial CTT
+        if (postalCode && window.CP7_DATABASE && window.CP7_DATABASE[postalCode]) {
+            const officialData = window.CP7_DATABASE[postalCode];
+            const ruaOficial = officialData.rua || officialData.street || officialData.nome || "";
+            const locOficial = officialData.localidade || officialData.locality || "";
+            if (ruaOficial) {
+                address = `${ruaOficial}, ${postalCode} ${locOficial}`.trim();
             }
         }
 
-        callback(postalCode, place.formatted_address);
+        callback(postalCode, address);
     });
 }
 
 /**
  * Traduz coordenadas GPS obtidas pelo navegador numa morada legível (Reverse Geocoding)
+ * com enriquecimento automático pela base oficial CTT.
  */
 export function obterEnderecoPorGPSGoogle(lat, lng, callback) {
     if (typeof google === 'undefined' || !google.maps) {
@@ -81,10 +132,22 @@ export function obterEnderecoPorGPSGoogle(lat, lng, callback) {
     const geocoder = new google.maps.Geocoder();
     geocoder.geocode({ location: { lat: parseFloat(lat), lng: parseFloat(lng) } }, (results, status) => {
         if (status === "OK" && results[0]) {
+            let finalAddress = results[0].formatted_address;
+            const postalCode = extrairCodigoPostalGoogle(results[0].address_components);
+
+            if (postalCode && window.CP7_DATABASE && window.CP7_DATABASE[postalCode]) {
+                const officialData = window.CP7_DATABASE[postalCode];
+                const ruaOficial = officialData.rua || officialData.street || officialData.nome || "";
+                const locOficial = officialData.localidade || officialData.locality || "";
+                if (ruaOficial) {
+                    finalAddress = `${ruaOficial}, ${postalCode} ${locOficial}`.trim();
+                }
+            }
+
             callback({
                 lat: parseFloat(lat),
                 lng: parseFloat(lng),
-                address: results[0].formatted_address
+                address: finalAddress
             });
         } else {
             callback(null);
@@ -214,7 +277,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             map: googleMap,
             label: { 
                 text: (i + 1).toString(), 
-                color: p.isNewUnconfirmed ? "#FFFFFF" : "#FFFFFF", 
+                color: "#FFFFFF", 
                 fontWeight: "bold" 
             },
             title: p.address,

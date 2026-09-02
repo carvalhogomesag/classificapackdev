@@ -1,10 +1,11 @@
 /**
  * js/rotas.js
- * Versão v76.1 - Com Persistência Blindada Anti-Perda, Odómetro Reativo e Gestão de Rotas
+ * Versão v77.4 - Com Resolução de Verdade Absoluta CTT (CP7_DATABASE),
+ *                Persistência Blindada Anti-Perda, Odómetro Reativo e Gestão de Rotas
  * Faz: Gestão principal da aba de rotas, integrando os componentes 'rotas-geografia.js',
  *      'rotas-odometro.js', 'rotas-modais.js', 'rotas-inputs.js' e 'rotas-ui.js'.
- *      Garante persistência instantânea local e remota em todas as ações de condução/planeamento.
- * Depende de: ./maps.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js
+ *      Garante enriquecimento oficial por CP7 e persistência instantânea local e remota.
+ * Depende de: ./maps.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js, ./cp7-data.js
  */
 
 import { saveData } from './storage.js';
@@ -204,7 +205,7 @@ function calcularRotaVizinhoMaisProximoLocal() {
 }
 
 // =========================================================================
-// ADICIONAR NOVA AÇÃO (ENTREGA OU RECOLHA)
+// ADICIONAR NOVA AÇÃO (ENTREGA OU RECOLHA) COM VERDADE ABSOLUTA CTT
 // =========================================================================
 export async function processarAdicaoPorPostal() {
     const inputPostal = document.getElementById('rota-codigo-postal');
@@ -215,7 +216,7 @@ export async function processarAdicaoPorPostal() {
     if (!inputPostal || !btnAdicionar) return;
 
     const postalCodeVal = inputPostal.value.trim();
-    const moradaVal = inputMorada ? inputMorada.value.trim() : "";
+    let moradaVal = inputMorada ? inputMorada.value.trim() : "";
 
     const cleanZip = postalCodeVal.replace(/\D/g, '');
     if (cleanZip.length !== 7) {
@@ -230,19 +231,67 @@ export async function processarAdicaoPorPostal() {
     btnAdicionar.disabled = true;
 
     try {
-        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                postalCode: formattedZip,
-                address: moradaVal
-            })
-        });
+        // 1. Consulta à Verdade Absoluta CTT (CP7_DATABASE)
+        const cp7Entry = (window.CP7_DATABASE && window.CP7_DATABASE[formattedZip]) ? window.CP7_DATABASE[formattedZip] : null;
+        let ruaOficial = "";
+        let localidadeOficial = "";
+        let concelhoOficial = obterConcelhoPorCodigoPostal(formattedZip) || "";
+        let calibratedLat = null;
+        let calibratedLng = null;
 
-        const data = await response.json();
+        if (cp7Entry) {
+            ruaOficial = cp7Entry.rua || cp7Entry.street || cp7Entry.nome || "";
+            localidadeOficial = cp7Entry.localidade || cp7Entry.locality || "";
+            concelhoOficial = cp7Entry.concelho || cp7Entry.municipality || concelhoOficial;
+            
+            if (typeof cp7Entry.lat === 'number' && typeof cp7Entry.lng === 'number' && cp7Entry.lat !== 0 && cp7Entry.lng !== 0) {
+                calibratedLat = cp7Entry.lat;
+                calibratedLng = cp7Entry.lng;
+            }
+        }
 
-        if (!response.ok) {
-            throw new Error(data.error || "Ocorreu uma falha ao geolocalizar.");
+        // Se o utilizador não escreveu uma morada detalhada, usamos a oficial dos CTT
+        if (!moradaVal && ruaOficial) {
+            moradaVal = ruaOficial;
+        }
+
+        // Monta o endereço de consulta enriquecido com o Concelho para evitar desvios geográficos
+        let enderecoParaGeocode = moradaVal;
+        if (concelhoOficial && !enderecoParaGeocode.toLowerCase().includes(concelhoOficial.toLowerCase())) {
+            enderecoParaGeocode = `${enderecoParaGeocode}, ${concelhoOficial}`;
+        }
+
+        let finalLat = calibratedLat;
+        let finalLng = calibratedLng;
+        let finalAddress = moradaVal ? `${moradaVal}, ${formattedZip} ${localidadeOficial || concelhoOficial}`.trim() : `${formattedZip} ${localidadeOficial || concelhoOficial}`.trim();
+
+        // 2. Chamada ao Roteirizador / Geocoder com contingência
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    postalCode: formattedZip,
+                    address: enderecoParaGeocode
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                finalLat = data.lat;
+                finalLng = data.lng;
+                finalAddress = data.address || finalAddress;
+            } else if (!finalLat || !finalLng) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || "Ocorreu uma falha ao geolocalizar este código postal.");
+            }
+        } catch (apiErr) {
+            // Se a API falhou mas temos coordenadas calibradas dos CTT no CP7_DATABASE, usamos com sucesso!
+            if (finalLat && finalLng) {
+                console.warn("[CP7-DATA] Backend inacessível. Coordenadas calibradas CTT aplicadas como contingência:", finalAddress);
+            } else {
+                throw apiErr;
+            }
         }
 
         const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
@@ -253,9 +302,9 @@ export async function processarAdicaoPorPostal() {
 
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
-            lat: data.lat,
-            lng: data.lng,
-            address: data.address,
+            lat: finalLat,
+            lng: finalLng,
+            address: finalAddress,
             status: "Pendente",
             observation: "",
             priority: false,
@@ -336,7 +385,7 @@ export async function processarAdicaoPorPostal() {
 
     } catch (err) {
         console.error("Erro na geocodificação:", err);
-        alert(`Erro: ${err.message}`);
+        alert(`Erro ao geolocalizar: ${err.message}`);
     } finally {
         btnAdicionar.innerHTML = '<i class="fa-solid fa-plus"></i> <span>Adicionar Pacote</span>';
         btnAdicionar.disabled = false;
