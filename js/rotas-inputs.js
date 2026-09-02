@@ -1,9 +1,10 @@
 /**
  * js/rotas-inputs.js
- * Versão v77.5 - Módulo de Formatação de Inputs, Autocomplete, Filtro Inteligente de Artérias CTT
+ * Versão v77.6 - Módulo de Formatação de Inputs, Autocomplete, Filtro Inteligente Multi-Artérias CTT
  * Faz: Controla a formatação e máscara de Código Postal (CP7), botão de prefixo rápido,
- *      filtro instantâneo de Ruas/Praças/Avenidas por Código Postal da base oficial CTT (CP7_DATABASE),
- *      lista suspensa inteligente com teclado e clique, e integração com Google Places.
+ *      filtro instantâneo de Ruas/Praças/Avenidas por Código Postal da base oficial CTT (CP7_DATABASE)
+ *      com suporte a múltiplas artérias por CP7 (relação 1-N), supressão inteligente do popup Google Places
+ *      e envio de morada completa oficial para a navegação GPS.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -16,7 +17,7 @@ let itemSugeridoAtivoIndex = -1;
 
 /**
  * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
- * Retorna os dados oficiais da rua, localidade, concelho e coordenadas (se disponíveis).
+ * Retorna os dados oficiais da rua/ruas, localidade, concelho e coordenadas (se disponíveis).
  */
 export function consultarDadosOficiaisCP7(cp7) {
     if (!cp7 || typeof cp7 !== 'string') return null;
@@ -28,7 +29,7 @@ export function consultarDadosOficiaisCP7(cp7) {
 }
 
 /**
- * Filtra e retorna todas as artérias (Ruas, Praças, Largos, etc.) existentes
+ * Filtra e retorna TODAS as artérias (Ruas, Praças, Largos, etc.) existentes
  * para um dado Código Postal (ou prefixo de 4 dígitos) na base oficial CTT.
  */
 export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
@@ -39,14 +40,18 @@ export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
     const resultados = [];
     const chavesVistas = new Set();
 
-    const prefixo4 = cleanCP.replace(/\D/g, '').substring(0, 4);
-    const cp7Formatado = cleanCP.length >= 8 ? cleanCP : (cleanCP.length === 7 && !cleanCP.includes('-') ? `${cleanCP.substring(0,4)}-${cleanCP.substring(4,7)}` : cleanCP);
+    const numerosApenas = cleanCP.replace(/\D/g, '');
+    const prefixo4 = numerosApenas.substring(0, 4);
+    const cp7Formatado = cleanCP.length >= 8 ? cleanCP : (numerosApenas.length === 7 ? `${numerosApenas.substring(0,4)}-${numerosApenas.substring(4,7)}` : cleanCP);
 
-    // 1. Procura se há registo direto no CP7
+    // 1. Procura correspondência exata do CP7
     if (CP7_DATABASE[cp7Formatado]) {
         const item = CP7_DATABASE[cp7Formatado];
-        const ruas = Array.isArray(item.ruas) ? item.ruas : [item.rua || item.street || item.nome || ""];
-        ruas.filter(Boolean).forEach(r => {
+        const listaRuas = Array.isArray(item.ruas) && item.ruas.length > 0 
+            ? item.ruas 
+            : [item.rua || item.street || item.nome || ""];
+
+        listaRuas.filter(Boolean).forEach(r => {
             const key = `${r.toLowerCase()}_${item.localidade || ''}`;
             if (!chavesVistas.has(key)) {
                 chavesVistas.add(key);
@@ -62,18 +67,21 @@ export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
         });
     }
 
-    // 2. Procura em todos os CP7s que partilhem o mesmo Código Postal ou prefixo de 4 dígitos
+    // 2. Procura em todos os CP7s que partilhem o mesmo código ou prefixo de 4 dígitos
     for (const [cp, item] of Object.entries(CP7_DATABASE)) {
         if (!item) continue;
         const matchesCP = cleanCP ? (cp === cleanCP || (prefixo4 && cp.startsWith(prefixo4))) : true;
         if (matchesCP) {
-            const rua = (item.rua || item.street || item.nome || "").trim();
-            if (rua) {
-                const key = `${rua.toLowerCase()}_${item.localidade || ''}`;
+            const listaRuas = Array.isArray(item.ruas) && item.ruas.length > 0 
+                ? item.ruas 
+                : [item.rua || item.street || item.nome || ""];
+
+            listaRuas.filter(Boolean).forEach(r => {
+                const key = `${r.toLowerCase()}_${item.localidade || ''}`;
                 if (!chavesVistas.has(key)) {
                     chavesVistas.add(key);
                     resultados.push({
-                        rua: rua,
+                        rua: r.trim(),
                         localidade: item.localidade || item.cpalf || "",
                         concelho: item.concelho || obterConcelhoPorCodigoPostal(cp) || "",
                         cp7: cp,
@@ -81,7 +89,7 @@ export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
                         lng: item.lng
                     });
                 }
-            }
+            });
         }
     }
 
@@ -91,14 +99,35 @@ export function obterRuasPorCodigoPostal(codigoPostal, termoBusca = "") {
             item.rua.toLowerCase().includes(termo) || 
             item.localidade.toLowerCase().includes(termo) ||
             item.cp7.toLowerCase().includes(termo)
-        ).slice(0, 35);
+        ).slice(0, 40);
     }
 
-    return resultados.slice(0, 35);
+    return resultados.slice(0, 40);
 }
 
 /**
- * Cria ou obtém o contentor da lista suspensa de sugestões de moradas oficiais
+ * Controla a visibilidade do popup nativo do Google Places (.pac-container)
+ * para que não interfira nem mostre locais de Cascais/Trafaria quando há um CP ativo.
+ */
+function alternarVisibilidadeGooglePlaces(mostrar) {
+    const pacContainers = document.querySelectorAll('.pac-container');
+    pacContainers.forEach(container => {
+        if (!mostrar) {
+            container.style.display = 'none';
+            container.style.visibility = 'hidden';
+            container.style.opacity = '0';
+            container.style.pointerEvents = 'none';
+        } else {
+            container.style.display = '';
+            container.style.visibility = '';
+            container.style.opacity = '';
+            container.style.pointerEvents = '';
+        }
+    });
+}
+
+/**
+ * Cria ou obtém o contentor da lista suspensa de sugestões de moradas oficiais CTT
  */
 function obterContentorSugestoesMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -106,17 +135,15 @@ function obterContentorSugestoesMorada() {
 
     let dropdown = document.getElementById('dropdown-sugestoes-ruas-ctt');
     if (!dropdown) {
-        // Assegura que o container pai tem posicionamento relativo
         if (inputMorada.parentElement) {
             inputMorada.parentElement.classList.add('relative');
         }
 
         dropdown = document.createElement('div');
         dropdown.id = 'dropdown-sugestoes-ruas-ctt';
-        dropdown.className = 'absolute z-[9999] left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-2xl max-h-64 overflow-y-auto divide-y divide-gray-100 hidden transition-all';
+        dropdown.className = 'absolute z-[99999] left-0 right-0 top-full mt-1 bg-white border border-blue-200 rounded-xl shadow-2xl max-h-64 overflow-y-auto divide-y divide-gray-100 hidden transition-all';
         inputMorada.parentElement.appendChild(dropdown);
 
-        // Fecha a lista ao clicar fora
         document.addEventListener('click', (e) => {
             if (!inputMorada.contains(e.target) && !dropdown.contains(e.target)) {
                 fecharSugestoesRuas();
@@ -136,6 +163,11 @@ export function fecharSugestoesRuas() {
         dropdown.innerHTML = '';
         itemSugeridoAtivoIndex = -1;
     }
+    // Restaura a visibilidade do Google Places apenas se não houver CP ativo
+    const inputCP = document.getElementById('rota-codigo-postal');
+    if (!inputCP || inputCP.value.trim().length < 4) {
+        alternarVisibilidadeGooglePlaces(true);
+    }
 }
 
 /**
@@ -154,6 +186,9 @@ export function renderizarSugestoesRuas(termoFiltro = "") {
         return;
     }
 
+    // Silencia imediatamente o popup nativo do Google Places
+    alternarVisibilidadeGooglePlaces(false);
+
     const ruasCorrespondentes = obterRuasPorCodigoPostal(cpAtual, termoFiltro);
 
     if (ruasCorrespondentes.length === 0) {
@@ -163,16 +198,16 @@ export function renderizarSugestoesRuas(termoFiltro = "") {
 
     itemSugeridoAtivoIndex = -1;
     dropdown.innerHTML = `
-        <div class="px-3 py-1.5 bg-blue-50/80 border-b border-blue-100 flex items-center justify-between text-[11px] font-bold text-blue-700">
-            <span><i class="fa-solid fa-map-location-dot mr-1 text-blue-500"></i> Ruas Oficiais dos CTT (${ruasCorrespondentes.length})</span>
-            <span class="text-[10px] text-gray-500 font-normal">Clique para preencher</span>
+        <div class="px-3 py-1.5 bg-blue-50/90 border-b border-blue-100 flex items-center justify-between text-[11px] font-bold text-blue-800">
+            <span><i class="fa-solid fa-map-location-dot mr-1 text-blue-600"></i> Artérias Oficiais CTT (${ruasCorrespondentes.length})</span>
+            <span class="text-[10px] text-gray-500 font-normal">Clique para selecionar</span>
         </div>
     `;
 
     ruasCorrespondentes.forEach((item, idx) => {
         const itemBtn = document.createElement('button');
         itemBtn.type = 'button';
-        itemBtn.className = 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/70 focus:bg-blue-100 transition-colors flex items-center justify-between group cursor-pointer border-none bg-transparent';
+        itemBtn.className = 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/80 focus:bg-blue-100 transition-colors flex items-center justify-between group cursor-pointer border-none bg-transparent';
         itemBtn.dataset.index = idx;
 
         itemBtn.innerHTML = `
@@ -183,7 +218,7 @@ export function renderizarSugestoesRuas(termoFiltro = "") {
                     <span class="text-[10px] text-gray-500 ml-1">(${item.localidade || item.concelho})</span>
                 </div>
             </div>
-            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 group-hover:bg-blue-600 group-hover:text-white transition-all ml-2 shrink-0">
+            <span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 group-hover:bg-blue-600 group-hover:text-white transition-all ml-2 shrink-0 font-mono">
                 ${item.cp7}
             </span>
         `;
@@ -212,7 +247,7 @@ function selecionarRuaSugerida(item) {
     }
 
     if (inputMorada) {
-        // Preenche com o nome da rua seguido de vírgula para inserção imediata do número
+        // Preenche o nome da artéria com vírgula para inserção imediata do número da porta
         inputMorada.value = `${item.rua}, `;
         inputMorada.focus();
         const pos = inputMorada.value.length;
@@ -233,7 +268,6 @@ export function aplicarPrefixoNoCampo(prefixo) {
     const comprimentoTexto = inputCP.value.length;
     inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
 
-    // Abre de imediato as ruas disponíveis para aquele prefixo
     setTimeout(() => {
         renderizarSugestoesRuas("");
     }, 50);
@@ -276,7 +310,6 @@ export function configurarTeclasEnterAdicao() {
             const dropdown = document.getElementById('dropdown-sugestoes-ruas-ctt');
             const dropdownAberto = dropdown && !dropdown.classList.contains('hidden');
 
-            // Se o dropdown de sugestões estiver aberto e o utilizador pressionou Enter
             if (dropdownAberto) {
                 const items = dropdown.querySelectorAll('button[data-index]');
                 if (items.length > 0) {
@@ -315,7 +348,7 @@ export function configurarTeclasEnterAdicao() {
                     items.forEach((btn, idx) => {
                         btn.className = idx === itemSugeridoAtivoIndex 
                             ? 'w-full text-left px-3 py-2 text-xs bg-blue-100 transition-colors flex items-center justify-between font-bold text-blue-800 cursor-pointer border-none' 
-                            : 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/70 transition-colors flex items-center justify-between cursor-pointer border-none bg-transparent';
+                            : 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/80 transition-colors flex items-center justify-between cursor-pointer border-none bg-transparent';
                     });
                     return;
                 } else if (e.key === 'ArrowUp') {
@@ -324,7 +357,7 @@ export function configurarTeclasEnterAdicao() {
                     items.forEach((btn, idx) => {
                         btn.className = idx === itemSugeridoAtivoIndex 
                             ? 'w-full text-left px-3 py-2 text-xs bg-blue-100 transition-colors flex items-center justify-between font-bold text-blue-800 cursor-pointer border-none' 
-                            : 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/70 transition-colors flex items-center justify-between cursor-pointer border-none bg-transparent';
+                            : 'w-full text-left px-3 py-2 text-xs hover:bg-blue-50/80 transition-colors flex items-center justify-between cursor-pointer border-none bg-transparent';
                     });
                     return;
                 } else if (e.key === 'Escape') {
@@ -341,7 +374,7 @@ export function configurarTeclasEnterAdicao() {
 
 /**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
- * e dispara a abertura das sugestões oficiais de ruas CTT
+ * e dispara o filtro de artérias oficiais CTT silenciando o Google Places
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -359,24 +392,27 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
-        // Se já digitou os 4 primeiros dígitos, exibe ou atualiza as sugestões de ruas daquele CP
         if (valor.length >= 4) {
+            alternarVisibilidadeGooglePlaces(false);
             const termoMorada = inputMorada ? inputMorada.value : "";
             renderizarSugestoesRuas(termoMorada);
         } else {
             fecharSugestoesRuas();
+            alternarVisibilidadeGooglePlaces(true);
         }
     });
 
     if (inputMorada) {
-        // Ao digitar no campo da morada, filtra as ruas correspondentes àquele CP
         inputMorada.addEventListener('input', () => {
-            renderizarSugestoesRuas(inputMorada.value);
+            if (inputCP.value.length >= 4) {
+                alternarVisibilidadeGooglePlaces(false);
+                renderizarSugestoesRuas(inputMorada.value);
+            }
         });
 
-        // Ao focar no campo da morada, abre a lista de ruas se houver CP digitado
         inputMorada.addEventListener('focus', () => {
             if (inputCP.value.length >= 4) {
+                alternarVisibilidadeGooglePlaces(false);
                 renderizarSugestoesRuas(inputMorada.value);
             }
         });
@@ -401,6 +437,7 @@ export function configurarEscutaCodigoPostalParaLimites() {
             const circuloMafra = new google.maps.Circle({ center: centroMafra, radius: 20000 });
             autocompleteInstancia.setBounds(circuloMafra.getBounds());
             autocompleteInstancia.setOptions({ strictBounds: false });
+            alternarVisibilidadeGooglePlaces(true);
             return;
         }
 
@@ -465,7 +502,6 @@ export function inicializarAutocompleteMorada() {
             const cpDigitado = inputCP ? inputCP.value.trim() : "";
             const padraoCP7 = /^\d{4}-\d{3}$/;
 
-            // Se o estafeta já digitou um CP7 completo válido, respeitamos como Verdade Absoluta
             if (padraoCP7.test(cpDigitado)) {
                 return;
             }

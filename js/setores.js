@@ -1,9 +1,10 @@
 /**
- * setores.js
- * Versão v77.2 - Módulo Integral de Bricks Dinâmicos, Mapeamento CP7, Auditoria e Importador Oficial CTT
+ * js/setores.js
+ * Versão v77.5 - Módulo Integral de Bricks Dinâmicos, Mapeamento CP7, Auditoria e Importador Oficial CTT
  * Faz: Gere a criação, agrupamento visual no mapa, edição e eliminação de Bricks personalizados;
- *      integra a base de dados de Códigos Postais (CP7), mapeamento manual de coordenadas,
- *      atribuição de motoristas, Auditoria de Saldo Zero e Motor de Processamento Oficial dos CTT (todos_cp.txt).
+ *      integra a base de dados de Códigos Postais (CP7) com suporte a MÚLTIPLAS RUAS por Código Postal (relação 1-N),
+ *      mapeamento manual de coordenadas, atribuição de motoristas, Auditoria de Saldo Zero
+ *      e Motor de Processamento Oficial dos CTT (todos_cp.txt).
  * Depende de: ./geografia-data.js, ./cp7-data.js, ./storage.js, ./firebase-init.js
  */
 
@@ -998,7 +999,7 @@ function desenharPinosMapa() {
 }
 
 // =========================================================================
-// MÓDULO IMPORTADOR OFICIAL DOS CTT (todos_cp.txt)
+// MÓDULO IMPORTADOR OFICIAL DOS CTT (todos_cp.txt) COM MULTI-RUAS (1-N)
 // =========================================================================
 let cttFileSelected = null;
 let cttParsedResults = {
@@ -1006,7 +1007,7 @@ let cttParsedResults = {
     sintraCount: 0,
     mafraCount: 0,
     cp7sUnicos: new Set(),
-    registos: [] // { cp7, rua, localidade, concelho }
+    registos: [] // { cp7, rua, localidade, concelho, cpalf }
 };
 
 function abrirModalImportadorCTT() {
@@ -1162,7 +1163,9 @@ async function iniciarProcessamentoFicheiroCTT() {
 
                 if ((isSintra && aceitarSintra) || (isMafra && aceitarMafra)) {
                     const concelhoNome = isSintra ? "Sintra" : "Mafra";
-                    const cp7 = `${cp4}-${cp3}`;
+                    // Garante que o CP3 tenha sempre 3 dígitos (ex: "95" vira "095")
+                    const cp3Formatado = cp3.padStart(3, '0');
+                    const cp7 = `${cp4}-${cp3Formatado}`;
 
                     const ruaPartes = [artTipo, priPrep, artTitulo, segPrep, artDesig].filter(Boolean);
                     let ruaCompleta = ruaPartes.join(' ').replace(/\s+/g, ' ').trim();
@@ -1194,12 +1197,11 @@ async function iniciarProcessamentoFicheiroCTT() {
             if (statMafra) statMafra.textContent = cttParsedResults.mafraCount.toLocaleString('pt-PT');
             if (statCp7) statCp7.textContent = cttParsedResults.cp7sUnicos.size.toLocaleString('pt-PT');
 
-            // Cede execução ao navegador para não travar a UI
             await new Promise(resolve => setTimeout(resolve, 0));
         }
 
         if (labelProgresso) {
-            labelProgresso.textContent = `✅ Processamento Concluído! Encontrados ${cttParsedResults.registos.length.toLocaleString('pt-PT')} registos oficiais.`;
+            labelProgresso.textContent = `✅ Processamento Concluído! Encontradas ${cttParsedResults.registos.length.toLocaleString('pt-PT')} artérias oficiais em ${cttParsedResults.cp7sUnicos.size.toLocaleString('pt-PT')} Códigos Postais únicos.`;
             labelProgresso.className = "text-emerald-700 font-black";
         }
 
@@ -1209,7 +1211,7 @@ async function iniciarProcessamentoFicheiroCTT() {
             const amostra = cttParsedResults.registos.slice(0, 15);
             listaPreview.innerHTML = amostra.map(r => `
                 <div class="flex items-center justify-between border-b border-gray-800 pb-0.5">
-                    <span class="text-white font-bold">${r.cp7}</span>
+                    <span class="text-white font-bold font-mono">${r.cp7}</span>
                     <span class="text-gray-300 truncate max-w-[280px]">${r.rua}</span>
                     <span class="text-emerald-400 uppercase text-[9px]">${r.concelho}</span>
                 </div>
@@ -1232,30 +1234,35 @@ function descarregarNovoCp7DataJs() {
         return;
     }
 
-    // Agrupa registos por CP7
+    // Agrupa TODAS as artérias (1-N) por Código Postal (CP7)
     const databaseExport = {};
 
     cttParsedResults.registos.forEach(r => {
         if (!databaseExport[r.cp7]) {
-            // Se já tínhamos coordenadas calibradas na cache, preserva-as!
             const coordsExistentes = cp7CoordsCache[r.cp7];
             databaseExport[r.cp7] = {
                 rua: r.rua,
+                ruas: [r.rua],
                 localidade: r.localidade,
                 concelho: r.concelho,
                 cpalf: r.cpalf,
                 lat: coordsExistentes ? coordsExistentes.lat : null,
                 lng: coordsExistentes ? coordsExistentes.lng : null
             };
+        } else {
+            if (r.rua && !databaseExport[r.cp7].ruas.includes(r.rua)) {
+                databaseExport[r.cp7].ruas.push(r.rua);
+            }
         }
     });
 
     const fileHeader = `/**
  * cp7-data.js
- * Base Oficial de Códigos Postais (CP7) - Sintra e Mafra
+ * Base Oficial de Códigos Postais e Artérias (CP7) - Sintra e Mafra
  * Gerado automaticamente a partir da Base Oficial dos CTT (todos_cp.txt)
  * Data de Geração: ${new Date().toLocaleString('pt-PT')}
  * Total de CP7s Únicos: ${Object.keys(databaseExport).length}
+ * Total de Artérias Mapeadas: ${cttParsedResults.registos.length}
  */
 
 export const CP7_DATABASE = ${JSON.stringify(databaseExport, null, 2)};
@@ -1271,7 +1278,7 @@ export const CP7_DATABASE = ${JSON.stringify(databaseExport, null, 2)};
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    alert(`🎉 Ficheiro "cp7-data.js" gerado com sucesso!\n\nSubstitua o ficheiro js/cp7-data.js pelo ficheiro descarregado.`);
+    alert(`🎉 Ficheiro "cp7-data.js" gerado com sucesso!\n\nAgora cada Código Postal contém TODAS as suas artérias associadas.\nSubstitua o ficheiro js/cp7-data.js pelo ficheiro descarregado.`);
 }
 
 // =========================================================================
