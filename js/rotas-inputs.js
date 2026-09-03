@@ -1,8 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.1 - Transporte Automático de CP7 + Cidade para o Google Maps e Preview Multi-Linha
- * Faz: Ao digitar o CP7, transporta imediatamente o Código Postal + Concelho para o campo do Google Places,
- *      posiciona o cursor no início para digitação da rua/porta, ancora geograficamente e exibe preview em 2 linhas.
+ * Versão v78.2 - Gestão de Inputs de Rota com Google Places Autocomplete e Cursor Fluido
+ * Faz: Ao digitar o CP7, transporta o Código Postal para o campo do Google Places com cursor no FIM,
+ *      limpa e atualiza automaticamente ao trocar de código postal, e posiciona o preview abaixo da linha inteira.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -11,6 +11,7 @@ import { obterConcelhoPorCodigoPostal } from './rotas-geografia.js';
 import { CP7_DATABASE } from './cp7-data.js';
 
 let autocompleteInstancia = null;
+let ultimoCpPreenchido = "";
 
 /**
  * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
@@ -59,27 +60,27 @@ export function formatarMoradaLegivel(moradaCompleta, codigoPostal = "") {
 }
 
 /**
- * Cria ou atualiza o Card de Pré-visualização Multi-Linha abaixo do campo de morada
+ * Cria ou atualiza o Card de Pré-visualização Multi-Linha abaixo da linha inteira de inputs
  */
 export function atualizarPreviewMorada(moradaTexto, codigoPostalTexto = "") {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
+    // Encontra o contentor exterior para não ficar espremido no flexbox do microfone
+    const containerWrapper = inputMorada.closest('.space-y-1') || inputMorada.parentElement.parentElement || inputMorada.parentElement;
+
     let previewContainer = document.getElementById('card-preview-morada-selecionada');
     if (!previewContainer) {
-        if (inputMorada.parentElement) {
-            inputMorada.parentElement.classList.add('relative');
-        }
         previewContainer = document.createElement('div');
         previewContainer.id = 'card-preview-morada-selecionada';
-        previewContainer.className = 'mt-1.5 p-2 bg-blue-50/70 border border-blue-200 rounded-xl transition-all hidden';
-        inputMorada.parentElement.appendChild(previewContainer);
+        previewContainer.className = 'mt-2 p-2.5 bg-blue-50/80 border border-blue-200 rounded-xl shadow-xs transition-all hidden w-full';
+        containerWrapper.appendChild(previewContainer);
     }
 
     const textoVal = moradaTexto || inputMorada.value.trim();
     const cpVal = codigoPostalTexto || document.getElementById('rota-codigo-postal')?.value.trim() || "";
 
-    if (!textoVal && !cpVal) {
+    if (!textoVal || textoVal.length < 5) {
         previewContainer.classList.add('hidden');
         previewContainer.innerHTML = '';
         return;
@@ -91,18 +92,18 @@ export function atualizarPreviewMorada(moradaTexto, codigoPostalTexto = "") {
         <div class="flex items-start justify-between gap-2">
             <div class="flex-1 min-w-0">
                 <div class="text-xs font-black text-gray-900 leading-snug break-words">
-                    <i class="fa-solid fa-location-dot text-blue-600 mr-1"></i>
+                    <i class="fa-solid fa-location-dot text-blue-600 mr-1.5"></i>
                     <span>${linhaPrincipal || textoVal}</span>
                 </div>
                 ${linhaSecundaria ? `
-                    <div class="text-[11px] font-bold text-blue-700 leading-tight mt-0.5 break-words">
+                    <div class="text-[11px] font-bold text-blue-700 leading-tight mt-1 break-words">
                         <i class="fa-solid fa-map-pin text-blue-400 mr-1 text-[10px]"></i>
                         <span>${linhaSecundaria}</span>
                     </div>
                 ` : ''}
             </div>
             <button type="button" onclick="document.getElementById('card-preview-morada-selecionada')?.classList.add('hidden')"
-                    class="text-gray-400 hover:text-gray-600 p-0.5 text-xs cursor-pointer border-none bg-transparent" title="Fechar visualização">
+                    class="text-gray-400 hover:text-gray-600 p-1 text-xs cursor-pointer border-none bg-transparent" title="Fechar visualização">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
@@ -186,7 +187,7 @@ export function configurarTeclasEnterAdicao() {
 
 /**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
- * e transporta automaticamente o CP7 + Concelho para a barra do Google Places
+ * e transporta o CP7 de forma limpa para a barra do Google Places com cursor no FIM
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -204,42 +205,39 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
+        // SE O UTILIZADOR APAGAR OU MUDAR O CÓDIGO POSTAL:
+        if (numerosApenas.length < 4) {
+            ultimoCpPreenchido = "";
+            if (inputMorada && /^\d{4}/.test(inputMorada.value.trim())) {
+                inputMorada.value = "";
+                const preview = document.getElementById('card-preview-morada-selecionada');
+                if (preview) preview.classList.add('hidden');
+            }
+            return;
+        }
+
         // QUANDO DIGITA OS 7 DÍGITOS COMPLETOS:
         if (numerosApenas.length === 7) {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
-            const concelho = obterConcelhoPorCodigoPostal(formattedZip) || "Sintra";
-            const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
-            const localidade = (dadosCtt && (dadosCtt.localidade || dadosCtt.cpalf)) 
-                ? (dadosCtt.localidade || dadosCtt.cpalf) 
-                : concelho;
 
-            if (inputMorada) {
-                // Se o campo de morada estiver vazio ou contiver apenas um CP anterior
-                const valorAtual = inputMorada.value.trim();
-                const isApenasCP = !valorAtual || /^\d{4}-\d{3}/.test(valorAtual) || /^\d{4}/.test(valorAtual);
+            if (formattedZip !== ultimoCpPreenchido && inputMorada) {
+                ultimoCpPreenchido = formattedZip;
+                
+                // Preenche o campo de morada com o CP7 e coloca o cursor no FIM para digitação imediata
+                inputMorada.value = `${formattedZip} `;
+                inputMorada.focus();
+                const pos = inputMorada.value.length;
+                inputMorada.setSelectionRange(pos, pos);
 
-                if (isApenasCP) {
-                    // Preenche com o CP7 e Cidade/Localidade
-                    inputMorada.value = `${formattedZip} ${localidade}`;
-                    
-                    // Foca o campo de morada e coloca o cursor no INÍCIO para digitar a rua
-                    inputMorada.focus();
-                    inputMorada.setSelectionRange(0, 0);
-
-                    // Dispara evento para atualizar o preview
-                    atualizarPreviewMorada(inputMorada.value, formattedZip);
-                }
+                // Dispara o evento de input para o Google Places iniciar a pesquisa
+                inputMorada.dispatchEvent(new Event('input', { bubbles: true }));
             }
-        }
-
-        if (inputMorada && inputMorada.value) {
-            atualizarPreviewMorada(inputMorada.value, inputCP.value);
         }
     });
 
     if (inputMorada) {
         inputMorada.addEventListener('input', () => {
-            if (inputMorada.value.trim().length > 3) {
+            if (inputMorada.value.trim().length > 6) {
                 atualizarPreviewMorada(inputMorada.value, inputCP.value);
             } else {
                 const preview = document.getElementById('card-preview-morada-selecionada');
@@ -345,7 +343,7 @@ export function inicializarAutocompleteMorada() {
                 }
             }
 
-            // Renderiza o card de pré-visualização em 2 linhas estruturadas
+            // Renderiza o card de pré-visualização em 2 linhas estruturadas abaixo da linha
             atualizarPreviewMorada(moradaFormatada, inputCP ? inputCP.value : "");
         });
 
