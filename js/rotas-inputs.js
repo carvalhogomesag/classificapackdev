@@ -1,9 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.0 - Módulo de Inputs de Rota com Google Places Autocomplete Otimizado e Preview Multi-Linha
- * Faz: Controla o formato e máscara de Código Postal (CP7), botão de prefixo rápido,
- *      ancoragem geográfica estrita do Google Places a Sintra/Mafra, suporte a teclado Enter,
- *      e Card de Pré-visualização em 2 linhas para moradas longas sem cortes horizontais.
+ * Versão v78.1 - Transporte Automático de CP7 + Cidade para o Google Maps e Preview Multi-Linha
+ * Faz: Ao digitar o CP7, transporta imediatamente o Código Postal + Concelho para o campo do Google Places,
+ *      posiciona o cursor no início para digitação da rua/porta, ancora geograficamente e exibe preview em 2 linhas.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -27,7 +26,7 @@ export function consultarDadosOficiaisCP7(cp7) {
 }
 
 /**
- * Limpa e divide uma morada longa em Artéria/Porta e Localidade/CP
+ * Limpa e divide uma morada longa em Artéria/Porta e Localidade/CP para leitura clara
  */
 export function formatarMoradaLegivel(moradaCompleta, codigoPostal = "") {
     if (!moradaCompleta) return { linhaPrincipal: "", linhaSecundaria: "" };
@@ -123,7 +122,6 @@ export function aplicarPrefixoNoCampo(prefixo) {
     const comprimentoTexto = inputCP.value.length;
     inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
 
-    // Dispara a calibração de limites para o Google Places
     inputCP.dispatchEvent(new Event('input'));
 }
 
@@ -161,7 +159,6 @@ export function configurarTeclasEnterAdicao() {
 
     const dispararAdicao = (e) => {
         if (e.key === 'Enter') {
-            // Se o utilizador estiver a selecionar no Google Places com setas, não dispara adição prematura
             const pacContainer = document.querySelector('.pac-container');
             const pacItemSelecionado = pacContainer && pacContainer.querySelector('.pac-item-selected');
             if (pacItemSelecionado) {
@@ -189,6 +186,7 @@ export function configurarTeclasEnterAdicao() {
 
 /**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
+ * e transporta automaticamente o CP7 + Concelho para a barra do Google Places
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -205,6 +203,34 @@ export function configurarFormatacaoCodigoPostal() {
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
         }
         inputCP.value = valor.toUpperCase();
+
+        // QUANDO DIGITA OS 7 DÍGITOS COMPLETOS:
+        if (numerosApenas.length === 7) {
+            const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
+            const concelho = obterConcelhoPorCodigoPostal(formattedZip) || "Sintra";
+            const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
+            const localidade = (dadosCtt && (dadosCtt.localidade || dadosCtt.cpalf)) 
+                ? (dadosCtt.localidade || dadosCtt.cpalf) 
+                : concelho;
+
+            if (inputMorada) {
+                // Se o campo de morada estiver vazio ou contiver apenas um CP anterior
+                const valorAtual = inputMorada.value.trim();
+                const isApenasCP = !valorAtual || /^\d{4}-\d{3}/.test(valorAtual) || /^\d{4}/.test(valorAtual);
+
+                if (isApenasCP) {
+                    // Preenche com o CP7 e Cidade/Localidade
+                    inputMorada.value = `${formattedZip} ${localidade}`;
+                    
+                    // Foca o campo de morada e coloca o cursor no INÍCIO para digitar a rua
+                    inputMorada.focus();
+                    inputMorada.setSelectionRange(0, 0);
+
+                    // Dispara evento para atualizar o preview
+                    atualizarPreviewMorada(inputMorada.value, formattedZip);
+                }
+            }
+        }
 
         if (inputMorada && inputMorada.value) {
             atualizarPreviewMorada(inputMorada.value, inputCP.value);
@@ -238,7 +264,6 @@ export function configurarEscutaCodigoPostalParaLimites() {
 
         if (!autocompleteInstancia) return;
 
-        // Se o campo for limpo, define área padrão para a região de Mafra/Sintra
         if (numerosApenas.length < 4) {
             const centroGeral = { lat: 38.8700, lng: -9.3500 };
             const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 25000 });
@@ -247,18 +272,16 @@ export function configurarEscutaCodigoPostalParaLimites() {
             return;
         }
 
-        // Se tem 4 ou 7 dígitos, ancora com precisão cirúrgica
         const concelhoDetectado = (obterConcelhoPorCodigoPostal(valor) || "SINTRA").toUpperCase();
         let centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
         let raioBusca = 12000;
 
-        // Se for um CP7 completo com coordenadas calibradas na base CTT, foca ainda mais
         if (numerosApenas.length === 7) {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
             const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
             if (dadosCtt && typeof dadosCtt.lat === 'number' && typeof dadosCtt.lng === 'number' && dadosCtt.lat !== 0) {
                 centroAlvo = { lat: dadosCtt.lat, lng: dadosCtt.lng };
-                raioBusca = 5000; // Raio focado de 5km
+                raioBusca = 5000;
             }
         }
 
