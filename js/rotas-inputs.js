@@ -1,8 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.2 - Gestão de Inputs de Rota com Google Places Autocomplete e Cursor Fluido
- * Faz: Ao digitar o CP7, transporta o Código Postal para o campo do Google Places com cursor no FIM,
- *      limpa e atualiza automaticamente ao trocar de código postal, e posiciona o preview abaixo da linha inteira.
+ * Versão v78.3 - Google Places com Travamento Estrito (strictBounds) em Sintra e Mafra
+ * Faz: Ao introduzir o CP7, trava geograficamente o Google Places estritamente ao concelho/zona (strictBounds: true),
+ *      mantém o campo da morada limpo para digitação natural da rua/número e formata o preview em 2 linhas.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -11,7 +11,6 @@ import { obterConcelhoPorCodigoPostal } from './rotas-geografia.js';
 import { CP7_DATABASE } from './cp7-data.js';
 
 let autocompleteInstancia = null;
-let ultimoCpPreenchido = "";
 
 /**
  * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
@@ -66,7 +65,6 @@ export function atualizarPreviewMorada(moradaTexto, codigoPostalTexto = "") {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
-    // Encontra o contentor exterior para não ficar espremido no flexbox do microfone
     const containerWrapper = inputMorada.closest('.space-y-1') || inputMorada.parentElement.parentElement || inputMorada.parentElement;
 
     let previewContainer = document.getElementById('card-preview-morada-selecionada');
@@ -80,7 +78,8 @@ export function atualizarPreviewMorada(moradaTexto, codigoPostalTexto = "") {
     const textoVal = moradaTexto || inputMorada.value.trim();
     const cpVal = codigoPostalTexto || document.getElementById('rota-codigo-postal')?.value.trim() || "";
 
-    if (!textoVal || textoVal.length < 5) {
+    // Só mostra o preview se já houver uma morada real selecionada ou digitada (mais do que apenas o CP)
+    if (!textoVal || textoVal.length < 5 || /^\d{4}-\d{3}$/.test(textoVal)) {
         previewContainer.classList.add('hidden');
         previewContainer.innerHTML = '';
         return;
@@ -187,7 +186,7 @@ export function configurarTeclasEnterAdicao() {
 
 /**
  * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
- * e transporta o CP7 de forma limpa para a barra do Google Places com cursor no FIM
+ * e foca o campo da morada para escrita da rua
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -205,33 +204,16 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
-        // SE O UTILIZADOR APAGAR OU MUDAR O CÓDIGO POSTAL:
+        // Se limpar o código postal, limpa o preview
         if (numerosApenas.length < 4) {
-            ultimoCpPreenchido = "";
-            if (inputMorada && /^\d{4}/.test(inputMorada.value.trim())) {
-                inputMorada.value = "";
-                const preview = document.getElementById('card-preview-morada-selecionada');
-                if (preview) preview.classList.add('hidden');
-            }
+            const preview = document.getElementById('card-preview-morada-selecionada');
+            if (preview) preview.classList.add('hidden');
             return;
         }
 
-        // QUANDO DIGITA OS 7 DÍGITOS COMPLETOS:
-        if (numerosApenas.length === 7) {
-            const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
-
-            if (formattedZip !== ultimoCpPreenchido && inputMorada) {
-                ultimoCpPreenchido = formattedZip;
-                
-                // Preenche o campo de morada com o CP7 e coloca o cursor no FIM para digitação imediata
-                inputMorada.value = `${formattedZip} `;
-                inputMorada.focus();
-                const pos = inputMorada.value.length;
-                inputMorada.setSelectionRange(pos, pos);
-
-                // Dispara o evento de input para o Google Places iniciar a pesquisa
-                inputMorada.dispatchEvent(new Event('input', { bubbles: true }));
-            }
+        // Quando termina de preencher os 7 dígitos do CP, foca a morada para digitar a rua
+        if (numerosApenas.length === 7 && inputMorada) {
+            inputMorada.focus();
         }
     });
 
@@ -250,7 +232,7 @@ export function configurarFormatacaoCodigoPostal() {
 }
 
 /**
- * Ajusta dinamicamente os limites geográficos (Bounds) do Google Places com base no Código Postal inserido
+ * Trava geograficamente o Google Places (strictBounds: true) ao Concelho / CP inserido
  */
 export function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -262,11 +244,12 @@ export function configurarEscutaCodigoPostalParaLimites() {
 
         if (!autocompleteInstancia) return;
 
+        // Se estiver vazio, define área padrão Sintra/Mafra
         if (numerosApenas.length < 4) {
             const centroGeral = { lat: 38.8700, lng: -9.3500 };
             const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 25000 });
             autocompleteInstancia.setBounds(circuloGeral.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false });
+            autocompleteInstancia.setOptions({ strictBounds: true });
             return;
         }
 
@@ -274,23 +257,25 @@ export function configurarEscutaCodigoPostalParaLimites() {
         let centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
         let raioBusca = 12000;
 
+        // Se for um CP7 completo com coordenadas conhecidas, trava num raio fechado de 6km
         if (numerosApenas.length === 7) {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
             const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
             if (dadosCtt && typeof dadosCtt.lat === 'number' && typeof dadosCtt.lng === 'number' && dadosCtt.lat !== 0) {
                 centroAlvo = { lat: dadosCtt.lat, lng: dadosCtt.lng };
-                raioBusca = 5000;
+                raioBusca = 6000;
             }
         }
 
         const circuloAlvo = new google.maps.Circle({ center: centroAlvo, radius: raioBusca });
         autocompleteInstancia.setBounds(circuloAlvo.getBounds());
-        autocompleteInstancia.setOptions({ strictBounds: false });
+        // TRAVAMENTO ESTRITO OBRIGATÓRIO: impede que o Google sugira Lisboa, Cascais, etc.
+        autocompleteInstancia.setOptions({ strictBounds: true });
     });
 }
 
 /**
- * Inicializa o Google Places Autocomplete nativo com extração de morada e preview visual
+ * Inicializa o Google Places Autocomplete com restrição estrita e preview formatado
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -313,7 +298,7 @@ export function inicializarAutocompleteMorada() {
             componentRestrictions: { country: 'pt' },
             fields: ['address_components', 'geometry', 'formatted_address', 'name'],
             bounds: circuloPadrao.getBounds(),
-            strictBounds: false
+            strictBounds: true // Garante que a Google só busca na área definida
         });
 
         inputMorada.dataset.autocompleteBound = "true";
@@ -329,10 +314,10 @@ export function inicializarAutocompleteMorada() {
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
             inputMorada.value = moradaFormatada;
 
-            // Extrai o Código Postal retornado pelo Google Places se o campo do CP estiver vazio
-            if (place.address_components) {
+            // Se o campo do Código Postal estiver vazio, preenche com o CP do Google Places
+            if (place.address_components && inputCP && !inputCP.value.trim()) {
                 const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
-                if (componenteCP && inputCP && !inputCP.value.trim()) {
+                if (componenteCP) {
                     const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
                     if (cpLimpo.length === 7) {
                         inputCP.value = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
@@ -343,7 +328,7 @@ export function inicializarAutocompleteMorada() {
                 }
             }
 
-            // Renderiza o card de pré-visualização em 2 linhas estruturadas abaixo da linha
+            // Renderiza o card de pré-visualização em 2 linhas abaixo da caixa de texto
             atualizarPreviewMorada(moradaFormatada, inputCP ? inputCP.value : "");
         });
 
