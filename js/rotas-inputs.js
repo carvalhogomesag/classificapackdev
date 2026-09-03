@@ -1,8 +1,9 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.6 - Busca Inteligente de POIs e Moradas com Prioridade Geográfica em Sintra/Mafra
- * Faz: Prioriza Sintra/Mafra na Google Maps Platform permitindo busca flexível de POIs (Continente, Pingo Doce, Farmácias),
- *      limpa a morada ao trocar de CP, sincroniza o CP real do estabelecimento e exibe preview em 2 linhas.
+ * Versão v78.7 - Autocomplete Híbrido com Chip CTT Oficial e Google Places Estrito
+ * Faz: Exibe chip de preenchimento rápido com a rua oficial dos CTT associada ao CP7 digitado,
+ *      trava o Google Places estritamente na zona geográfica de Sintra/Mafra (eliminando Olival Basto/Cascais),
+ *      limpa a morada ao trocar de CP e sincroniza o CP real.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -13,17 +14,17 @@ import { CP7_DATABASE } from './cp7-data.js';
 let autocompleteInstancia = null;
 let ultimoCpConcluido = "";
 
-// Mapeamento de centros geográficos precisos por prefixo para calibração de busca
+// Mapeamento de centros geográficos precisos por prefixo para travamento estrito
 const COORDENADAS_PREFIXOS = {
-    "2715": { lat: 38.8550, lng: -9.3100, raio: 7000 }, // Almargem do Bispo / Pêro Pinheiro / Montelavar
-    "2710": { lat: 38.7980, lng: -9.3800, raio: 7000 }, // Sintra Centro / São Pedro / Linhó
-    "2705": { lat: 38.8100, lng: -9.4300, raio: 7000 }, // Colares / São João das Lampas / Terrugem
-    "2725": { lat: 38.7990, lng: -9.3450, raio: 5000 }, // Algueirão / Mem Martins
-    "2745": { lat: 38.7600, lng: -9.2600, raio: 5000 }, // Queluz / Monte Abraão
-    "2655": { lat: 38.9630, lng: -9.4170, raio: 7000 }, // Ericeira
-    "2640": { lat: 38.9370, lng: -9.3280, raio: 7000 }, // Mafra
-    "2665": { lat: 38.9300, lng: -9.2500, raio: 7000 }, // Malveira / Venda do Pinheiro
-    "2670": { lat: 38.8800, lng: -9.2000, raio: 7000 }  // Lousa / Loures
+    "2715": { lat: 38.8550, lng: -9.3100, raio: 4500 }, // Almargem do Bispo / Pêro Pinheiro / Montelavar
+    "2710": { lat: 38.7980, lng: -9.3800, raio: 5000 }, // Sintra Centro / São Pedro / Linhó
+    "2705": { lat: 38.8100, lng: -9.4300, raio: 5500 }, // Colares / São João das Lampas / Terrugem
+    "2725": { lat: 38.7990, lng: -9.3450, raio: 3500 }, // Algueirão / Mem Martins
+    "2745": { lat: 38.7600, lng: -9.2600, raio: 3500 }, // Queluz / Monte Abraão
+    "2655": { lat: 38.9630, lng: -9.4170, raio: 5000 }, // Ericeira
+    "2640": { lat: 38.9370, lng: -9.3280, raio: 5000 }, // Mafra
+    "2665": { lat: 38.9300, lng: -9.2500, raio: 5000 }, // Malveira / Venda do Pinheiro
+    "2670": { lat: 38.8800, lng: -9.2000, raio: 4500 }  // Lousa / Loures
 };
 
 /**
@@ -38,6 +39,80 @@ export function consultarDadosOficiaisCP7(cp7) {
     }
     return null;
 }
+
+/**
+ * Exibe ou atualiza o Chip de Sugestão Oficial CTT logo abaixo do campo de morada
+ */
+function atualizarChipSugestaoOficialCTT(cp7Formatado) {
+    const inputMorada = document.getElementById('rota-morada-completa');
+    if (!inputMorada) return;
+
+    const containerWrapper = inputMorada.closest('.space-y-1') || inputMorada.parentElement.parentElement || inputMorada.parentElement;
+
+    let chipContainer = document.getElementById('chip-sugestao-oficial-ctt');
+    if (!chipContainer) {
+        chipContainer = document.createElement('div');
+        chipContainer.id = 'chip-sugestao-oficial-ctt';
+        chipContainer.className = 'mt-1.5 transition-all hidden';
+        containerWrapper.insertBefore(chipContainer, containerWrapper.querySelector('#card-preview-morada-selecionada') || null);
+    }
+
+    const dadosCtt = consultarDadosOficiaisCP7(cp7Formatado);
+    if (!dadosCtt) {
+        chipContainer.classList.add('hidden');
+        chipContainer.innerHTML = '';
+        return;
+    }
+
+    const listaRuas = Array.isArray(dadosCtt.ruas) && dadosCtt.ruas.length > 0 
+        ? dadosCtt.ruas 
+        : [dadosCtt.rua || dadosCtt.street || dadosCtt.nome || ""];
+
+    const ruasValidas = listaRuas.filter(Boolean);
+    if (ruasValidas.length === 0) {
+        chipContainer.classList.add('hidden');
+        chipContainer.innerHTML = '';
+        return;
+    }
+
+    chipContainer.innerHTML = `
+        <div class="flex flex-wrap items-center gap-1.5 p-1.5 bg-indigo-50/80 border border-indigo-200 rounded-xl">
+            <span class="text-[10px] font-extrabold text-indigo-700 flex items-center mr-1">
+                <i class="fa-solid fa-map-pin mr-1 text-indigo-500"></i> Oficial CTT:
+            </span>
+            ${ruasValidas.map(rua => `
+                <button type="button" 
+                        onclick="window.aplicarRuaOficialNoCampo('${rua.replace(/'/g, "\\'")}')"
+                        class="px-2 py-1 bg-white hover:bg-indigo-600 text-indigo-800 hover:text-white text-xs font-bold rounded-lg border border-indigo-200 shadow-2xs transition-all cursor-pointer flex items-center space-x-1">
+                    <span>${rua}</span>
+                    <i class="fa-solid fa-arrow-turn-down text-[9px] opacity-70"></i>
+                </button>
+            `).join('')}
+        </div>
+    `;
+
+    chipContainer.classList.remove('hidden');
+}
+
+/**
+ * Aplica a rua oficial dos CTT no campo e coloca o cursor no fim para o número da porta
+ */
+window.aplicarRuaOficialNoCampo = function(nomeRua) {
+    const inputMorada = document.getElementById('rota-morada-completa');
+    const inputCP = document.getElementById('rota-codigo-postal');
+    if (!inputMorada) return;
+
+    inputMorada.value = `${nomeRua}, `;
+    inputMorada.focus();
+    const pos = inputMorada.value.length;
+    inputMorada.setSelectionRange(pos, pos);
+
+    // Esconde o chip após seleção e renderiza preview
+    const chipContainer = document.getElementById('chip-sugestao-oficial-ctt');
+    if (chipContainer) chipContainer.classList.add('hidden');
+
+    atualizarPreviewMorada(inputMorada.value, inputCP ? inputCP.value : "");
+};
 
 /**
  * Limpa e divide uma morada longa em Artéria/Porta e Localidade/CP sem duplicação de códigos postais
@@ -148,6 +223,9 @@ export function aplicarPrefixoNoCampo(prefixo) {
     const preview = document.getElementById('card-preview-morada-selecionada');
     if (preview) preview.classList.add('hidden');
 
+    const chipContainer = document.getElementById('chip-sugestao-oficial-ctt');
+    if (chipContainer) chipContainer.classList.add('hidden');
+
     inputCP.dispatchEvent(new Event('input'));
 }
 
@@ -229,7 +307,7 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
-        // SE O UTILIZADOR APAGAR OU ALTERAR O CÓDIGO POSTAL:
+        // SE O UTILIZADOR ALTERAR O CÓDIGO POSTAL:
         if (valor !== ultimoCpConcluido) {
             if (inputMorada) {
                 inputMorada.value = "";
@@ -239,11 +317,17 @@ export function configurarFormatacaoCodigoPostal() {
                 preview.classList.add('hidden');
                 preview.innerHTML = '';
             }
+            const chipContainer = document.getElementById('chip-sugestao-oficial-ctt');
+            if (chipContainer) chipContainer.classList.add('hidden');
         }
 
         // QUANDO DIGITA OS 7 DÍGITOS COMPLETOS:
         if (numerosApenas.length === 7) {
             ultimoCpConcluido = valor;
+            
+            // Exibe de imediato o Chip com a Rua Oficial dos CTT para preenchimento em 1 clique
+            atualizarChipSugestaoOficialCTT(valor);
+
             if (inputMorada) {
                 inputMorada.value = "";
                 inputMorada.focus();
@@ -255,7 +339,7 @@ export function configurarFormatacaoCodigoPostal() {
 }
 
 /**
- * Prioriza geograficamente o Google Places com base no Concelho / Prefixo
+ * Trava geograficamente o Google Places (strictBounds: true) ao Concelho / Prefixo correto
  */
 export function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -267,18 +351,17 @@ export function configurarEscutaCodigoPostalParaLimites() {
 
         if (!autocompleteInstancia) return;
 
-        // Se estiver vazio, define prioridade padrão para toda a região de Sintra e Mafra
         if (numerosApenas.length < 4) {
             const centroGeral = { lat: 38.8700, lng: -9.3500 };
-            const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 25000 });
+            const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 20000 });
             autocompleteInstancia.setBounds(circuloGeral.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: false });
+            autocompleteInstancia.setOptions({ strictBounds: true });
             return;
         }
 
         const prefixo4 = numerosApenas.substring(0, 4);
         let centroAlvo = { lat: 38.8000, lng: -9.3800 };
-        let raioBusca = 7000;
+        let raioBusca = 5000;
 
         if (COORDENADAS_PREFIXOS[prefixo4]) {
             centroAlvo = { lat: COORDENADAS_PREFIXOS[prefixo4].lat, lng: COORDENADAS_PREFIXOS[prefixo4].lng };
@@ -286,7 +369,7 @@ export function configurarEscutaCodigoPostalParaLimites() {
         } else {
             const concelhoDetectado = (obterConcelhoPorCodigoPostal(valor) || "SINTRA").toUpperCase();
             centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8200, lng: -9.3600 } : { lat: 38.9369, lng: -9.3282 };
-            raioBusca = 7000;
+            raioBusca = 5000;
         }
 
         if (numerosApenas.length === 7) {
@@ -294,19 +377,19 @@ export function configurarEscutaCodigoPostalParaLimites() {
             const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
             if (dadosCtt && typeof dadosCtt.lat === 'number' && typeof dadosCtt.lng === 'number' && dadosCtt.lat !== 0) {
                 centroAlvo = { lat: dadosCtt.lat, lng: dadosCtt.lng };
-                raioBusca = 5000;
+                raioBusca = 3500;
             }
         }
 
         const circuloAlvo = new google.maps.Circle({ center: centroAlvo, radius: raioBusca });
         autocompleteInstancia.setBounds(circuloAlvo.getBounds());
-        // strictBounds: false permite que POIs (Continente, Cafés, etc.) com nomes compostos apareçam perfeitamente
-        autocompleteInstancia.setOptions({ strictBounds: false });
+        // strictBounds: true elimina Olival Basto, Cascais, Lisboa e outras cidades fora do concelho
+        autocompleteInstancia.setOptions({ strictBounds: true });
     });
 }
 
 /**
- * Inicializa o Google Places Autocomplete com prioridade regional e captura de POIs
+ * Inicializa o Google Places Autocomplete com travamento estrito e captura de moradas
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -323,13 +406,13 @@ export function inicializarAutocompleteMorada() {
 
     try {
         const centroPadrao = { lat: 38.8700, lng: -9.3500 };
-        const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 25000 });
+        const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 20000 });
 
         autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
             componentRestrictions: { country: 'pt' },
             fields: ['address_components', 'geometry', 'formatted_address', 'name'],
             bounds: circuloPadrao.getBounds(),
-            strictBounds: false
+            strictBounds: true
         });
 
         inputMorada.dataset.autocompleteBound = "true";
@@ -356,7 +439,6 @@ export function inicializarAutocompleteMorada() {
                 }
             }
 
-            // Se o Google Places detectou o Código Postal do POI/Morada, atualiza o campo de CP
             if (cpGoogleReal && inputCP) {
                 inputCP.value = cpGoogleReal;
                 ultimoCpConcluido = cpGoogleReal;
@@ -366,6 +448,10 @@ export function inicializarAutocompleteMorada() {
 
             let moradaSemCP = moradaFormatada.replace(/\b\d{4}-\d{3}\b/g, '').replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
             inputMorada.value = moradaSemCP;
+
+            // Oculta o chip da CTT quando seleciona morada e exibe o preview estruturado
+            const chipContainer = document.getElementById('chip-sugestao-oficial-ctt');
+            if (chipContainer) chipContainer.classList.add('hidden');
 
             atualizarPreviewMorada(moradaSemCP, cpFinal);
         });
