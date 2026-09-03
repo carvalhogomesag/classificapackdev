@@ -1,8 +1,9 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.8 - Proteção de CP7 da Etiqueta (Verdade Absoluta), Chip CTT e Google Places Estrito
- * Faz: Protege o CP7 de 7 dígitos inserido pelo utilizador contra sobrescritas genéricas do Google Maps (ex: 089 vs 058),
- *      exibe chip CTT oficial, trava busca geograficamente em Sintra/Mafra e exibe preview de 2 linhas.
+ * Versão v78.9 - Fluxo em 2 Passos (Rua ➔ Número da Porta), Chip CTT Oficial e Google Places Estrito
+ * Faz: Ao selecionar uma rua (via Google Places ou Chip CTT), prepara automaticamente o campo com "Rua, nº "
+ *      e posiciona o cursor no fim para digitação imediata do número da porta em 2 passos fluídos.
+ *      Mantém a proteção de CP7 original, travamento estrito em Sintra/Mafra e preview em 2 linhas.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -94,14 +95,15 @@ function atualizarChipSugestaoOficialCTT(cp7Formatado) {
 }
 
 /**
- * Aplica a rua oficial dos CTT no campo e coloca o cursor no fim para o número da porta
+ * Aplica a rua oficial dos CTT no campo e prepara o cursor para o Passo 2 (Número da Porta)
  */
 window.aplicarRuaOficialNoCampo = function(nomeRua) {
     const inputMorada = document.getElementById('rota-morada-completa');
     const inputCP = document.getElementById('rota-codigo-postal');
     if (!inputMorada) return;
 
-    inputMorada.value = `${nomeRua}, `;
+    // Passo 2: Prepara a rua e coloca o cursor pronto para receber o número da porta
+    inputMorada.value = `${nomeRua}, nº `;
     inputMorada.focus();
     const pos = inputMorada.value.length;
     inputMorada.setSelectionRange(pos, pos);
@@ -120,7 +122,6 @@ export function formatarMoradaLegivel(moradaCompleta, codigoPostal = "") {
 
     let textoLimpo = moradaCompleta.replace(/,\s*Portugal$/i, '').replace(/,\s*PT$/i, '').trim();
 
-    // Extrai e remove qualquer CP que esteja no meio do texto retornado pela Google
     const matchCP = textoLimpo.match(/\b\d{4}-\d{3}\b/);
     const cpDetectado = codigoPostal || (matchCP ? matchCP[0] : "");
     textoLimpo = textoLimpo.replace(/\b\d{4}-\d{3}\b/g, '').replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
@@ -171,7 +172,7 @@ export function atualizarPreviewMorada(moradaTexto, codigoPostalTexto = "") {
     const textoVal = moradaTexto || inputMorada.value.trim();
     const cpVal = codigoPostalTexto || document.getElementById('rota-codigo-postal')?.value.trim() || "";
 
-    if (!textoVal || textoVal.length < 5 || /^\d{4}-\d{3}$/.test(textoVal)) {
+    if (!textoVal || textoVal.length < 4 || /^\d{4}-\d{3}$/.test(textoVal)) {
         previewContainer.classList.add('hidden');
         previewContainer.innerHTML = '';
         return;
@@ -324,7 +325,7 @@ export function configurarFormatacaoCodigoPostal() {
         if (numerosApenas.length === 7) {
             ultimoCpConcluido = valor;
             
-            // Exibe de imediato o Chip com a Rua Oficial dos CTT para preenchimento em 1 clique
+            // Exibe de imediato o Chip com a Rua Oficial dos CTT
             atualizarChipSugestaoOficialCTT(valor);
 
             if (inputMorada) {
@@ -387,7 +388,7 @@ export function configurarEscutaCodigoPostalParaLimites() {
 }
 
 /**
- * Inicializa o Google Places Autocomplete com proteção total do CP7 original
+ * Inicializa o Google Places Autocomplete com suporte ao fluxo em 2 passos (Rua ➔ Número da Porta)
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -427,8 +428,7 @@ export function inicializarAutocompleteMorada() {
             const cpDigitado = inputCP ? inputCP.value.trim() : "";
             const isCpDigitadoCompleto = /^\d{4}-\d{3}$/.test(cpDigitado);
 
-            // REGRA DE OURO: Se o estafeta já digitou um CP7 completo (ex: 2710-058), ele é a Verdade Absoluta!
-            // O Google Places só preenche o CP se o campo estiver vazio ou incompleto.
+            // REGRA DE OURO: O CP7 digitado na etiqueta (ex: 2710-058) prevalece sempre
             let cpFinal = cpDigitado;
 
             if (!isCpDigitadoCompleto && place.address_components) {
@@ -446,15 +446,28 @@ export function inicializarAutocompleteMorada() {
                 }
             }
 
-            // Remove o código postal de dentro do texto da rua para manter o campo limpo
+            // Remove o código postal de dentro do texto da rua
             let moradaSemCP = moradaFormatada.replace(/\b\d{4}-\d{3}\b/g, '').replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
-            inputMorada.value = moradaSemCP;
+
+            // FLUXO EM 2 PASSOS: Verifica se o utilizador escolheu apenas a rua sem número de porta
+            const temNumeroPorta = place.address_components && place.address_components.some(c => c.types.includes('street_number'));
+            
+            if (!temNumeroPorta && !/\b\d+\b/.test(moradaSemCP.split(',')[0])) {
+                // Prepara o campo com a rua e coloca o cursor no fim para digitar o número da porta
+                const ruaApenas = moradaSemCP.split(',')[0].trim();
+                inputMorada.value = `${ruaApenas}, nº `;
+                inputMorada.focus();
+                const pos = inputMorada.value.length;
+                inputMorada.setSelectionRange(pos, pos);
+            } else {
+                inputMorada.value = moradaSemCP;
+            }
 
             // Oculta o chip da CTT quando seleciona morada e exibe o preview estruturado
             const chipContainer = document.getElementById('chip-sugestao-oficial-ctt');
             if (chipContainer) chipContainer.classList.add('hidden');
 
-            atualizarPreviewMorada(moradaSemCP, cpFinal);
+            atualizarPreviewMorada(inputMorada.value, cpFinal);
         });
 
     } catch (err) {
