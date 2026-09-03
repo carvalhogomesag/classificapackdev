@@ -5,7 +5,7 @@
  */
 
 
-const CACHE_NAME = 'classificapack-v77.8.2';
+const CACHE_NAME = 'classificapack-v77.8.3';
 
 const ASSETS = [
   './',
