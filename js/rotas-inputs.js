@@ -1,8 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.4 - Sincronização Perfeita de CP7, Limpeza de Morada e Preview Estruturado
- * Faz: Ao selecionar uma morada do Google Places, sincroniza o Código Postal real no campo do CP,
- *      limpa códigos postais embutidos no nome da rua e exibe o preview 100% alinhado em 2 linhas.
+ * Versão v78.5 - Limpeza Reativa de Morada, Travamento Cirúrgico por Prefixo e Google Places
+ * Faz: Ao trocar ou editar o CP7, limpa imediatamente o campo da morada e o preview;
+ *      ancora com raio ultra-preciso por prefixo (2715, 2710, 2655, 2640, etc.) bloqueando Cascais/Lisboa.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -11,6 +11,20 @@ import { obterConcelhoPorCodigoPostal } from './rotas-geografia.js';
 import { CP7_DATABASE } from './cp7-data.js';
 
 let autocompleteInstancia = null;
+let ultimoCpConcluido = "";
+
+// Mapeamento de centros geográficos precisos por prefixo para evitar vazamento para Cascais/Lisboa
+const COORDENADAS_PREFIXOS = {
+    "2715": { lat: 38.8550, lng: -9.3100, raio: 4500 }, // Almargem do Bispo / Pêro Pinheiro / Montelavar
+    "2710": { lat: 38.7980, lng: -9.3800, raio: 4500 }, // Sintra Centro / São Pedro / Linhó
+    "2705": { lat: 38.8100, lng: -9.4300, raio: 5000 }, // Colares / São João das Lampas / Terrugem
+    "2725": { lat: 38.7990, lng: -9.3450, raio: 3500 }, // Algueirão / Mem Martins
+    "2745": { lat: 38.7600, lng: -9.2600, raio: 3500 }, // Queluz / Monte Abraão
+    "2655": { lat: 38.9630, lng: -9.4170, raio: 4500 }, // Ericeira
+    "2640": { lat: 38.9370, lng: -9.3280, raio: 4500 }, // Mafra
+    "2665": { lat: 38.9300, lng: -9.2500, raio: 4500 }, // Malveira / Venda do Pinheiro
+    "2670": { lat: 38.8800, lng: -9.2000, raio: 4500 }  // Lousa / Loures
+};
 
 /**
  * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
@@ -31,15 +45,12 @@ export function consultarDadosOficiaisCP7(cp7) {
 export function formatarMoradaLegivel(moradaCompleta, codigoPostal = "") {
     if (!moradaCompleta) return { linhaPrincipal: "", linhaSecundaria: "" };
 
-    // Remove ", Portugal" ou ", PT"
     let textoLimpo = moradaCompleta.replace(/,\s*Portugal$/i, '').replace(/,\s*PT$/i, '').trim();
 
-    // Extrai e remove qualquer CP (ex: 2715-311) que esteja no meio do texto da morada
     const matchCP = textoLimpo.match(/\b\d{4}-\d{3}\b/);
     const cpDetectado = matchCP ? matchCP[0] : (codigoPostal || "");
     textoLimpo = textoLimpo.replace(/\b\d{4}-\d{3}\b/g, '').replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
 
-    // Divide as partes por vírgula
     const partes = textoLimpo.split(',').map(p => p.trim()).filter(Boolean);
 
     if (partes.length === 0) {
@@ -49,7 +60,6 @@ export function formatarMoradaLegivel(moradaCompleta, codigoPostal = "") {
         };
     }
 
-    // Identifica artéria + número da porta
     let linhaPrincipal = partes[0];
     let restantePartes = partes.slice(1);
 
@@ -124,11 +134,19 @@ export function atualizarPreviewMorada(moradaTexto, codigoPostalTexto = "") {
  */
 export function aplicarPrefixoNoCampo(prefixo) {
     const inputCP = document.getElementById('rota-codigo-postal');
+    const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputCP) return;
+
     inputCP.value = `${prefixo}-`;
     inputCP.focus();
     const comprimentoTexto = inputCP.value.length;
     inputCP.setSelectionRange(comprimentoTexto, comprimentoTexto);
+
+    if (inputMorada) {
+        inputMorada.value = "";
+    }
+    const preview = document.getElementById('card-preview-morada-selecionada');
+    if (preview) preview.classList.add('hidden');
 
     inputCP.dispatchEvent(new Event('input'));
 }
@@ -193,7 +211,7 @@ export function configurarTeclasEnterAdicao() {
 }
 
 /**
- * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
+ * Aplica a máscara XXXX-XXX no Código Postal e limpa automaticamente a morada ao trocar de CP
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -211,33 +229,33 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
-        if (numerosApenas.length < 4) {
+        // SE O UTILIZADOR APAGAR OU ALTERAR O CÓDIGO POSTAL:
+        if (valor !== ultimoCpConcluido) {
+            if (inputMorada) {
+                inputMorada.value = "";
+            }
             const preview = document.getElementById('card-preview-morada-selecionada');
-            if (preview) preview.classList.add('hidden');
-            return;
+            if (preview) {
+                preview.classList.add('hidden');
+                preview.innerHTML = '';
+            }
         }
 
-        if (numerosApenas.length === 7 && inputMorada) {
-            inputMorada.focus();
+        // QUANDO DIGITA OS 7 DÍGITOS COMPLETOS:
+        if (numerosApenas.length === 7) {
+            ultimoCpConcluido = valor;
+            if (inputMorada) {
+                inputMorada.value = "";
+                inputMorada.focus();
+            }
         }
     });
-
-    if (inputMorada) {
-        inputMorada.addEventListener('input', () => {
-            if (inputMorada.value.trim().length > 6) {
-                atualizarPreviewMorada(inputMorada.value, inputCP.value);
-            } else {
-                const preview = document.getElementById('card-preview-morada-selecionada');
-                if (preview) preview.classList.add('hidden');
-            }
-        });
-    }
 
     configurarTeclasEnterAdicao();
 }
 
 /**
- * Trava geograficamente o Google Places (strictBounds: true) ao Concelho / CP inserido
+ * Trava geograficamente o Google Places (strictBounds: true) com raio focado por prefixo
  */
 export function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -249,29 +267,42 @@ export function configurarEscutaCodigoPostalParaLimites() {
 
         if (!autocompleteInstancia) return;
 
+        // Se estiver vazio, define área padrão Mafra/Sintra
         if (numerosApenas.length < 4) {
             const centroGeral = { lat: 38.8700, lng: -9.3500 };
-            const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 25000 });
+            const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 20000 });
             autocompleteInstancia.setBounds(circuloGeral.getBounds());
             autocompleteInstancia.setOptions({ strictBounds: true });
             return;
         }
 
-        const concelhoDetectado = (obterConcelhoPorCodigoPostal(valor) || "SINTRA").toUpperCase();
-        let centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8000, lng: -9.3800 } : { lat: 38.9369, lng: -9.3282 };
-        let raioBusca = 12000;
+        const prefixo4 = numerosApenas.substring(0, 4);
+        let centroAlvo = { lat: 38.8000, lng: -9.3800 };
+        let raioBusca = 4500;
 
+        // 1. Busca pelo prefixo de 4 dígitos na tabela calibrada
+        if (COORDENADAS_PREFIXOS[prefixo4]) {
+            centroAlvo = { lat: COORDENADAS_PREFIXOS[prefixo4].lat, lng: COORDENADAS_PREFIXOS[prefixo4].lng };
+            raioBusca = COORDENADAS_PREFIXOS[prefixo4].raio;
+        } else {
+            const concelhoDetectado = (obterConcelhoPorCodigoPostal(valor) || "SINTRA").toUpperCase();
+            centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8200, lng: -9.3600 } : { lat: 38.9369, lng: -9.3282 };
+            raioBusca = 5000;
+        }
+
+        // 2. Se for um CP7 completo com coordenadas calibradas nos CTT, afunila ainda mais para 3.5km
         if (numerosApenas.length === 7) {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
             const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
             if (dadosCtt && typeof dadosCtt.lat === 'number' && typeof dadosCtt.lng === 'number' && dadosCtt.lat !== 0) {
                 centroAlvo = { lat: dadosCtt.lat, lng: dadosCtt.lng };
-                raioBusca = 6000;
+                raioBusca = 3500;
             }
         }
 
         const circuloAlvo = new google.maps.Circle({ center: centroAlvo, radius: raioBusca });
         autocompleteInstancia.setBounds(circuloAlvo.getBounds());
+        // TRAVAMENTO ESTRITO ATIVO: bloqueia 100% qualquer resultado fora do raio
         autocompleteInstancia.setOptions({ strictBounds: true });
     });
 }
@@ -294,7 +325,7 @@ export function inicializarAutocompleteMorada() {
 
     try {
         const centroPadrao = { lat: 38.8700, lng: -9.3500 };
-        const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 25000 });
+        const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 20000 });
 
         autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
             componentRestrictions: { country: 'pt' },
@@ -312,10 +343,8 @@ export function inicializarAutocompleteMorada() {
             const inputCP = document.getElementById('rota-codigo-postal');
             let moradaFormatada = place.formatted_address || place.name || "";
 
-            // Limpa o sufixo redundante ", Portugal"
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
 
-            // Extrai o Código Postal real retornado pelo Google Places para esta morada específica
             let cpGoogleReal = "";
             if (place.address_components) {
                 const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
@@ -329,18 +358,16 @@ export function inicializarAutocompleteMorada() {
                 }
             }
 
-            // SINCRONIZAÇÃO COMPLETA: se a Google retornou um CP exato para a rua escolhida, atualiza o campo de CP
             if (cpGoogleReal && inputCP) {
                 inputCP.value = cpGoogleReal;
+                ultimoCpConcluido = cpGoogleReal;
             }
 
             const cpFinal = cpGoogleReal || (inputCP ? inputCP.value.trim() : "");
 
-            // Limpa a morada no campo de texto removendo o código postal embutido
             let moradaSemCP = moradaFormatada.replace(/\b\d{4}-\d{3}\b/g, '').replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
             inputMorada.value = moradaSemCP;
 
-            // Atualiza o preview com 100% de coerência entre rua e código postal
             atualizarPreviewMorada(moradaSemCP, cpFinal);
         });
 
