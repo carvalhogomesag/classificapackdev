@@ -1,8 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.5 - Limpeza Reativa de Morada, Travamento Cirúrgico por Prefixo e Google Places
- * Faz: Ao trocar ou editar o CP7, limpa imediatamente o campo da morada e o preview;
- *      ancora com raio ultra-preciso por prefixo (2715, 2710, 2655, 2640, etc.) bloqueando Cascais/Lisboa.
+ * Versão v78.6 - Busca Inteligente de POIs e Moradas com Prioridade Geográfica em Sintra/Mafra
+ * Faz: Prioriza Sintra/Mafra na Google Maps Platform permitindo busca flexível de POIs (Continente, Pingo Doce, Farmácias),
+ *      limpa a morada ao trocar de CP, sincroniza o CP real do estabelecimento e exibe preview em 2 linhas.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -13,17 +13,17 @@ import { CP7_DATABASE } from './cp7-data.js';
 let autocompleteInstancia = null;
 let ultimoCpConcluido = "";
 
-// Mapeamento de centros geográficos precisos por prefixo para evitar vazamento para Cascais/Lisboa
+// Mapeamento de centros geográficos precisos por prefixo para calibração de busca
 const COORDENADAS_PREFIXOS = {
-    "2715": { lat: 38.8550, lng: -9.3100, raio: 4500 }, // Almargem do Bispo / Pêro Pinheiro / Montelavar
-    "2710": { lat: 38.7980, lng: -9.3800, raio: 4500 }, // Sintra Centro / São Pedro / Linhó
-    "2705": { lat: 38.8100, lng: -9.4300, raio: 5000 }, // Colares / São João das Lampas / Terrugem
-    "2725": { lat: 38.7990, lng: -9.3450, raio: 3500 }, // Algueirão / Mem Martins
-    "2745": { lat: 38.7600, lng: -9.2600, raio: 3500 }, // Queluz / Monte Abraão
-    "2655": { lat: 38.9630, lng: -9.4170, raio: 4500 }, // Ericeira
-    "2640": { lat: 38.9370, lng: -9.3280, raio: 4500 }, // Mafra
-    "2665": { lat: 38.9300, lng: -9.2500, raio: 4500 }, // Malveira / Venda do Pinheiro
-    "2670": { lat: 38.8800, lng: -9.2000, raio: 4500 }  // Lousa / Loures
+    "2715": { lat: 38.8550, lng: -9.3100, raio: 7000 }, // Almargem do Bispo / Pêro Pinheiro / Montelavar
+    "2710": { lat: 38.7980, lng: -9.3800, raio: 7000 }, // Sintra Centro / São Pedro / Linhó
+    "2705": { lat: 38.8100, lng: -9.4300, raio: 7000 }, // Colares / São João das Lampas / Terrugem
+    "2725": { lat: 38.7990, lng: -9.3450, raio: 5000 }, // Algueirão / Mem Martins
+    "2745": { lat: 38.7600, lng: -9.2600, raio: 5000 }, // Queluz / Monte Abraão
+    "2655": { lat: 38.9630, lng: -9.4170, raio: 7000 }, // Ericeira
+    "2640": { lat: 38.9370, lng: -9.3280, raio: 7000 }, // Mafra
+    "2665": { lat: 38.9300, lng: -9.2500, raio: 7000 }, // Malveira / Venda do Pinheiro
+    "2670": { lat: 38.8800, lng: -9.2000, raio: 7000 }  // Lousa / Loures
 };
 
 /**
@@ -255,7 +255,7 @@ export function configurarFormatacaoCodigoPostal() {
 }
 
 /**
- * Trava geograficamente o Google Places (strictBounds: true) com raio focado por prefixo
+ * Prioriza geograficamente o Google Places com base no Concelho / Prefixo
  */
 export function configurarEscutaCodigoPostalParaLimites() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -267,48 +267,46 @@ export function configurarEscutaCodigoPostalParaLimites() {
 
         if (!autocompleteInstancia) return;
 
-        // Se estiver vazio, define área padrão Mafra/Sintra
+        // Se estiver vazio, define prioridade padrão para toda a região de Sintra e Mafra
         if (numerosApenas.length < 4) {
             const centroGeral = { lat: 38.8700, lng: -9.3500 };
-            const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 20000 });
+            const circuloGeral = new google.maps.Circle({ center: centroGeral, radius: 25000 });
             autocompleteInstancia.setBounds(circuloGeral.getBounds());
-            autocompleteInstancia.setOptions({ strictBounds: true });
+            autocompleteInstancia.setOptions({ strictBounds: false });
             return;
         }
 
         const prefixo4 = numerosApenas.substring(0, 4);
         let centroAlvo = { lat: 38.8000, lng: -9.3800 };
-        let raioBusca = 4500;
+        let raioBusca = 7000;
 
-        // 1. Busca pelo prefixo de 4 dígitos na tabela calibrada
         if (COORDENADAS_PREFIXOS[prefixo4]) {
             centroAlvo = { lat: COORDENADAS_PREFIXOS[prefixo4].lat, lng: COORDENADAS_PREFIXOS[prefixo4].lng };
             raioBusca = COORDENADAS_PREFIXOS[prefixo4].raio;
         } else {
             const concelhoDetectado = (obterConcelhoPorCodigoPostal(valor) || "SINTRA").toUpperCase();
             centroAlvo = concelhoDetectado === "SINTRA" ? { lat: 38.8200, lng: -9.3600 } : { lat: 38.9369, lng: -9.3282 };
-            raioBusca = 5000;
+            raioBusca = 7000;
         }
 
-        // 2. Se for um CP7 completo com coordenadas calibradas nos CTT, afunila ainda mais para 3.5km
         if (numerosApenas.length === 7) {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
             const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
             if (dadosCtt && typeof dadosCtt.lat === 'number' && typeof dadosCtt.lng === 'number' && dadosCtt.lat !== 0) {
                 centroAlvo = { lat: dadosCtt.lat, lng: dadosCtt.lng };
-                raioBusca = 3500;
+                raioBusca = 5000;
             }
         }
 
         const circuloAlvo = new google.maps.Circle({ center: centroAlvo, radius: raioBusca });
         autocompleteInstancia.setBounds(circuloAlvo.getBounds());
-        // TRAVAMENTO ESTRITO ATIVO: bloqueia 100% qualquer resultado fora do raio
-        autocompleteInstancia.setOptions({ strictBounds: true });
+        // strictBounds: false permite que POIs (Continente, Cafés, etc.) com nomes compostos apareçam perfeitamente
+        autocompleteInstancia.setOptions({ strictBounds: false });
     });
 }
 
 /**
- * Inicializa o Google Places Autocomplete com sincronização de CP e preview estruturado
+ * Inicializa o Google Places Autocomplete com prioridade regional e captura de POIs
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -325,13 +323,13 @@ export function inicializarAutocompleteMorada() {
 
     try {
         const centroPadrao = { lat: 38.8700, lng: -9.3500 };
-        const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 20000 });
+        const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 25000 });
 
         autocompleteInstancia = new google.maps.places.Autocomplete(inputMorada, {
             componentRestrictions: { country: 'pt' },
             fields: ['address_components', 'geometry', 'formatted_address', 'name'],
             bounds: circuloPadrao.getBounds(),
-            strictBounds: true
+            strictBounds: false
         });
 
         inputMorada.dataset.autocompleteBound = "true";
@@ -358,6 +356,7 @@ export function inicializarAutocompleteMorada() {
                 }
             }
 
+            // Se o Google Places detectou o Código Postal do POI/Morada, atualiza o campo de CP
             if (cpGoogleReal && inputCP) {
                 inputCP.value = cpGoogleReal;
                 ultimoCpConcluido = cpGoogleReal;
