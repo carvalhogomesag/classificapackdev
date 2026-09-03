@@ -1,9 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v78.7 - Autocomplete Híbrido com Chip CTT Oficial e Google Places Estrito
- * Faz: Exibe chip de preenchimento rápido com a rua oficial dos CTT associada ao CP7 digitado,
- *      trava o Google Places estritamente na zona geográfica de Sintra/Mafra (eliminando Olival Basto/Cascais),
- *      limpa a morada ao trocar de CP e sincroniza o CP real.
+ * Versão v78.8 - Proteção de CP7 da Etiqueta (Verdade Absoluta), Chip CTT e Google Places Estrito
+ * Faz: Protege o CP7 de 7 dígitos inserido pelo utilizador contra sobrescritas genéricas do Google Maps (ex: 089 vs 058),
+ *      exibe chip CTT oficial, trava busca geograficamente em Sintra/Mafra e exibe preview de 2 linhas.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -107,7 +106,6 @@ window.aplicarRuaOficialNoCampo = function(nomeRua) {
     const pos = inputMorada.value.length;
     inputMorada.setSelectionRange(pos, pos);
 
-    // Esconde o chip após seleção e renderiza preview
     const chipContainer = document.getElementById('chip-sugestao-oficial-ctt');
     if (chipContainer) chipContainer.classList.add('hidden');
 
@@ -122,8 +120,9 @@ export function formatarMoradaLegivel(moradaCompleta, codigoPostal = "") {
 
     let textoLimpo = moradaCompleta.replace(/,\s*Portugal$/i, '').replace(/,\s*PT$/i, '').trim();
 
+    // Extrai e remove qualquer CP que esteja no meio do texto retornado pela Google
     const matchCP = textoLimpo.match(/\b\d{4}-\d{3}\b/);
-    const cpDetectado = matchCP ? matchCP[0] : (codigoPostal || "");
+    const cpDetectado = codigoPostal || (matchCP ? matchCP[0] : "");
     textoLimpo = textoLimpo.replace(/\b\d{4}-\d{3}\b/g, '').replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
 
     const partes = textoLimpo.split(',').map(p => p.trim()).filter(Boolean);
@@ -383,13 +382,12 @@ export function configurarEscutaCodigoPostalParaLimites() {
 
         const circuloAlvo = new google.maps.Circle({ center: centroAlvo, radius: raioBusca });
         autocompleteInstancia.setBounds(circuloAlvo.getBounds());
-        // strictBounds: true elimina Olival Basto, Cascais, Lisboa e outras cidades fora do concelho
         autocompleteInstancia.setOptions({ strictBounds: true });
     });
 }
 
 /**
- * Inicializa o Google Places Autocomplete com travamento estrito e captura de moradas
+ * Inicializa o Google Places Autocomplete com proteção total do CP7 original
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -426,26 +424,29 @@ export function inicializarAutocompleteMorada() {
 
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
 
-            let cpGoogleReal = "";
-            if (place.address_components) {
+            const cpDigitado = inputCP ? inputCP.value.trim() : "";
+            const isCpDigitadoCompleto = /^\d{4}-\d{3}$/.test(cpDigitado);
+
+            // REGRA DE OURO: Se o estafeta já digitou um CP7 completo (ex: 2710-058), ele é a Verdade Absoluta!
+            // O Google Places só preenche o CP se o campo estiver vazio ou incompleto.
+            let cpFinal = cpDigitado;
+
+            if (!isCpDigitadoCompleto && place.address_components) {
                 const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
                 if (componenteCP) {
                     const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
                     if (cpLimpo.length === 7) {
-                        cpGoogleReal = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
+                        cpFinal = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
+                        if (inputCP) inputCP.value = cpFinal;
+                        ultimoCpConcluido = cpFinal;
                     } else if (cpLimpo.length === 4) {
-                        cpGoogleReal = `${cpLimpo}-`;
+                        cpFinal = `${cpLimpo}-`;
+                        if (inputCP) inputCP.value = cpFinal;
                     }
                 }
             }
 
-            if (cpGoogleReal && inputCP) {
-                inputCP.value = cpGoogleReal;
-                ultimoCpConcluido = cpGoogleReal;
-            }
-
-            const cpFinal = cpGoogleReal || (inputCP ? inputCP.value.trim() : "");
-
+            // Remove o código postal de dentro do texto da rua para manter o campo limpo
             let moradaSemCP = moradaFormatada.replace(/\b\d{4}-\d{3}\b/g, '').replace(/\s{2,}/g, ' ').replace(/,\s*,/g, ',').trim();
             inputMorada.value = moradaSemCP;
 
