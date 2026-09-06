@@ -1,8 +1,9 @@
 /**
  * js/rotas-inputs.js
- * Versão v80.3 - Blindagem Absoluta do CP7 da Etiqueta contra Sobrescrita do Google Maps
- * Faz: Ao selecionar uma morada no Google Places, protege o CP7 digitado pelo utilizador (ex: 2710-731),
- *      impedindo que o Google troque para o código genérico da freguesia (ex: 2710-089).
+ * Versão v80.4 - Limpeza/Repreenchimento Reativo de CP7 e Botão Limpar Rápido (X)
+ * Faz: Ao alterar o CP7, limpa e repreenche automaticamente a morada com o novo código;
+ *      injeta botão 'X' interativo para limpar o campo de endereço com 1 clique;
+ *      protege o CP7 da etiqueta contra alterações da Google e mantém Google Places nativo.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -11,6 +12,7 @@ import { obterConcelhoPorCodigoPostal } from './rotas-geografia.js';
 import { CP7_DATABASE } from './cp7-data.js';
 
 let autocompleteInstancia = null;
+let ultimoCpConcluido = "";
 
 /**
  * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
@@ -22,6 +24,56 @@ export function consultarDadosOficiaisCP7(cp7) {
         return CP7_DATABASE[cpFormatado];
     }
     return null;
+}
+
+/**
+ * Configura o Botão de Limpar Rápido (X) dentro do campo de morada
+ */
+function configurarBotaoLimparMorada() {
+    const inputMorada = document.getElementById('rota-morada-completa');
+    if (!inputMorada) return;
+
+    let btnLimpar = document.getElementById('btn-limpar-campo-morada');
+    if (!btnLimpar) {
+        if (inputMorada.parentElement) {
+            inputMorada.parentElement.classList.add('relative');
+        }
+
+        btnLimpar = document.createElement('button');
+        btnLimpar.id = 'btn-limpar-campo-morada';
+        btnLimpar.type = 'button';
+        btnLimpar.className = 'absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600 hover:text-gray-900 flex items-center justify-center text-xs transition-all cursor-pointer border-none shadow-2xs hidden z-10';
+        btnLimpar.title = 'Limpar campo de endereço';
+        btnLimpar.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+
+        if (inputMorada.parentElement) {
+            inputMorada.parentElement.appendChild(btnLimpar);
+        }
+
+        btnLimpar.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            inputMorada.value = '';
+            btnLimpar.classList.add('hidden');
+            inputMorada.focus();
+        });
+    }
+
+    const atualizarVisibilidadeLimpar = () => {
+        if (inputMorada.value && inputMorada.value.trim().length > 0) {
+            btnLimpar.classList.remove('hidden');
+        } else {
+            btnLimpar.classList.add('hidden');
+        }
+    };
+
+    if (inputMorada.dataset.limparBound !== "true") {
+        inputMorada.addEventListener('input', atualizarVisibilidadeLimpar);
+        inputMorada.addEventListener('change', atualizarVisibilidadeLimpar);
+        inputMorada.dataset.limparBound = "true";
+    }
+
+    atualizarVisibilidadeLimpar();
 }
 
 /**
@@ -96,8 +148,7 @@ export function configurarTeclasEnterAdicao() {
 }
 
 /**
- * Aplica a máscara XXXX-XXX no campo de Código Postal e envia "XXXX-XXX "
- * para o campo da Google com o cursor posicionado no FIM para digitação imediata
+ * Aplica a máscara XXXX-XXX no Código Postal e limpa/re-preenche dinamicamente ao trocar de CP
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -115,27 +166,36 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
-        // SE O UTILIZADOR LIMPAR OU ALTERAR O CÓDIGO POSTAL:
-        if (numerosApenas.length < 4 && inputMorada && /^\d{4}/.test(inputMorada.value.trim())) {
-            inputMorada.value = "";
+        // SE O UTILIZADOR ALTERAR OU APAGAR O CÓDIGO POSTAL:
+        if (valor !== ultimoCpConcluido) {
+            if (numerosApenas.length < 7 && inputMorada) {
+                // Se a morada tinha o CP antigo, limpa o campo
+                if (/^\d{4}/.test(inputMorada.value.trim())) {
+                    inputMorada.value = "";
+                    const btnLimpar = document.getElementById('btn-limpar-campo-morada');
+                    if (btnLimpar) btnLimpar.classList.add('hidden');
+                }
+            }
         }
 
-        // QUANDO COMPLETA OS 7 DÍGITOS DO CP7:
+        // QUANDO CONCLUI OS 7 DÍGITOS DO NOVO CÓDIGO POSTAL:
         if (numerosApenas.length === 7 && inputMorada) {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
-            const valorAtualMorada = inputMorada.value.trim();
+            ultimoCpConcluido = formattedZip;
 
-            if (!valorAtualMorada || /^\d{4}-\d{3}/.test(valorAtualMorada) || /^\d{4}/.test(valorAtualMorada)) {
-                inputMorada.value = `${formattedZip} `;
-                inputMorada.focus();
-                
-                const pos = inputMorada.value.length;
-                inputMorada.setSelectionRange(pos, pos);
-            }
+            // Limpa e substitui imediatamente pelo novo Código Postal com cursor no FIM
+            inputMorada.value = `${formattedZip} `;
+            inputMorada.focus();
+            const pos = inputMorada.value.length;
+            inputMorada.setSelectionRange(pos, pos);
+
+            const btnLimpar = document.getElementById('btn-limpar-campo-morada');
+            if (btnLimpar) btnLimpar.classList.remove('hidden');
         }
     });
 
     configurarTeclasEnterAdicao();
+    configurarBotaoLimparMorada();
 }
 
 /**
@@ -155,13 +215,14 @@ export function configurarEscutaCodigoPostalParaLimites() {
 }
 
 /**
- * Inicializa o Google Places Autocomplete protegendo sempre o CP7 da etiqueta
+ * Inicializa o Google Places Autocomplete Tradicional protegendo o CP e ativando o botão 'X'
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputMorada) return;
 
     configurarTeclasEnterAdicao();
+    configurarBotaoLimparMorada();
 
     if (inputMorada.dataset.autocompleteBound === "true") return;
 
@@ -194,13 +255,11 @@ export function inicializarAutocompleteMorada() {
             let moradaFormatada = place.formatted_address || place.name || "";
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
 
-            // REGRA DE OURO: Se o utilizador já digitou um CP7 completo (ex: 2710-731), ele NUNCA é alterado!
+            // REGRA DE OURO: O CP7 da etiqueta (ex: 2710-731) nunca é sobrescrito pelo Google
             if (temCp7Valido) {
-                // Substitui qualquer código postal genérico que o Google tenha injetado (ex: 2710-089) pelo CP7 correto
                 moradaFormatada = moradaFormatada.replace(/\b\d{4}-\d{3}\b/g, cpOriginalDigitado);
                 inputMorada.value = moradaFormatada;
             } else {
-                // Se o campo de CP estava vazio, preenche com o CP retornado pelo Google
                 if (place.address_components && inputCP) {
                     const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
                     if (componenteCP) {
@@ -214,6 +273,9 @@ export function inicializarAutocompleteMorada() {
                 }
                 inputMorada.value = moradaFormatada;
             }
+
+            const btnLimpar = document.getElementById('btn-limpar-campo-morada');
+            if (btnLimpar) btnLimpar.classList.remove('hidden');
         });
 
     } catch (err) {
