@@ -1,9 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v80.4 - Limpeza/Repreenchimento Reativo de CP7 e Botão Limpar Rápido (X)
- * Faz: Ao alterar o CP7, limpa e repreenche automaticamente a morada com o novo código;
- *      injeta botão 'X' interativo para limpar o campo de endereço com 1 clique;
- *      protege o CP7 da etiqueta contra alterações da Google e mantém Google Places nativo.
+ * Versão v80.5 - Preservação Automática de Número de Porta, Blindagem de CP7 e Google Places Nativo
+ * Faz: Preserva o número de porta/lote digitado pelo utilizador mesmo que o Google Places devolva apenas a rua;
+ *      mantém o CP7 da etiqueta protegido contra códigos genéricos (ex: 2710-089) e botão 'X' de limpeza rápida.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -13,6 +12,7 @@ import { CP7_DATABASE } from './cp7-data.js';
 
 let autocompleteInstancia = null;
 let ultimoCpConcluido = "";
+let textoDigitadoAntesDeSelecionar = "";
 
 /**
  * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
@@ -24,6 +24,37 @@ export function consultarDadosOficiaisCP7(cp7) {
         return CP7_DATABASE[cpFormatado];
     }
     return null;
+}
+
+/**
+ * Preserva o número da porta digitado pelo utilizador caso o Google Places devolva apenas a rua
+ */
+function preservarNumeroDaPorta(moradaGoogle, textoDigitado) {
+    if (!moradaGoogle || !textoDigitado) return moradaGoogle;
+
+    // Remove o código postal do texto digitado para não confundir com o número da porta
+    const textoSemCP = textoDigitado.replace(/\b\d{4}-\d{3}\b/g, '').trim();
+
+    // Procura número da porta ou lote (ex: "78", "nº 12", "Lote 4", "5A", "14-B")
+    const matchNumero = textoSemCP.match(/(?:n[ºo°]?\s*|lote\s*|bloco\s*|lt\.?\s*)?(\b\d+[A-Za-z]?\b|\b\d+\s*[-/]\s*\d+\b)/i);
+
+    if (!matchNumero) return moradaGoogle;
+
+    const numeroIdentificado = matchNumero[0].trim();
+    const apenasDigitos = matchNumero[1].trim();
+
+    // Verifica se a primeira parte da morada da Google já tem o número
+    const partesMorada = moradaGoogle.split(',').map(p => p.trim());
+    const primeiraParte = partesMorada[0] || "";
+
+    const jaTemNumero = new RegExp(`\\b${apenasDigitos}\\b`).test(primeiraParte);
+
+    if (!jaTemNumero && partesMorada.length > 0) {
+        partesMorada[0] = `${primeiraParte}, ${numeroIdentificado}`;
+        return partesMorada.join(', ');
+    }
+
+    return moradaGoogle;
 }
 
 /**
@@ -54,6 +85,7 @@ function configurarBotaoLimparMorada() {
             e.preventDefault();
             e.stopPropagation();
             inputMorada.value = '';
+            textoDigitadoAntesDeSelecionar = '';
             btnLimpar.classList.add('hidden');
             inputMorada.focus();
         });
@@ -68,7 +100,10 @@ function configurarBotaoLimparMorada() {
     };
 
     if (inputMorada.dataset.limparBound !== "true") {
-        inputMorada.addEventListener('input', atualizarVisibilidadeLimpar);
+        inputMorada.addEventListener('input', () => {
+            textoDigitadoAntesDeSelecionar = inputMorada.value;
+            atualizarVisibilidadeLimpar();
+        });
         inputMorada.addEventListener('change', atualizarVisibilidadeLimpar);
         inputMorada.dataset.limparBound = "true";
     }
@@ -169,9 +204,9 @@ export function configurarFormatacaoCodigoPostal() {
         // SE O UTILIZADOR ALTERAR OU APAGAR O CÓDIGO POSTAL:
         if (valor !== ultimoCpConcluido) {
             if (numerosApenas.length < 7 && inputMorada) {
-                // Se a morada tinha o CP antigo, limpa o campo
                 if (/^\d{4}/.test(inputMorada.value.trim())) {
                     inputMorada.value = "";
+                    textoDigitadoAntesDeSelecionar = "";
                     const btnLimpar = document.getElementById('btn-limpar-campo-morada');
                     if (btnLimpar) btnLimpar.classList.add('hidden');
                 }
@@ -183,8 +218,8 @@ export function configurarFormatacaoCodigoPostal() {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
             ultimoCpConcluido = formattedZip;
 
-            // Limpa e substitui imediatamente pelo novo Código Postal com cursor no FIM
             inputMorada.value = `${formattedZip} `;
+            textoDigitadoAntesDeSelecionar = inputMorada.value;
             inputMorada.focus();
             const pos = inputMorada.value.length;
             inputMorada.setSelectionRange(pos, pos);
@@ -215,7 +250,7 @@ export function configurarEscutaCodigoPostalParaLimites() {
 }
 
 /**
- * Inicializa o Google Places Autocomplete Tradicional protegendo o CP e ativando o botão 'X'
+ * Inicializa o Google Places Autocomplete protegendo o CP e preservando o número da porta
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -255,7 +290,10 @@ export function inicializarAutocompleteMorada() {
             let moradaFormatada = place.formatted_address || place.name || "";
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
 
-            // REGRA DE OURO: O CP7 da etiqueta (ex: 2710-731) nunca é sobrescrito pelo Google
+            // PRESERVAÇÃO DO NÚMERO DA PORTA: Garante que o número digitado pelo utilizador não se perde
+            moradaFormatada = preservarNumeroDaPorta(moradaFormatada, textoDigitadoAntesDeSelecionar || inputMorada.value);
+
+            // REGRA DE OURO: O CP7 da etiqueta (ex: 2710-730) nunca é sobrescrito pelo Google
             if (temCp7Valido) {
                 moradaFormatada = moradaFormatada.replace(/\b\d{4}-\d{3}\b/g, cpOriginalDigitado);
                 inputMorada.value = moradaFormatada;
