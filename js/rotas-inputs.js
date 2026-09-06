@@ -1,8 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v80.1 - Google Places Tradicional com Envio Automático de CP7 + Localidade
- * Faz: Ao completar os 7 dígitos do CP7, transporta imediatamente o Código Postal e a Localidade
- *      para o campo do Google Places, posicionando o cursor para agilizar o preenchimento da rua.
+ * Versão v80.2 - Google Places Tradicional com CP7 e Cursor no Fim
+ * Faz: Ao completar os 7 dígitos do CP7, transporta apenas o código postal formatado ("XXXX-XXX ")
+ *      para o campo da morada e coloca o cursor no FINAL para digitação imediata da rua/porta.
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -96,8 +96,8 @@ export function configurarTeclasEnterAdicao() {
 }
 
 /**
- * Aplica a máscara XXXX-XXX no campo de Código Postal e transporta automaticamente
- * o CP7 + Localidade para o campo da Google ao completar os 7 dígitos
+ * Aplica a máscara XXXX-XXX no campo de Código Postal e envia "XXXX-XXX "
+ * para o campo da Google com o cursor posicionado no FIM para digitação imediata
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
@@ -115,7 +115,7 @@ export function configurarFormatacaoCodigoPostal() {
         }
         inputCP.value = valor.toUpperCase();
 
-        // SE O UTILIZADOR LIMPAR O CÓDIGO POSTAL:
+        // SE O UTILIZADOR LIMPAR OU ALTERAR O CÓDIGO POSTAL:
         if (numerosApenas.length < 4 && inputMorada && /^\d{4}/.test(inputMorada.value.trim())) {
             inputMorada.value = "";
         }
@@ -123,19 +123,16 @@ export function configurarFormatacaoCodigoPostal() {
         // QUANDO COMPLETA OS 7 DÍGITOS DO CP7:
         if (numerosApenas.length === 7 && inputMorada) {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
-            const concelho = obterConcelhoPorCodigoPostal(formattedZip) || "Sintra";
-            const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
-            const localidade = (dadosCtt && (dadosCtt.localidade || dadosCtt.cpalf)) 
-                ? (dadosCtt.localidade || dadosCtt.cpalf) 
-                : concelho;
-
             const valorAtualMorada = inputMorada.value.trim();
-            // Preenche se o campo estiver vazio ou contiver apenas um código postal anterior
-            if (!valorAtualMorada || /^\d{4}/.test(valorAtualMorada)) {
-                inputMorada.value = `${formattedZip} ${localidade}`;
+
+            // Se o campo estiver vazio ou contiver apenas um código postal anterior
+            if (!valorAtualMorada || /^\d{4}-\d{3}/.test(valorAtualMorada) || /^\d{4}/.test(valorAtualMorada)) {
+                inputMorada.value = `${formattedZip} `;
                 inputMorada.focus();
-                // Posiciona o cursor no início para digitar a rua antes da localidade com facilidade
-                inputMorada.setSelectionRange(0, 0);
+                
+                // Cursor colocado no FIM para continuar a digitar a rua logo a seguir ao espaço
+                const pos = inputMorada.value.length;
+                inputMorada.setSelectionRange(pos, pos);
             }
         }
     });
@@ -183,7 +180,7 @@ export function inicializarAutocompleteMorada() {
             componentRestrictions: { country: 'pt' },
             fields: ['address_components', 'geometry', 'formatted_address', 'name'],
             bounds: circuloPadrao.getBounds(),
-            strictBounds: false // Busca fluida sem bloqueios
+            strictBounds: false
         });
 
         inputMorada.dataset.autocompleteBound = "true";
@@ -199,7 +196,7 @@ export function inicializarAutocompleteMorada() {
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
             inputMorada.value = moradaFormatada;
 
-            // Extrai o Código Postal retornado pelo Google Places e preenche o campo de CP
+            // Extrai o Código Postal retornado pelo Google Places se o campo do CP estiver vazio
             if (place.address_components && inputCP) {
                 const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
                 if (componenteCP) {
