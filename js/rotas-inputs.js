@@ -1,15 +1,28 @@
 /**
  * js/rotas-inputs.js
- * Versão v80.0 - Google Places Autocomplete Tradicional, Rápido e Descomplicado
- * Faz: Integração nativa, direta e fluida com a Google Maps Platform para pesquisa de Moradas,
- *      Ruas com Número e Pontos de Interesse (POIs), extração automática de Código Postal e suporte a Enter.
- * Depende de: ./ui-menu.js, ./rotas-geografia.js
+ * Versão v80.1 - Google Places Tradicional com Envio Automático de CP7 + Localidade
+ * Faz: Ao completar os 7 dígitos do CP7, transporta imediatamente o Código Postal e a Localidade
+ *      para o campo do Google Places, posicionando o cursor para agilizar o preenchimento da rua.
+ * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
 import { obterPrefixoPadrao } from './ui-menu.js';
 import { obterConcelhoPorCodigoPostal } from './rotas-geografia.js';
+import { CP7_DATABASE } from './cp7-data.js';
 
 let autocompleteInstancia = null;
+
+/**
+ * Consulta a Base Oficial dos CTT pelo Código Postal (CP7)
+ */
+export function consultarDadosOficiaisCP7(cp7) {
+    if (!cp7 || typeof cp7 !== 'string') return null;
+    const cpFormatado = cp7.trim();
+    if (CP7_DATABASE && CP7_DATABASE[cpFormatado]) {
+        return CP7_DATABASE[cpFormatado];
+    }
+    return null;
+}
 
 /**
  * Preenche o prefixo no campo de Código Postal e foca o campo
@@ -83,10 +96,12 @@ export function configurarTeclasEnterAdicao() {
 }
 
 /**
- * Aplica a máscara e formatação automática XXXX-XXX no campo de Código Postal
+ * Aplica a máscara XXXX-XXX no campo de Código Postal e transporta automaticamente
+ * o CP7 + Localidade para o campo da Google ao completar os 7 dígitos
  */
 export function configurarFormatacaoCodigoPostal() {
     const inputCP = document.getElementById('rota-codigo-postal');
+    const inputMorada = document.getElementById('rota-morada-completa');
     if (!inputCP) return;
 
     inputCP.addEventListener('input', () => {
@@ -99,6 +114,30 @@ export function configurarFormatacaoCodigoPostal() {
             valor = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
         }
         inputCP.value = valor.toUpperCase();
+
+        // SE O UTILIZADOR LIMPAR O CÓDIGO POSTAL:
+        if (numerosApenas.length < 4 && inputMorada && /^\d{4}/.test(inputMorada.value.trim())) {
+            inputMorada.value = "";
+        }
+
+        // QUANDO COMPLETA OS 7 DÍGITOS DO CP7:
+        if (numerosApenas.length === 7 && inputMorada) {
+            const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
+            const concelho = obterConcelhoPorCodigoPostal(formattedZip) || "Sintra";
+            const dadosCtt = consultarDadosOficiaisCP7(formattedZip);
+            const localidade = (dadosCtt && (dadosCtt.localidade || dadosCtt.cpalf)) 
+                ? (dadosCtt.localidade || dadosCtt.cpalf) 
+                : concelho;
+
+            const valorAtualMorada = inputMorada.value.trim();
+            // Preenche se o campo estiver vazio ou contiver apenas um código postal anterior
+            if (!valorAtualMorada || /^\d{4}/.test(valorAtualMorada)) {
+                inputMorada.value = `${formattedZip} ${localidade}`;
+                inputMorada.focus();
+                // Posiciona o cursor no início para digitar a rua antes da localidade com facilidade
+                inputMorada.setSelectionRange(0, 0);
+            }
+        }
     });
 
     configurarTeclasEnterAdicao();
@@ -137,7 +176,6 @@ export function inicializarAutocompleteMorada() {
     }
 
     try {
-        // Área de preferência padrão (Sintra e Mafra), flexível para qualquer pesquisa válida
         const centroPadrao = { lat: 38.8600, lng: -9.3500 };
         const circuloPadrao = new google.maps.Circle({ center: centroPadrao, radius: 30000 });
 
@@ -161,7 +199,7 @@ export function inicializarAutocompleteMorada() {
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
             inputMorada.value = moradaFormatada;
 
-            // Extrai o Código Postal retornado pelo Google Places e preenche o campo de CP (para saber o Brick)
+            // Extrai o Código Postal retornado pelo Google Places e preenche o campo de CP
             if (place.address_components && inputCP) {
                 const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
                 if (componenteCP) {
