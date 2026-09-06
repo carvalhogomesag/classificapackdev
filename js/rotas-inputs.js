@@ -1,8 +1,8 @@
 /**
  * js/rotas-inputs.js
- * Versão v80.2 - Google Places Tradicional com CP7 e Cursor no Fim
- * Faz: Ao completar os 7 dígitos do CP7, transporta apenas o código postal formatado ("XXXX-XXX ")
- *      para o campo da morada e coloca o cursor no FINAL para digitação imediata da rua/porta.
+ * Versão v80.3 - Blindagem Absoluta do CP7 da Etiqueta contra Sobrescrita do Google Maps
+ * Faz: Ao selecionar uma morada no Google Places, protege o CP7 digitado pelo utilizador (ex: 2710-731),
+ *      impedindo que o Google troque para o código genérico da freguesia (ex: 2710-089).
  * Depende de: ./ui-menu.js, ./rotas-geografia.js, ./cp7-data.js
  */
 
@@ -125,12 +125,10 @@ export function configurarFormatacaoCodigoPostal() {
             const formattedZip = `${numerosApenas.substring(0, 4)}-${numerosApenas.substring(4, 7)}`;
             const valorAtualMorada = inputMorada.value.trim();
 
-            // Se o campo estiver vazio ou contiver apenas um código postal anterior
             if (!valorAtualMorada || /^\d{4}-\d{3}/.test(valorAtualMorada) || /^\d{4}/.test(valorAtualMorada)) {
                 inputMorada.value = `${formattedZip} `;
                 inputMorada.focus();
                 
-                // Cursor colocado no FIM para continuar a digitar a rua logo a seguir ao espaço
                 const pos = inputMorada.value.length;
                 inputMorada.setSelectionRange(pos, pos);
             }
@@ -157,7 +155,7 @@ export function configurarEscutaCodigoPostalParaLimites() {
 }
 
 /**
- * Inicializa o Google Places Autocomplete Tradicional (Moradas, POIs e Ruas)
+ * Inicializa o Google Places Autocomplete protegendo sempre o CP7 da etiqueta
  */
 export function inicializarAutocompleteMorada() {
     const inputMorada = document.getElementById('rota-morada-completa');
@@ -190,23 +188,31 @@ export function inicializarAutocompleteMorada() {
             if (!place || (!place.formatted_address && !place.name)) return;
 
             const inputCP = document.getElementById('rota-codigo-postal');
+            const cpOriginalDigitado = inputCP ? inputCP.value.trim() : "";
+            const temCp7Valido = /^\d{4}-\d{3}$/.test(cpOriginalDigitado);
+
             let moradaFormatada = place.formatted_address || place.name || "";
-
-            // Limpa o sufixo redundante ", Portugal" para manter o campo limpo
             moradaFormatada = moradaFormatada.replace(/,\s*Portugal$/i, '').trim();
-            inputMorada.value = moradaFormatada;
 
-            // Extrai o Código Postal retornado pelo Google Places se o campo do CP estiver vazio
-            if (place.address_components && inputCP) {
-                const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
-                if (componenteCP) {
-                    const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
-                    if (cpLimpo.length === 7) {
-                        inputCP.value = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
-                    } else if (cpLimpo.length === 4) {
-                        inputCP.value = `${cpLimpo}-`;
+            // REGRA DE OURO: Se o utilizador já digitou um CP7 completo (ex: 2710-731), ele NUNCA é alterado!
+            if (temCp7Valido) {
+                // Substitui qualquer código postal genérico que o Google tenha injetado (ex: 2710-089) pelo CP7 correto
+                moradaFormatada = moradaFormatada.replace(/\b\d{4}-\d{3}\b/g, cpOriginalDigitado);
+                inputMorada.value = moradaFormatada;
+            } else {
+                // Se o campo de CP estava vazio, preenche com o CP retornado pelo Google
+                if (place.address_components && inputCP) {
+                    const componenteCP = place.address_components.find(c => c.types.includes('postal_code'));
+                    if (componenteCP) {
+                        const cpLimpo = componenteCP.long_name.replace(/\D/g, '');
+                        if (cpLimpo.length === 7) {
+                            inputCP.value = `${cpLimpo.substring(0, 4)}-${cpLimpo.substring(4, 7)}`;
+                        } else if (cpLimpo.length === 4) {
+                            inputCP.value = `${cpLimpo}-`;
+                        }
                     }
                 }
+                inputMorada.value = moradaFormatada;
             }
         });
 
