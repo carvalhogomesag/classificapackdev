@@ -1,11 +1,11 @@
 /**
  * js/maps.js
- * Versão v81.0 - Suporte a Mapa em Tempo Real no Planeamento, Laço de Perímetro e Otimização
+ * Versão v82.0 - Suporte Total a Múltiplos Blocos (Multi-Cluster), Planeamento ao Vivo e Condução
  * Faz: Gere a integração total com a Google Maps Platform:
- *      - Desenho de mapa em tempo real durante o planeamento (visualização imediata dos pacotes adicionados).
- *      - Desenho de rota otimizada com polilinha e balões interativos.
+ *      - Renderização de pinos em tempo real com cores dinâmicas para múltiplos blocos (Circuit-Style).
+ *      - Desenho de rota otimizada com polilinha e balões de informação ricos com identificador de bloco.
  *      - Dispersão em espiral para moradas no mesmo local.
- *      - Destaque de marcadores para seleção por perímetro (Lasso / Circuit-Style).
+ *      - Destaque e atualização reativa de marcadores em múltiplos clusters.
  * Depende de: Nenhuns módulos externos (comunicação direta com o SDK do Google Maps e window.CP7_DATABASE).
  */
 
@@ -193,8 +193,7 @@ function criarDispersorEspiral() {
 }
 
 /**
- * DESENHA O MAPA EM TEMPO REAL NO MODO PLANEAMENTO (Sem linha de rota / polilinha)
- * Conforme o estafeta insere moradas, os pinos surgem instantaneamente no mapa!
+ * DESENHA O MAPA EM TEMPO REAL NO MODO PLANEAMENTO COM SUPORTE A MÚLTIPLOS BLOCOS
  */
 export function desenharMapaPlaneamento(mapElement, partida, moradas) {
     if (typeof google === 'undefined' || !mapElement) return;
@@ -222,7 +221,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
     const bounds = new google.maps.LatLngBounds();
     const evitarSobreposicao = criarDispersorEspiral();
 
-    // 1. Ponto de Partida (se existir)
+    // 1. Ponto de Partida
     if (partida && typeof partida.lat === 'number') {
         const startPos = evitarSobreposicao(partida.lat, partida.lng);
         bounds.extend(startPos);
@@ -257,7 +256,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
         googleMarkers.push(partidaMarker);
     }
 
-    // 2. Marcadores das Paragens Mapeadas
+    // 2. Marcadores das Paragens Mapeadas com Cores de Bloco
     if (Array.isArray(moradas)) {
         moradas.forEach((p, i) => {
             if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
@@ -265,8 +264,14 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
             const pos = evitarSobreposicao(p.lat, p.lng);
             bounds.extend(pos);
 
-            let pinoColor = p.isClusterGroup ? "#8B5CF6" : (p.tipoOperacao === "Recolha" ? "#9333EA" : "#2563EB");
-            let strokeColor = p.isClusterGroup ? "#4C1D95" : "#FFFFFF";
+            let pinoColor = p.isClusterGroup && p.clusterColor 
+                ? p.clusterColor 
+                : (p.tipoOperacao === "Recolha" ? "#9333EA" : "#2563EB");
+
+            let strokeColor = p.isClusterGroup && p.clusterBorder 
+                ? p.clusterBorder 
+                : "#FFFFFF";
+
             let strokeWeight = p.isClusterGroup ? 3 : 2;
 
             const m = new google.maps.Marker({
@@ -297,7 +302,12 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
                 const opLabel = isRecolha ? "Recolha" : "Entrega";
                 const opColor = isRecolha ? "#7C3AED" : "#2563EB";
                 const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
-                const clusterBadge = p.isClusterGroup ? `<div style="font-size: 10px; background: #EDE9FE; color: #6D28D9; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px;">🔗 Bloco Selecionado (Perímetro)</div>` : '';
+                
+                const clusterBadge = p.isClusterGroup ? `
+                    <div style="font-size: 10px; background: ${p.clusterColor || '#8B5CF6'}20; color: ${p.clusterBorder || '#6D28D9'}; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px; border: 1px solid ${p.clusterColor || '#8B5CF6'}50;">
+                        🔗 ${p.clusterGroupName || 'Bloco'} (Roteirizado Junto)
+                    </div>
+                ` : '';
 
                 googleInfoWindow.setContent(`
                     <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 230px;">
@@ -332,7 +342,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
 }
 
 /**
- * Desenha a rota otimizada no Mapa da Google com Polilinha de percurso
+ * Desenha a rota otimizada com polilinha e suporte visual a múltiplos blocos
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -392,30 +402,28 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     googleMarkers.push(partidaMarker);
 
-    // Paragens / Entregas Otimizadas
+    // Paragens Otimizadas com Cores por Bloco
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
         bounds.extend(pos);
 
-        let pinoColor = "#2563EB"; 
+        let pinoColor = p.isClusterGroup && p.clusterColor ? p.clusterColor : "#2563EB"; 
         let bounceAnimation = null;
-        let strokeColor = "#FFFFFF";
-        let strokeWeight = 2;
+        let strokeColor = p.isClusterGroup && p.clusterBorder ? p.clusterBorder : "#FFFFFF";
+        let strokeWeight = p.isClusterGroup ? 3 : 2;
 
         if (p.isNewUnconfirmed) {
             pinoColor = "#F97316"; 
             bounceAnimation = google.maps.Animation.BOUNCE;
             strokeColor = "#000000"; 
             strokeWeight = 3;
-        } else if (p.isClusterGroup) {
-            pinoColor = "#8B5CF6"; // Roxo para paragens de bloco manual
-            strokeColor = "#4C1D95";
-            strokeWeight = 3;
         } else if (p.status === "Entregue") {
             pinoColor = "#10B981"; 
+            strokeColor = "#059669";
         } else if (p.status === "Falhou" || p.status === "Failed") {
             pinoColor = "#EF4444"; 
+            strokeColor = "#B91C1C";
         }
 
         const m = new google.maps.Marker({
@@ -456,7 +464,13 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             }
 
             const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
-            const clusterText = p.isClusterGroup ? `<div style="font-size: 10px; background: #EDE9FE; color: #6D28D9; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px;">🔗 Bloco Roteirizado Junto</div>` : '';
+            
+            const clusterText = p.isClusterGroup ? `
+                <div style="font-size: 10px; background: ${p.clusterColor || '#8B5CF6'}20; color: ${p.clusterBorder || '#6D28D9'}; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px; border: 1px solid ${p.clusterColor || '#8B5CF6'}50;">
+                    🔗 ${p.clusterGroupName || 'Bloco'} (Roteirizado Junto)
+                </div>
+            ` : '';
+
             const obsText = p.observation ? `<div style="font-size: 10px; color: #4B5563; font-style: italic; background: #FEF3C7; padding: 4px; border-radius: 4px; margin-top: 4px;">💬 ${p.observation}</div>` : '';
 
             const confirmBtnHtml = p.isNewUnconfirmed ? `
@@ -511,21 +525,26 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 }
 
 /**
- * Destaca visualmente no mapa os marcadores selecionados por um perímetro/laço
+ * Destaca visualmente no mapa os marcadores de paragens de acordo com o seu bloco
  */
 export function destacarMarcadoresGrupo(idsParagensSelecionadas) {
-    const idSet = new Set(idsParagensSelecionadas);
+    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    if (!Array.isArray(lista)) return;
+
+    const idToParagemMap = new Map();
+    lista.forEach(p => idToParagemMap.set(p.id, p));
+
     googleMarkers.forEach(m => {
         if (!m.paragemId) return;
-        const estaNoGrupo = idSet.has(m.paragemId);
-        if (estaNoGrupo) {
+        const paragem = idToParagemMap.get(m.paragemId);
+        if (paragem && paragem.isClusterGroup) {
             m.setIcon({
                 path: google.maps.SymbolPath.CIRCLE,
-                scale: 17,
-                fillColor: "#8B5CF6", // Roxo vibrante de destaque
+                scale: 16,
+                fillColor: paragem.clusterColor || "#8B5CF6",
                 fillOpacity: 1,
                 strokeWeight: 3.5,
-                strokeColor: "#4C1D95"
+                strokeColor: paragem.clusterBorder || "#6D28D9"
             });
         }
     });

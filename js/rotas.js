@@ -1,9 +1,9 @@
 /**
  * js/rotas.js
- * Versão v81.0 - Maestro de Rotas com Mapa em Tempo Real, Roteirização de Blocos/Perímetro e Persistência Blindada
+ * Versão v82.0 - Maestro de Rotas com Roteirização Multi-Cluster, Mapa em Tempo Real e Persistência Blindada
  * Faz: Gestão principal da aba de rotas, integrando visualização em tempo real de pacotes no mapa,
- *      roteirização inteligente com respeito a blocos de perímetro (Lasso / Circuit-Style),
- *      odómetro reativo, edição de paragens e persistência local/Firestore.
+ *      roteirização encadeada de múltiplos blocos/perímetros (Multi-Cluster / Circuit-Style),
+ *      re-otimização a qualquer momento, odómetro reativo e persistência local/Firestore.
  * Depende de: ./maps.js, ./rotas-laco.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js
  */
 
@@ -18,7 +18,11 @@ import {
     limparMapaVisual 
 } from './maps.js';
 
-import { ativarModoDesenhoPerimetro, limparPerimetroDesenho } from './rotas-laco.js';
+import { 
+    ativarModoDesenhoPerimetro, 
+    limparTodosClusters, 
+    renderizarPainelMultiClusters 
+} from './rotas-laco.js';
 
 // Importa o módulo de navegação (Google Maps vs Waze)
 import { abrirNavegacao } from './navigation.js';
@@ -172,8 +176,8 @@ export function setupVozLogic() {
 }
 
 /**
- * ALGORITMO LOCAL DE ROTEIRIZAÇÃO COM RESPEITO A BLOCOS/CLUSTERS (TIPO CIRCUIT)
- * Se uma paragem pertence a um bloco agrupado por perímetro, visita todas as paragens desse bloco juntas!
+ * ALGORITMO MULTI-CLUSTER DE ROTEIRIZAÇÃO ENCADEADA (CIRCUIT-STYLE)
+ * Garante que, ao entrar em qualquer bloco desenhado, todas as paragens desse bloco sejam entregues juntas!
  */
 function calcularRotaVizinhoMaisProximoLocal() {
     if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
@@ -183,13 +187,13 @@ function calcularRotaVizinhoMaisProximoLocal() {
     let currentCoords = { lat: window.partidaLocalizacao.lat, lng: window.partidaLocalizacao.lng };
 
     while (unvisited.length > 0) {
-        let nearestIndex = 0;
+        let nearestIndex = -1;
         let minDistance = Infinity;
 
-        // Se a paragem anterior pertence a um bloco/cluster de perímetro, restringe as candidatas às restantes do mesmo bloco
         const currentStop = optimized.length > 0 ? optimized[optimized.length - 1] : null;
         let candidatePool = unvisited;
 
+        // Se a paragem anterior pertence a um bloco que ainda tem paragens pendentes, restringe aos membros desse mesmo bloco
         if (currentStop && currentStop.isClusterGroup && currentStop.clusterGroupId) {
             const clusterCandidates = unvisited.filter(p => p.isClusterGroup && p.clusterGroupId === currentStop.clusterGroupId);
             if (clusterCandidates.length > 0) {
@@ -211,6 +215,16 @@ function calcularRotaVizinhoMaisProximoLocal() {
                 minDistance = dist;
                 nearestIndex = i;
             }
+        }
+
+        if (nearestIndex === -1) {
+            nearestIndex = 0;
+            minDistance = calcularDistanciaHaversine(
+                currentCoords.lat,
+                currentCoords.lng,
+                unvisited[0].lat,
+                unvisited[0].lng
+            );
         }
 
         const nextStop = unvisited.splice(nearestIndex, 1)[0];
@@ -287,7 +301,10 @@ export async function processarAdicaoPorPostal() {
             tipoOperacao: tipoOperacaoVal,
             isNewUnconfirmed: rotaJaOtimizada,
             isClusterGroup: false,
-            clusterGroupId: null
+            clusterGroupId: null,
+            clusterGroupName: null,
+            clusterColor: null,
+            clusterBorder: null
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -301,7 +318,6 @@ export async function processarAdicaoPorPostal() {
             window.moradasEntregas.push(novaMorada);
 
             if (rotaJaOtimizada) {
-                // Se a rota já está em andamento, anexa ao fim da rota otimizada
                 let pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
 
                 novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
@@ -330,7 +346,6 @@ export async function processarAdicaoPorPostal() {
 
                 alternarModoRota('conducao');
             } else {
-                // FASE DE PLANEAMENTO: Exibe imediatamente os pinos no mapa em tempo real!
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
 
@@ -371,7 +386,7 @@ export async function processarAdicaoPorPostal() {
 }
 
 // =========================================================================
-// OTIMIZAÇÃO GLOBAL DA ROTA (CLOUD / LOCAL COM SUPORTE A BLOCOS DE PERÍMETRO)
+// OTIMIZAÇÃO GLOBAL DA ROTA (SUPORTE A MÚLTIPLOS BLOCOS ANTES E DEPOIS)
 // =========================================================================
 export async function otimizarItinerarioComVizinhoMaisProximo() {
     if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
@@ -379,8 +394,8 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     const btnOtimizar = document.getElementById('btn-otimizar-rota');
 
-    if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
-        const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa. Se otimizar de novo, o sistema recalculará todo o percurso e confirmará todas as posições. Deseja continuar?");
+    if (window.rotaOtimizada && window.rotaOtimizada.length > 0 && !window.moradasEntregas.some(p => p.isClusterGroup)) {
+        const confirmarRecalculo = confirm("Atenção: Já possui uma rota ativa. Se otimizar de novo, o sistema recalculará todo o percurso. Deseja continuar?");
         if (!confirmarRecalculo) return;
     }
 
@@ -389,21 +404,21 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         btnOtimizar.disabled = true;
     }
 
-    // Se existirem blocos agrupados por perímetro (Lasso), resolve localmente com o algoritmo de clusters agrupados
     const temBlocosPerimetro = window.moradasEntregas.some(p => p.isClusterGroup);
 
+    // Se existem múltiplos blocos definidos pelo laço, resolve com o solver multi-cluster local
     if (temBlocosPerimetro) {
-        console.log("[ROTEIRIZADOR] Agrupamento de perímetro detetado. A calcular sequência em bloco...");
         window.isRouteOptimized = true;
         calcularRotaVizinhoMaisProximoLocal();
         window.rotaOtimizada.forEach(p => p.isNewUnconfirmed = false);
-        window.routingMethodUsed = 'Cluster-Local';
-        localStorage.setItem('cp_routing_method', 'Cluster-Local');
+        window.routingMethodUsed = 'Multi-Cluster';
+        localStorage.setItem('cp_routing_method', 'Multi-Cluster');
 
         document.getElementById('container-mapa')?.classList.remove('hidden');
         document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
 
         renderizarItinerarioOtimizado();
+        renderizarPainelMultiClusters();
         sincronizarPersistencia();
 
         setTimeout(() => {
@@ -629,7 +644,6 @@ export function setupRotasLogic() {
                         }
                         sincronizarPersistencia();
 
-                        // Atualiza o mapa de planeamento com o ponto de partida
                         if (window.moradasEntregas && window.moradasEntregas.length > 0) {
                             desenharMapaPlaneamento(document.getElementById('map'), window.partidaLocalizacao, window.moradasEntregas);
                         }
@@ -664,7 +678,7 @@ export function setupRotasLogic() {
                 document.getElementById('container-rota-ordenada')?.classList.add('hidden');
                 document.getElementById('estatisticas-rota')?.classList.add('hidden');
                 limparMapaVisual();
-                limparPerimetroDesenho();
+                limparTodosClusters();
                 renderMoradasAdicionadas();
                 alternarModoRota('planeamento');
                 sincronizarPersistencia();
@@ -750,12 +764,12 @@ export function sincronizarInterfaceRota() {
 
         configurarGatilhoEdicaoOdometro();
         renderMoradasAdicionadas();
+        renderizarPainelMultiClusters();
         setTimeout(inicializarAutocompleteMorada, 100);
 
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
         alternarModoRota(modoSalvo);
 
-        // Se a rota já foi otimizada, desenha a rota completa com polilinha
         if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
             document.getElementById('container-mapa')?.classList.remove('hidden');
             document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
@@ -769,7 +783,6 @@ export function sincronizarInterfaceRota() {
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
             }, 300);
         } else if (window.moradasEntregas && window.moradasEntregas.length > 0) {
-            // Se está em fase de planeamento mas já tem moradas, exibe o mapa de planeamento em tempo real
             document.getElementById('container-mapa')?.classList.remove('hidden');
             document.getElementById('container-rota-ordenada')?.classList.add('hidden');
             document.getElementById('estatisticas-rota')?.classList.add('hidden');

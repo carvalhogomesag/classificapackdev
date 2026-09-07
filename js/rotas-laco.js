@@ -1,22 +1,34 @@
 /**
  * js/rotas-laco.js
- * Versão v81.0 - Módulo de Desenho Livre de Perímetro (Lasso) e Agrupamento em Bloco
- * Faz: Permite ao utilizador desenhar livremente com o dedo/rato sobre o mapa da rota,
- *      deteta todas as paragens contidas no perímetro desenhado e agrupa-as para roteirização conjunta.
+ * Versão v82.0 - Sistema Multi-Cluster de Perímetros (Lasso / Circuit-Style)
+ * Faz: Permite desenhar múltiplos blocos/perímetros com cores distintas sobre o mapa,
+ *      deteta paragens em cada polígono, suporta agrupamento antes e depois da otimização,
+ *      e permite gerir/reorganizar clusters de forma visual e independente.
  * Depende de: ./maps.js, ./storage.js
  */
 
 import { obterInstanciaMapaGoogle, destacarMarcadoresGrupo } from './maps.js';
 
 let isDrawingMode = false;
-let currentPolygon = null;
 let drawingPolyline = null;
 let capturedCoordinates = [];
-let mouseMoveListener = null;
-let touchMoveListener = null;
+let onGrupoCallbackAtual = null;
+
+// Paleta de cores vibrantes para distinguir múltiplos blocos
+const PALETA_CLUSTERS = [
+    { nome: "Roxo",   cor: "#8B5CF6", borda: "#6D28D9", fundo: "#8B5CF625" },
+    { nome: "Ciano",  cor: "#06B6D4", borda: "#0891B2", fundo: "#06B6D425" },
+    { nome: "Âmbar",  cor: "#F59E0B", borda: "#D97706", fundo: "#F59E0B25" },
+    { nome: "Rosa",   cor: "#EC4899", borda: "#DB2777", fundo: "#EC489925" },
+    { nome: "Esmeralda", cor: "#10B981", borda: "#059669", fundo: "#10B98125" },
+    { nome: "Índigo", cor: "#6366F1", borda: "#4F46E5", fundo: "#6366F125" }
+];
+
+// Registo em memória de todos os polígonos visuais criados no mapa
+let activePolygons = new Map(); // clusterId -> google.maps.Polygon
 
 /**
- * Algoritmo matemático Ray-Casting para detetar se um ponto GPS está dentro do polígono
+ * Algoritmo Ray-Casting para detetar se uma coordenada GPS está dentro do polígono
  */
 function pontoNoPoligono(ponto, vertices) {
     const x = ponto.lat;
@@ -34,7 +46,7 @@ function pontoNoPoligono(ponto, vertices) {
 }
 
 /**
- * Converte coordenadas de pixel do ecrã (clientX, clientY) para coordenadas geográficas LatLng
+ * Converte coordenadas de pixel do ecrã para coordenadas geográficas LatLng do Google Maps
  */
 function pixelParaLatLng(map, clientX, clientY) {
     const mapDiv = map.getDiv();
@@ -55,19 +67,34 @@ function pixelParaLatLng(map, clientX, clientY) {
 }
 
 /**
- * Ativa o modo de desenho livre de perímetro sobre o mapa
+ * Retorna a próxima cor disponível para um novo cluster
+ */
+function obterProximaCorCluster() {
+    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    const clustersExistentes = new Set();
+    if (Array.isArray(lista)) {
+        lista.forEach(p => {
+            if (p.clusterGroupId) clustersExistentes.add(p.clusterGroupId);
+        });
+    }
+    const indexCor = clustersExistentes.size % PALETA_CLUSTERS.length;
+    return PALETA_CLUSTERS[indexCor];
+}
+
+/**
+ * Ativa o modo de desenho livre de perímetro sobre o mapa (Funciona no Planeamento e Condução)
  */
 export function ativarModoDesenhoPerimetro(onGrupoSelecionadoCallback) {
     const map = obterInstanciaMapaGoogle();
     if (!map) {
-        alert("O mapa ainda não está carregado.");
+        alert("O mapa ainda não está carregado. Adicione pelo menos uma morada primeiro.");
         return;
     }
 
-    limparPerimetroDesenho();
+    onGrupoCallbackAtual = onGrupoSelecionadoCallback;
     isDrawingMode = true;
 
-    // Desativa o arrasto do mapa para permitir o desenho com o dedo/rato
+    // Desativa navegação do mapa para permitir desenho livre com o dedo/rato
     map.setOptions({
         draggable: false,
         gestureHandling: 'none'
@@ -77,14 +104,14 @@ export function ativarModoDesenhoPerimetro(onGrupoSelecionadoCallback) {
     mapDiv.style.cursor = 'crosshair';
 
     capturedCoordinates = [];
+    const configCor = obterProximaCorCluster();
 
-    // Cria a linha guia do desenho em tempo real
     drawingPolyline = new google.maps.Polyline({
         map: map,
         path: [],
-        strokeColor: "#8B5CF6",
+        strokeColor: configCor.cor,
         strokeOpacity: 0.9,
-        strokeWeight: 3,
+        strokeWeight: 3.5,
         zIndex: 9999
     });
 
@@ -118,33 +145,35 @@ export function ativarModoDesenhoPerimetro(onGrupoSelecionadoCallback) {
             return;
         }
 
-        // Fecha o polígono
         if (drawingPolyline) {
             drawingPolyline.setMap(null);
             drawingPolyline = null;
         }
 
-        currentPolygon = new google.maps.Polygon({
+        const clusterId = `cluster_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        const corCluster = obterProximaCorCluster();
+
+        const novoPoligono = new google.maps.Polygon({
             map: map,
             paths: capturedCoordinates,
-            strokeColor: "#7C3AED",
+            strokeColor: corCluster.borda,
             strokeOpacity: 0.9,
             strokeWeight: 2.5,
-            fillColor: "#8B5CF6",
-            fillOpacity: 0.2,
-            zIndex: 9998
+            fillColor: corCluster.cor,
+            fillOpacity: 0.18,
+            zIndex: 9990
         });
 
+        activePolygons.set(clusterId, novoPoligono);
+
         desativarModoDesenho();
-        processarParagensNoPerimetro(capturedCoordinates, onGrupoSelecionadoCallback);
+        processarNovoCluster(clusterId, corCluster, capturedCoordinates);
     };
 
-    // Eventos do Rato
     mapDiv.onmousedown = iniciarDesenho;
     mapDiv.onmousemove = desenhar;
     mapDiv.onmouseup = finalizarDesenho;
 
-    // Eventos Touch (Mobile)
     mapDiv.ontouchstart = iniciarDesenho;
     mapDiv.ontouchmove = desenhar;
     mapDiv.ontouchend = finalizarDesenho;
@@ -153,7 +182,7 @@ export function ativarModoDesenhoPerimetro(onGrupoSelecionadoCallback) {
 }
 
 /**
- * Desativa o modo de captura de desenho e restaura o controlo do mapa
+ * Desativa a captura de desenho e restaura o controlo do mapa
  */
 export function desativarModoDesenho() {
     isDrawingMode = false;
@@ -176,82 +205,227 @@ export function desativarModoDesenho() {
 }
 
 /**
- * Identifica quais paragens estão dentro do perímetro desenhado e aplica o agrupamento
+ * Processa a criação de um novo cluster a partir das coordenadas desenhadas
  */
-function processarParagensNoPerimetro(vertices, onGrupoSelecionadoCallback) {
-    const listaAtual = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
-    if (!Array.isArray(listaAtual) || listaAtual.length === 0) return;
+function processarNovoCluster(clusterId, configCor, vertices) {
+    // Procura na lista de rota otimizada se já houver, ou na lista de planeamento
+    const listaAlvo = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    if (!Array.isArray(listaAlvo) || listaAlvo.length === 0) return;
+
+    // Calcula o número do bloco (ex: Bloco 1, Bloco 2)
+    const clustersExistentes = new Set();
+    listaAlvo.forEach(p => {
+        if (p.clusterGroupId) clustersExistentes.add(p.clusterGroupId);
+    });
+    const numeroBloco = clustersExistentes.size + 1;
+    const nomeBloco = `Bloco ${numeroBloco}`;
 
     const paragensNoGrupo = [];
 
-    listaAtual.forEach((p, idx) => {
+    listaAlvo.forEach(p => {
         if (typeof p.lat === 'number' && typeof p.lng === 'number') {
             const estaDentro = pontoNoPoligono({ lat: p.lat, lng: p.lng }, vertices);
             if (estaDentro) {
                 p.isClusterGroup = true;
-                p.clusterGroupId = p.clusterGroupId || `cluster_${Date.now()}`;
+                p.clusterGroupId = clusterId;
+                p.clusterGroupName = nomeBloco;
+                p.clusterColor = configCor.cor;
+                p.clusterBorder = configCor.borda;
                 paragensNoGrupo.push(p);
             }
         }
     });
 
     if (paragensNoGrupo.length === 0) {
-        alert("⚠️ Nenhuma paragem foi encontrada dentro do perímetro desenhado. Tente desenhar em volta dos pinos pretendidos.");
-        limparPerimetroDesenho();
+        alert("⚠️ Nenhuma paragem foi encontrada dentro do perímetro desenhado. Tente desenhar mais próximo dos pinos.");
+        removerPoligonoCluster(clusterId);
         return;
     }
 
-    // Destaca visualmente os marcadores no mapa
-    destacarMarcadoresGrupo(paragensNoGrupo.map(p => p.id));
-
-    // Exibe a barra de ações do grupo selecionado
-    exibirBarraAcoesGrupo(paragensNoGrupo.length);
-
-    if (typeof onGrupoSelecionadoCallback === 'function') {
-        onGrupoSelecionadoCallback(paragensNoGrupo);
-    }
-}
-
-/**
- * Remove o polígono visual e desmarca o agrupamento de cluster
- */
-export function limparPerimetroDesenho() {
-    if (currentPolygon) {
-        currentPolygon.setMap(null);
-        currentPolygon = null;
-    }
-    if (drawingPolyline) {
-        drawingPolyline.setMap(null);
-        drawingPolyline = null;
-    }
-    capturedCoordinates = [];
-
-    // Remove a flag de cluster das paragens
-    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
-    if (Array.isArray(lista)) {
-        lista.forEach(p => {
-            p.isClusterGroup = false;
-            p.clusterGroupId = null;
+    // Se estivermos a operar sobre a lista otimizada, sincroniza também a lista base de moradas
+    if (window.rotaOtimizada && window.rotaOtimizada.length > 0 && Array.isArray(window.moradasEntregas)) {
+        const idSet = new Set(paragensNoGrupo.map(p => p.id));
+        window.moradasEntregas.forEach(p => {
+            if (idSet.has(p.id)) {
+                p.isClusterGroup = true;
+                p.clusterGroupId = clusterId;
+                p.clusterGroupName = nomeBloco;
+                p.clusterColor = configCor.cor;
+                p.clusterBorder = configCor.borda;
+            }
         });
     }
 
-    ocultarBarraAcoesGrupo();
+    // Redesenha os marcadores com as cores do cluster
+    destacarMarcadoresGrupo(paragensNoGrupo.map(p => p.id));
+
+    // Atualiza o painel de gestão de múltiplos clusters
+    renderizarPainelMultiClusters();
+
+    if (typeof onGrupoCallbackAtual === 'function') {
+        onGrupoCallbackAtual(paragensNoGrupo);
+    }
 }
 
 /**
- * Exibe barra de aviso "Desenhe o perímetro no ecrã"
+ * Remove um cluster específico
+ */
+export function removerClusterEspecifico(clusterId) {
+    removerPoligonoCluster(clusterId);
+
+    const limparLista = (lista) => {
+        if (!Array.isArray(lista)) return;
+        lista.forEach(p => {
+            if (p.clusterGroupId === clusterId) {
+                p.isClusterGroup = false;
+                p.clusterGroupId = null;
+                p.clusterGroupName = null;
+                p.clusterColor = null;
+                p.clusterBorder = null;
+            }
+        });
+    };
+
+    limparLista(window.moradasEntregas);
+    limparLista(window.rotaOtimizada);
+
+    // Redesenha o mapa para atualizar as cores
+    if (typeof window.ajustarLimitesMapaGoogle === 'function') {
+        window.ajustarLimitesMapaGoogle();
+    }
+
+    renderizarPainelMultiClusters();
+
+    if (typeof window.sincronizarPersistencia === 'function') {
+        window.sincronizarPersistencia();
+    }
+}
+
+/**
+ * Remove o polígono do Google Maps
+ */
+function removerPoligonoCluster(clusterId) {
+    const poly = activePolygons.get(clusterId);
+    if (poly) {
+        poly.setMap(null);
+        activePolygons.delete(clusterId);
+    }
+}
+
+/**
+ * Limpa todos os clusters e polígonos
+ */
+export function limparTodosClusters() {
+    activePolygons.forEach(poly => {
+        if (poly) poly.setMap(null);
+    });
+    activePolygons.clear();
+
+    const limparLista = (lista) => {
+        if (!Array.isArray(lista)) return;
+        lista.forEach(p => {
+            p.isClusterGroup = false;
+            p.clusterGroupId = null;
+            p.clusterGroupName = null;
+            p.clusterColor = null;
+            p.clusterBorder = null;
+        });
+    };
+
+    limparLista(window.moradasEntregas);
+    limparLista(window.rotaOtimizada);
+
+    renderizarPainelMultiClusters();
+
+    if (typeof window.sincronizarPersistencia === 'function') {
+        window.sincronizarPersistencia();
+    }
+}
+
+/**
+ * Renderiza o painel flutuante de múltiplos clusters criados
+ */
+export function renderizarPainelMultiClusters() {
+    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    const clustersMap = new Map(); // clusterId -> { name, color, count }
+
+    if (Array.isArray(lista)) {
+        lista.forEach(p => {
+            if (p.isClusterGroup && p.clusterGroupId) {
+                if (!clustersMap.has(p.clusterGroupId)) {
+                    clustersMap.set(p.clusterGroupId, {
+                        id: p.clusterGroupId,
+                        name: p.clusterGroupName || "Bloco",
+                        color: p.clusterColor || "#8B5CF6",
+                        count: 0
+                    });
+                }
+                clustersMap.get(p.clusterGroupId).count++;
+            }
+        });
+    }
+
+    let container = document.getElementById('container-acoes-laco-grupo');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'container-acoes-laco-grupo';
+        container.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-md border-2 border-purple-400 p-3 rounded-2xl shadow-2xl transition-all max-w-[92vw] overflow-x-auto';
+        document.body.appendChild(container);
+    }
+
+    if (clustersMap.size === 0) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
+    const clustersList = Array.from(clustersMap.values());
+
+    container.innerHTML = `
+        <div class="flex items-center space-x-2">
+            <div class="flex items-center space-x-1.5 flex-nowrap pr-2 border-r border-gray-200">
+                <span class="w-2.5 h-2.5 rounded-full bg-purple-600 animate-ping"></span>
+                <span class="text-[11px] font-black text-gray-800 uppercase tracking-tight whitespace-nowrap">
+                    ${clustersList.length} ${clustersList.length === 1 ? 'Bloco' : 'Blocos'}:
+                </span>
+            </div>
+
+            <div class="flex items-center space-x-1.5 flex-nowrap">
+                ${clustersList.map(c => `
+                    <div class="flex items-center space-x-1 px-2 py-1 rounded-xl text-[11px] font-bold text-white shadow-2xs whitespace-nowrap" style="background-color: ${c.color};">
+                        <span>${c.name} (${c.count})</span>
+                        <button type="button" onclick="window.removerClusterEspecifico('${c.id}')"
+                                class="hover:opacity-80 p-0.5 ml-1 text-[10px] cursor-pointer border-none bg-transparent text-white" title="Desfazer este bloco">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                `).join('')}
+            </div>
+
+            <button type="button" onclick="window.limparTodosClusters()"
+                    class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-extrabold rounded-lg border border-gray-300 cursor-pointer whitespace-nowrap ml-1" title="Limpar todos os blocos">
+                Limpar Todos
+            </button>
+        </div>
+    `;
+
+    container.classList.remove('hidden');
+}
+
+/**
+ * Exibe barra de aviso quando o modo de desenho está ativo
  */
 function exibirBarraAvisoDesenho() {
     let barra = document.getElementById('barra-aviso-desenho-laco');
     if (!barra) {
         barra = document.createElement('div');
         barra.id = 'barra-aviso-desenho-laco';
-        barra.className = 'fixed top-20 left-1/2 -translate-x-1/2 z-[1000] bg-purple-900/90 text-white px-4 py-2 rounded-2xl shadow-xl border border-purple-400 text-xs font-black flex items-center space-x-2 animate-bounce';
+        barra.className = 'fixed top-20 left-1/2 -translate-x-1/2 z-[1000] bg-purple-900/95 text-white px-4 py-2 rounded-2xl shadow-xl border border-purple-400 text-xs font-black flex items-center space-x-2 animate-bounce';
         document.body.appendChild(barra);
     }
     barra.innerHTML = `
         <i class="fa-solid fa-pen-nib text-purple-300"></i>
-        <span>Desenhe com o dedo/rato em volta dos pinos que quer agrupar</span>
+        <span>Desenhe no mapa em volta dos pinos para formar um novo bloco</span>
     `;
     barra.classList.remove('hidden');
 }
@@ -261,38 +435,7 @@ function ocultarBarraAvisoDesenho() {
     if (barra) barra.classList.add('hidden');
 }
 
-/**
- * Exibe a barra flutuante de confirmação com a contagem de paragens agrupadas
- */
-function exibirBarraAcoesGrupo(quantidade) {
-    let container = document.getElementById('container-acoes-laco-grupo');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'container-acoes-laco-grupo';
-        container.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur border-2 border-purple-500 p-3 rounded-2xl shadow-2xl flex items-center space-x-3 transition-all';
-        document.body.appendChild(container);
-    }
-
-    container.innerHTML = `
-        <div class="flex items-center space-x-2">
-            <span class="w-3 h-3 rounded-full bg-purple-600 animate-ping"></span>
-            <span class="text-xs font-black text-gray-800">
-                🔗 <strong>${quantidade}</strong> paragens agrupadas em bloco!
-            </span>
-        </div>
-        <button type="button" onclick="window.limparPerimetroLaco()"
-                class="px-2.5 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold rounded-xl border border-gray-300 cursor-pointer">
-            Limpar
-        </button>
-    `;
-    container.classList.remove('hidden');
-}
-
-function ocultarBarraAcoesGrupo() {
-    const container = document.getElementById('container-acoes-laco-grupo');
-    if (container) container.classList.add('hidden');
-}
-
 // Assinaturas públicas no objeto global Window
 window.ativarModoDesenhoPerimetro = ativarModoDesenhoPerimetro;
-window.limparPerimetroLaco = limparPerimetroDesenho;
+window.removerClusterEspecifico = removerClusterEspecifico;
+window.limparTodosClusters = limparTodosClusters;
