@@ -1,10 +1,11 @@
 /**
  * js/rotas-modais.js
- * Versão v74.1 - Módulo de Modais de Edição Simplificada e Re-sequenciação de Paragens
- * Faz: Controla o modal de edição detalhada de entregas/recolhas (morada, observações,
- *      tipo de operação, prioridade) e a alteração manual de sequência de rota.
- * Alteração v74.1: Preserva o estado isNewUnconfirmed (laranja saltitante) ao salvar observações.
- * Depende de: ./rotas-geografia.js, ./maps.js, ./rotas.js
+ * Versão v82.0 - Modais de Edição com Atribuição de Bloco (Cluster) e Inserção Cirúrgica Anti-Caos
+ * Faz: Controla o modal de edição detalhada de entregas/recolhas, permitindo associar qualquer paragem
+ *      diretamente a um Bloco (Cluster) existente ou desassociar;
+ *      ao associar a um bloco, realiza o encaixe cirúrgico da paragem junto das outras daquele bloco;
+ *      mantém a re-sequenciação manual e confirmação de posição.
+ * Depende de: ./rotas-geografia.js, ./maps.js, ./rotas.js, ./rotas-laco.js
  */
 
 import { resolveBrickForZip } from './rotas-geografia.js';
@@ -14,12 +15,78 @@ import {
     renderMoradasAdicionadas, 
     renderizarItinerarioOtimizado 
 } from './rotas.js';
+import { renderizarPainelMultiClusters } from './rotas-laco.js';
 
 let itemSendoEditado = null;
 
 const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
     ? 'http://localhost:3000'
     : 'https://classificapack-backend.onrender.com';
+
+/**
+ * Obtém todos os blocos (clusters) ativos existentes na rota atual
+ */
+function obterListaClustersDisponiveis() {
+    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    const clustersMap = new Map();
+
+    if (Array.isArray(lista)) {
+        lista.forEach(p => {
+            if (p.isClusterGroup && p.clusterGroupId && !clustersMap.has(p.clusterGroupId)) {
+                clustersMap.set(p.clusterGroupId, {
+                    id: p.clusterGroupId,
+                    nome: p.clusterGroupName || "Bloco",
+                    cor: p.clusterColor || "#8B5CF6",
+                    borda: p.clusterBorder || "#6D28D9"
+                });
+            }
+        });
+    }
+
+    return Array.from(clustersMap.values());
+}
+
+/**
+ * Injeta ou atualiza o seletor de Bloco (Cluster) dentro do modal de edição
+ */
+function popularSeletorBlocosNoModal(paragemAtual) {
+    const modalEditar = document.getElementById('modal-editar-paragem');
+    if (!modalEditar) return;
+
+    let containerSeletor = document.getElementById('container-seletor-cluster-modal');
+    if (!containerSeletor) {
+        containerSeletor = document.createElement('div');
+        containerSeletor.id = 'container-seletor-cluster-modal';
+        containerSeletor.className = 'space-y-1.5 pt-1';
+
+        const btnSalvar = document.getElementById('btn-salvar-edicao');
+        const formContainer = btnSalvar ? btnSalvar.closest('.space-y-3.5') || btnSalvar.parentElement : null;
+        if (formContainer) {
+            formContainer.insertBefore(containerSeletor, btnSalvar.parentElement || btnSalvar);
+        }
+    }
+
+    const clustersAtivos = obterListaClustersDisponiveis();
+
+    containerSeletor.innerHTML = `
+        <label class="block text-xs font-bold text-gray-600 uppercase flex items-center justify-between">
+            <span class="flex items-center space-x-1">
+                <i class="fa-solid fa-layer-group text-purple-600 mr-1"></i>
+                <span>Agrupar no Bloco (Cluster):</span>
+            </span>
+            <span class="text-[10px] text-gray-400 font-normal lowercase">encaixe cirúrgico</span>
+        </label>
+        <select id="edit-cluster-select" 
+                class="w-full p-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs font-bold text-gray-800 focus:ring-2 focus:ring-purple-500 cursor-pointer">
+            <option value="">-- Sem Bloco (Entrega Avulsa) --</option>
+            ${clustersAtivos.map(c => `
+                <option value="${c.id}" ${paragemAtual && paragemAtual.clusterGroupId === c.id ? 'selected' : ''}>
+                    🔗 ${c.nome} (${c.cor})
+                </option>
+            `).join('')}
+        </select>
+    `;
+}
 
 // =========================================================================
 // CONFIRMAÇÃO DIRETA DA POSIÇÃO DA NOVA AÇÃO (DESATIVA O BOUNCE E O LARANJA)
@@ -70,7 +137,6 @@ export function abrirModalAlterarSequencia(indexAtual, paragem) {
 
         const novoIndex = novaPos - 1;
 
-        // Ao alterar a ordem, a posição fica confirmada (desativa o bounce)
         paragem.isNewUnconfirmed = false;
         const originalPre = window.moradasEntregas.find(m => m.id === paragem.id);
         if (originalPre) originalPre.isNewUnconfirmed = false;
@@ -124,6 +190,7 @@ export function setupModaisEdicao() {
         const editMoradaObs = document.getElementById('edit-morada-obs');
         const editMoradaPrioridade = document.getElementById('edit-morada-prioridade');
         const editTipoOperacaoInput = document.getElementById('edit-tipo-operacao');
+        const editClusterSelect = document.getElementById('edit-cluster-select');
 
         if (!editMoradaTexto || !editMoradaObs) return;
 
@@ -131,6 +198,7 @@ export function setupModaisEdicao() {
         const novaObs = editMoradaObs.value.trim();
         const novaPrioridade = editMoradaPrioridade ? editMoradaPrioridade.checked : false;
         const novoTipoOperacao = editTipoOperacaoInput ? editTipoOperacaoInput.value : "Entrega";
+        const novoClusterId = editClusterSelect ? editClusterSelect.value : "";
 
         if (!novaMorada) {
             alert("A morada de entrega não pode ficar em branco.");
@@ -138,7 +206,7 @@ export function setupModaisEdicao() {
         }
 
         const textoOriginalBotao = btnSalvarEdicao.innerHTML;
-        btnSalvarEdicao.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> A geolocalizar...';
+        btnSalvarEdicao.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> A gravar...';
         btnSalvarEdicao.disabled = true;
 
         try {
@@ -163,30 +231,63 @@ export function setupModaisEdicao() {
                     const { brickId, brickName } = resolveBrickForZip(postalCodeMatch[0], window.drivers);
                     itemSendoEditado.brickId = brickId;
                     itemSendoEditado.brickName = brickName;
-                } else {
-                    const { brickId, brickName } = resolveBrickForZip(novaMorada, window.drivers);
-                    if (brickId) {
-                        itemSendoEditado.brickId = brickId;
-                        itemSendoEditado.brickName = brickName;
-                    }
                 }
             }
 
-            // ATENÇÃO: Mantém o isNewUnconfirmed intacto! Não desativa o salto nem a cor laranja aqui.
             itemSendoEditado.observation = novaObs;
             itemSendoEditado.priority = novaPrioridade;
             itemSendoEditado.tipoOperacao = novoTipoOperacao;
 
-            let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
-            let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
+            // ATRIBUIÇÃO OU REMOÇÃO DO BLOCO (CLUSTER)
+            if (novoClusterId) {
+                const clustersDisponiveis = obterListaClustersDisponiveis();
+                const clusterInfo = clustersDisponiveis.find(c => c.id === novoClusterId);
 
+                itemSendoEditado.isClusterGroup = true;
+                itemSendoEditado.clusterGroupId = novoClusterId;
+                itemSendoEditado.clusterGroupName = clusterInfo ? clusterInfo.nome : "Bloco";
+                itemSendoEditado.clusterColor = clusterInfo ? clusterInfo.cor : "#8B5CF6";
+                itemSendoEditado.clusterBorder = clusterInfo ? clusterInfo.borda : "#6D28D9";
+            } else {
+                itemSendoEditado.isClusterGroup = false;
+                itemSendoEditado.clusterGroupId = null;
+                itemSendoEditado.clusterGroupName = null;
+                itemSendoEditado.clusterColor = null;
+                itemSendoEditado.clusterBorder = null;
+            }
+
+            let itemIndexPre = window.moradasEntregas.findIndex(m => m.id === itemSendoEditado.id);
             if (itemIndexPre !== -1) {
                 window.moradasEntregas[itemIndexPre] = { ...itemSendoEditado };
             }
 
-            if (itemIndexPos !== -1) {
-                window.rotaOtimizada[itemIndexPos] = { ...itemSendoEditado };
+            // ENCAIXE CIRÚRGICO NA ROTA OTIMIZADA: se foi atribuído a um bloco, posiciona junto das outras do mesmo bloco
+            if (window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+                let itemIndexPos = window.rotaOtimizada.findIndex(m => m.id === itemSendoEditado.id);
 
+                if (itemIndexPos !== -1) {
+                    window.rotaOtimizada.splice(itemIndexPos, 1);
+                }
+
+                if (itemSendoEditado.isClusterGroup && itemSendoEditado.clusterGroupId) {
+                    // Encontra a última paragem daquele mesmo bloco na rota para inserir logo a seguir
+                    let ultimoIndexCluster = -1;
+                    window.rotaOtimizada.forEach((p, idx) => {
+                        if (p.clusterGroupId === itemSendoEditado.clusterGroupId) {
+                            ultimoIndexCluster = idx;
+                        }
+                    });
+
+                    if (ultimoIndexCluster !== -1) {
+                        window.rotaOtimizada.splice(ultimoIndexCluster + 1, 0, { ...itemSendoEditado });
+                    } else {
+                        window.rotaOtimizada.push({ ...itemSendoEditado });
+                    }
+                } else {
+                    window.rotaOtimizada.push({ ...itemSendoEditado });
+                }
+
+                // Recalcula distâncias encadeadas
                 window.rotaOtimizada.forEach((p, idx) => {
                     p.distanciaDoAnterior = calcularDistanciaHaversine(
                         idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
@@ -199,6 +300,8 @@ export function setupModaisEdicao() {
 
             sincronizarPersistencia();
             renderMoradasAdicionadas();
+            renderizarPainelMultiClusters();
+
             if (window.rotaOtimizada.length > 0) {
                 renderizarItinerarioOtimizado();
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
@@ -237,9 +340,7 @@ export function setupModaisEdicao() {
 }
 
 /**
- * Abre o modal de edição da paragem de forma simplificada e polimórfica.
- * @param {Object|number} paragemOuIndex - Objeto paragem ou índice numérico da lista
- * @param {string|boolean} modoOuEstaNaRota - Modo ('conducao'|'planeamento') ou booleano
+ * Abre o modal de edição da paragem e popula o seletor de blocos (clusters)
  */
 export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
     const modalEditarParagem = document.getElementById('modal-editar-paragem');
@@ -288,6 +389,9 @@ export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
             editTipoRecolha.className = "flex-1 py-2 text-xs font-bold rounded-lg text-center text-gray-500 transition-all focus:outline-none cursor-pointer";
         }
     }
+
+    // Popula o seletor com os blocos disponíveis e marca o bloco atual da paragem
+    popularSeletorBlocosNoModal(paragem);
 
     modalEditarParagem.classList.remove('hidden');
 

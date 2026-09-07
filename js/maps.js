@@ -1,11 +1,11 @@
 /**
  * js/maps.js
- * Versão v82.0 - Suporte Total a Múltiplos Blocos (Multi-Cluster), Planeamento ao Vivo e Condução
+ * Versão v82.1 - Suporte Total a Múltiplos Blocos (Multi-Cluster) com Cores Únicas e Bouncing
  * Faz: Gere a integração total com a Google Maps Platform:
- *      - Renderização de pinos em tempo real com cores dinâmicas para múltiplos blocos (Circuit-Style).
- *      - Desenho de rota otimizada com polilinha e balões de informação ricos com identificador de bloco.
+ *      - Renderização de pinos com cores distintas para cada Bloco (Roxo, Ciano, Âmbar, Rosa, etc.).
+ *      - Suporte a novos pacotes por confirmar dentro de blocos (mantém a cor do bloco com salto bounce e borda preta).
+ *      - Desenho de rota otimizada com polilinha e balões com distintivo do Bloco.
  *      - Dispersão em espiral para moradas no mesmo local.
- *      - Destaque e atualização reativa de marcadores em múltiplos clusters.
  * Depende de: Nenhuns módulos externos (comunicação direta com o SDK do Google Maps e window.CP7_DATABASE).
  */
 
@@ -256,7 +256,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
         googleMarkers.push(partidaMarker);
     }
 
-    // 2. Marcadores das Paragens Mapeadas com Cores de Bloco
+    // 2. Marcadores das Paragens com Cores do respetivo Bloco
     if (Array.isArray(moradas)) {
         moradas.forEach((p, i) => {
             if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
@@ -272,7 +272,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
                 ? p.clusterBorder 
                 : "#FFFFFF";
 
-            let strokeWeight = p.isClusterGroup ? 3 : 2;
+            let strokeWeight = p.isClusterGroup ? 3.5 : 2;
 
             const m = new google.maps.Marker({
                 position: pos,
@@ -342,7 +342,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
 }
 
 /**
- * Desenha a rota otimizada com polilinha e suporte visual a múltiplos blocos
+ * Desenha a rota otimizada com polilinha e respeito total às cores de cada Bloco
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -408,16 +408,20 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
         path.push(pos);
         bounds.extend(pos);
 
-        let pinoColor = p.isClusterGroup && p.clusterColor ? p.clusterColor : "#2563EB"; 
+        // Define a cor base: se tem bloco, usa a cor do bloco!
+        let pinoColor = (p.isClusterGroup && p.clusterColor) ? p.clusterColor : "#2563EB"; 
         let bounceAnimation = null;
-        let strokeColor = p.isClusterGroup && p.clusterBorder ? p.clusterBorder : "#FFFFFF";
-        let strokeWeight = p.isClusterGroup ? 3 : 2;
+        let strokeColor = (p.isClusterGroup && p.clusterBorder) ? p.clusterBorder : "#FFFFFF";
+        let strokeWeight = p.isClusterGroup ? 3.5 : 2;
 
         if (p.isNewUnconfirmed) {
-            pinoColor = "#F97316"; 
+            // Se for novo pacote não confirmado dentro de um bloco: mantém a cor do bloco, com bounce e borda preta
+            if (!p.isClusterGroup) {
+                pinoColor = "#F97316"; // Laranja clássico apenas para os que NÃO pertencem a nenhum bloco
+            }
             bounceAnimation = google.maps.Animation.BOUNCE;
             strokeColor = "#000000"; 
-            strokeWeight = 3;
+            strokeWeight = 3.5;
         } else if (p.status === "Entregue") {
             pinoColor = "#10B981"; 
             strokeColor = "#059669";
