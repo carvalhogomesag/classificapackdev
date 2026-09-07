@@ -1,11 +1,9 @@
 /**
  * js/maps.js
- * Versão v82.1 - Suporte Total a Múltiplos Blocos (Multi-Cluster) com Cores Únicas e Bouncing
- * Faz: Gere a integração total com a Google Maps Platform:
- *      - Renderização de pinos com cores distintas para cada Bloco (Roxo, Ciano, Âmbar, Rosa, etc.).
- *      - Suporte a novos pacotes por confirmar dentro de blocos (mantém a cor do bloco com salto bounce e borda preta).
- *      - Desenho de rota otimizada com polilinha e balões com distintivo do Bloco.
- *      - Dispersão em espiral para moradas no mesmo local.
+ * Versão v83.0 - Seleção Direta de Bloco (Cluster) no Card do Pino do Mapa
+ * Faz: Permite associar, trocar ou criar um novo Bloco (Cluster) diretamente no balão informativo (card)
+ *      ao clicar em qualquer pino no mapa, com encaixe cirúrgico e atualização de cores em tempo real;
+ *      mantém suporte a múltiplos clusters com cores vibrantes, dispersão em espiral e polilinhas.
  * Depende de: Nenhuns módulos externos (comunicação direta com o SDK do Google Maps e window.CP7_DATABASE).
  */
 
@@ -21,6 +19,29 @@ let googleInfoWindow = null;
  */
 export function obterInstanciaMapaGoogle() {
     return googleMap;
+}
+
+/**
+ * Obtém todos os blocos (clusters) ativos existentes na rota atual
+ */
+function obterListaClustersAtivos() {
+    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    const clustersMap = new Map();
+
+    if (Array.isArray(lista)) {
+        lista.forEach(p => {
+            if (p.isClusterGroup && p.clusterGroupId && !clustersMap.has(p.clusterGroupId)) {
+                clustersMap.set(p.clusterGroupId, {
+                    id: p.clusterGroupId,
+                    nome: p.clusterGroupName || "Bloco",
+                    cor: p.clusterColor || "#8B5CF6",
+                    borda: p.clusterBorder || "#6D28D9"
+                });
+            }
+        });
+    }
+
+    return Array.from(clustersMap.values());
 }
 
 /**
@@ -193,7 +214,7 @@ function criarDispersorEspiral() {
 }
 
 /**
- * DESENHA O MAPA EM TEMPO REAL NO MODO PLANEAMENTO COM SUPORTE A MÚLTIPLOS BLOCOS
+ * DESENHA O MAPA EM TEMPO REAL NO MODO PLANEAMENTO COM SELETOR DE BLOCO NO CARD
  */
 export function desenharMapaPlaneamento(mapElement, partida, moradas) {
     if (typeof google === 'undefined' || !mapElement) return;
@@ -220,6 +241,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
 
     const bounds = new google.maps.LatLngBounds();
     const evitarSobreposicao = criarDispersorEspiral();
+    const clustersAtivos = obterListaClustersAtivos();
 
     // 1. Ponto de Partida
     if (partida && typeof partida.lat === 'number') {
@@ -256,7 +278,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
         googleMarkers.push(partidaMarker);
     }
 
-    // 2. Marcadores das Paragens com Cores do respetivo Bloco
+    // 2. Marcadores das Paragens com Cores do Bloco e Seletor no Card
     if (Array.isArray(moradas)) {
         moradas.forEach((p, i) => {
             if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
@@ -303,14 +325,28 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
                 const opColor = isRecolha ? "#7C3AED" : "#2563EB";
                 const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
                 
-                const clusterBadge = p.isClusterGroup ? `
-                    <div style="font-size: 10px; background: ${p.clusterColor || '#8B5CF6'}20; color: ${p.clusterBorder || '#6D28D9'}; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px; border: 1px solid ${p.clusterColor || '#8B5CF6'}50;">
-                        🔗 ${p.clusterGroupName || 'Bloco'} (Roteirizado Junto)
+                // SELETOR INTERATIVO DE BLOCO DIRETAMENTE NO CARD
+                const seletorBlocoHtml = `
+                    <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #E5E7EB;">
+                        <label style="font-size: 10px; font-weight: 800; color: #4B5563; display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+                            <span>🔗 Bloco (Cluster):</span>
+                            <span style="font-size: 9px; color: #9CA3AF; font-weight: normal;">troca direta</span>
+                        </label>
+                        <select onchange="window.alterarBlocoParagemPeloMapa('${p.id}', this.value)" 
+                                style="width: 100%; font-size: 11px; font-weight: bold; padding: 4px 6px; border-radius: 6px; border: 1px solid #D1D5DB; background: #F9FAFB; cursor: pointer; color: #1F2937;">
+                            <option value="">-- Sem Bloco (Avulsa) --</option>
+                            ${clustersAtivos.map(c => `
+                                <option value="${c.id}" ${p.clusterGroupId === c.id ? 'selected' : ''}>
+                                    🔗 ${c.nome}
+                                </option>
+                            `).join('')}
+                            <option value="__novo__">✨ + Criar Novo Bloco...</option>
+                        </select>
                     </div>
-                ` : '';
+                `;
 
                 googleInfoWindow.setContent(`
-                    <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 230px;">
+                    <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 240px;">
                         <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px;">
                             <span style="background: ${pinoColor}; color: #FFFFFF; font-weight: 900; font-size: 11px; padding: 2px 6px; border-radius: 9999px;">
                                 #${i + 1}
@@ -323,7 +359,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
                             ${p.address}
                         </div>
                         ${brickText}
-                        ${clusterBadge}
+                        ${seletorBlocoHtml}
                     </div>
                 `);
                 googleInfoWindow.open(googleMap, m);
@@ -342,7 +378,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
 }
 
 /**
- * Desenha a rota otimizada com polilinha e respeito total às cores de cada Bloco
+ * Desenha a rota otimizada com polilinha e seletor de bloco interativo no card
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -367,6 +403,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     const path = [];
     const bounds = new google.maps.LatLngBounds();
     const evitarSobreposicao = criarDispersorEspiral();
+    const clustersAtivos = obterListaClustersAtivos();
 
     // Ponto de Partida
     const startPos = evitarSobreposicao(partida.lat, partida.lng);
@@ -402,22 +439,20 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     googleMarkers.push(partidaMarker);
 
-    // Paragens Otimizadas com Cores por Bloco
+    // Paragens Otimizadas com Cores de Bloco e Seletor no Card
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
         bounds.extend(pos);
 
-        // Define a cor base: se tem bloco, usa a cor do bloco!
         let pinoColor = (p.isClusterGroup && p.clusterColor) ? p.clusterColor : "#2563EB"; 
         let bounceAnimation = null;
         let strokeColor = (p.isClusterGroup && p.clusterBorder) ? p.clusterBorder : "#FFFFFF";
         let strokeWeight = p.isClusterGroup ? 3.5 : 2;
 
         if (p.isNewUnconfirmed) {
-            // Se for novo pacote não confirmado dentro de um bloco: mantém a cor do bloco, com bounce e borda preta
             if (!p.isClusterGroup) {
-                pinoColor = "#F97316"; // Laranja clássico apenas para os que NÃO pertencem a nenhum bloco
+                pinoColor = "#F97316"; 
             }
             bounceAnimation = google.maps.Animation.BOUNCE;
             strokeColor = "#000000"; 
@@ -468,13 +503,6 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             }
 
             const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
-            
-            const clusterText = p.isClusterGroup ? `
-                <div style="font-size: 10px; background: ${p.clusterColor || '#8B5CF6'}20; color: ${p.clusterBorder || '#6D28D9'}; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px; border: 1px solid ${p.clusterColor || '#8B5CF6'}50;">
-                    🔗 ${p.clusterGroupName || 'Bloco'} (Roteirizado Junto)
-                </div>
-            ` : '';
-
             const obsText = p.observation ? `<div style="font-size: 10px; color: #4B5563; font-style: italic; background: #FEF3C7; padding: 4px; border-radius: 4px; margin-top: 4px;">💬 ${p.observation}</div>` : '';
 
             const confirmBtnHtml = p.isNewUnconfirmed ? `
@@ -482,6 +510,26 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                     ✓ Confirmar Posição Atual
                 </button>
             ` : '';
+
+            // SELETOR INTERATIVO DE BLOCO DIRETAMENTE NO CARD
+            const seletorBlocoHtml = `
+                <div style="margin-top: 8px; padding-top: 6px; border-top: 1px dashed #E5E7EB;">
+                    <label style="font-size: 10px; font-weight: 800; color: #4B5563; display: flex; align-items: center; justify-content: space-between; margin-bottom: 3px;">
+                        <span>🔗 Bloco (Cluster):</span>
+                        <span style="font-size: 9px; color: #9CA3AF; font-weight: normal;">troca direta</span>
+                    </label>
+                    <select onchange="window.alterarBlocoParagemPeloMapa('${p.id}', this.value)" 
+                            style="width: 100%; font-size: 11px; font-weight: bold; padding: 4px 6px; border-radius: 6px; border: 1px solid #D1D5DB; background: #F9FAFB; cursor: pointer; color: #1F2937;">
+                        <option value="">-- Sem Bloco (Avulsa) --</option>
+                        ${clustersAtivos.map(c => `
+                            <option value="${c.id}" ${p.clusterGroupId === c.id ? 'selected' : ''}>
+                                🔗 ${c.nome}
+                            </option>
+                        `).join('')}
+                        <option value="__novo__">✨ + Criar Novo Bloco...</option>
+                    </select>
+                </div>
+            `;
 
             googleInfoWindow.setContent(`
                 <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 240px;">
@@ -500,8 +548,8 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                     </div>
 
                     ${brickText}
-                    ${clusterText}
                     ${obsText}
+                    ${seletorBlocoHtml}
 
                     <div style="margin-top: 8px;">
                         ${confirmBtnHtml}
@@ -527,6 +575,123 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     googleRoutePolyline.setMap(googleMap);
     googleMap.fitBounds(bounds);
 }
+
+/**
+ * GESTÃO DIRETA DE BLOCO PELO CARD DO PINO NO MAPA
+ */
+window.alterarBlocoParagemPeloMapa = function(paragemId, novoClusterId) {
+    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    if (!Array.isArray(lista)) return;
+
+    const paragem = lista.find(p => p.id === paragemId);
+    if (!paragem) return;
+
+    if (novoClusterId === '__novo__') {
+        const paleta = [
+            { cor: "#8B5CF6", borda: "#6D28D9" },
+            { cor: "#06B6D4", borda: "#0891B2" },
+            { cor: "#EC4899", borda: "#DB2777" },
+            { cor: "#10B981", borda: "#059669" },
+            { cor: "#F59E0B", borda: "#D97706" },
+            { cor: "#6366F1", borda: "#4F46E5" }
+        ];
+        const clustersExistentes = new Set(lista.filter(p => p.clusterGroupId).map(p => p.clusterGroupId));
+        const numBloco = clustersExistentes.size + 1;
+        const configCor = paleta[(numBloco - 1) % paleta.length];
+
+        const novoId = `cluster_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+        paragem.isClusterGroup = true;
+        paragem.clusterGroupId = novoId;
+        paragem.clusterGroupName = `Bloco ${numBloco}`;
+        paragem.clusterColor = configCor.cor;
+        paragem.clusterBorder = configCor.borda;
+    } else if (novoClusterId) {
+        const clustersDisponiveis = obterListaClustersAtivos();
+        const clusterInfo = clustersDisponiveis.find(c => c.id === novoClusterId);
+        if (clusterInfo) {
+            paragem.isClusterGroup = true;
+            paragem.clusterGroupId = clusterInfo.id;
+            paragem.clusterGroupName = clusterInfo.nome;
+            paragem.clusterColor = clusterInfo.cor;
+            paragem.clusterBorder = clusterInfo.borda;
+        }
+    } else {
+        paragem.isClusterGroup = false;
+        paragem.clusterGroupId = null;
+        paragem.clusterGroupName = null;
+        paragem.clusterColor = null;
+        paragem.clusterBorder = null;
+    }
+
+    // Sincroniza na lista base de moradas se estivermos na rota otimizada
+    if (window.moradasEntregas) {
+        const pOrig = window.moradasEntregas.find(p => p.id === paragemId);
+        if (pOrig) {
+            pOrig.isClusterGroup = paragem.isClusterGroup;
+            pOrig.clusterGroupId = paragem.clusterGroupId;
+            pOrig.clusterGroupName = paragem.clusterGroupName;
+            pOrig.clusterColor = paragem.clusterColor;
+            pOrig.clusterBorder = paragem.clusterBorder;
+        }
+    }
+
+    // Encaixe cirúrgico na rota ativa (se atribuído a um bloco)
+    if (window.rotaOtimizada && window.rotaOtimizada.length > 0 && paragem.isClusterGroup && paragem.clusterGroupId) {
+        let indexAtual = window.rotaOtimizada.findIndex(p => p.id === paragemId);
+        if (indexAtual !== -1) {
+            window.rotaOtimizada.splice(indexAtual, 1);
+        }
+        let ultimoIndexCluster = -1;
+        window.rotaOtimizada.forEach((p, idx) => {
+            if (p.clusterGroupId === paragem.clusterGroupId && p.id !== paragemId) {
+                ultimoIndexCluster = idx;
+            }
+        });
+        if (ultimoIndexCluster !== -1) {
+            window.rotaOtimizada.splice(ultimoIndexCluster + 1, 0, paragem);
+        } else {
+            window.rotaOtimizada.push(paragem);
+        }
+
+        window.rotaOtimizada.forEach((p, idx) => {
+            p.distanciaDoAnterior = calcularDistanciaHaversine(
+                idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
+                idx === 0 ? window.partidaLocalizacao.lng : window.rotaOtimizada[idx - 1].lng,
+                p.lat,
+                p.lng
+            );
+        });
+    }
+
+    // Fecha o balão após a alteração
+    if (googleInfoWindow) {
+        googleInfoWindow.close();
+    }
+
+    // Redesenha o mapa com as novas cores
+    const mapElement = document.getElementById('map');
+    if (mapElement) {
+        if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+            desenharMapaGoogle(mapElement, window.partidaLocalizacao, window.rotaOtimizada);
+        } else if (window.moradasEntregas && window.moradasEntregas.length > 0) {
+            desenharMapaPlaneamento(mapElement, window.partidaLocalizacao, window.moradasEntregas);
+        }
+    }
+
+    // Persistência e UI sincronizadas
+    if (typeof window.sincronizarPersistencia === 'function') {
+        window.sincronizarPersistencia();
+    }
+    if (typeof window.renderMoradasAdicionadas === 'function') {
+        window.renderMoradasAdicionadas();
+    }
+    if (typeof window.renderizarItinerarioOtimizado === 'function' && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+        window.renderizarItinerarioOtimizado();
+    }
+    if (typeof window.renderizarPainelMultiClusters === 'function') {
+        window.renderizarPainelMultiClusters();
+    }
+};
 
 /**
  * Destaca visualmente no mapa os marcadores de paragens de acordo com o seu bloco
