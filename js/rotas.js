@@ -1,9 +1,9 @@
 /**
  * js/rotas.js
- * Versão v82.0 - Maestro de Rotas com Roteirização Multi-Cluster, Mapa em Tempo Real e Persistência Blindada
+ * Versão v83.0 - Maestro de Rotas com Sincronização Perfeita de Fecho de Turno e Multi-Cluster
  * Faz: Gestão principal da aba de rotas, integrando visualização em tempo real de pacotes no mapa,
  *      roteirização encadeada de múltiplos blocos/perímetros (Multi-Cluster / Circuit-Style),
- *      re-otimização a qualquer momento, odómetro reativo e persistência local/Firestore.
+ *      garante que a barra de blocos é 100% ocultada ao fechar o turno, odómetro reativo e persistência blindada.
  * Depende de: ./maps.js, ./rotas-laco.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js
  */
 
@@ -126,6 +126,7 @@ export function sincronizarPersistencia() {
         });
     }
 }
+window.sincronizarPersistencia = sincronizarPersistencia;
 
 // ==========================================
 // CENTRAL DE MODOS: PLANEAMENTO VS CONDUÇÃO
@@ -177,7 +178,6 @@ export function setupVozLogic() {
 
 /**
  * ALGORITMO MULTI-CLUSTER DE ROTEIRIZAÇÃO ENCADEADA (CIRCUIT-STYLE)
- * Garante que, ao entrar em qualquer bloco desenhado, todas as paragens desse bloco sejam entregues juntas!
  */
 function calcularRotaVizinhoMaisProximoLocal() {
     if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
@@ -193,7 +193,6 @@ function calcularRotaVizinhoMaisProximoLocal() {
         const currentStop = optimized.length > 0 ? optimized[optimized.length - 1] : null;
         let candidatePool = unvisited;
 
-        // Se a paragem anterior pertence a um bloco que ainda tem paragens pendentes, restringe aos membros desse mesmo bloco
         if (currentStop && currentStop.isClusterGroup && currentStop.clusterGroupId) {
             const clusterCandidates = unvisited.filter(p => p.isClusterGroup && p.clusterGroupId === currentStop.clusterGroupId);
             if (clusterCandidates.length > 0) {
@@ -406,7 +405,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
 
     const temBlocosPerimetro = window.moradasEntregas.some(p => p.isClusterGroup);
 
-    // Se existem múltiplos blocos definidos pelo laço, resolve com o solver multi-cluster local
     if (temBlocosPerimetro) {
         window.isRouteOptimized = true;
         calcularRotaVizinhoMaisProximoLocal();
@@ -680,6 +678,7 @@ export function setupRotasLogic() {
                 limparMapaVisual();
                 limparTodosClusters();
                 renderMoradasAdicionadas();
+                renderizarPainelMultiClusters();
                 alternarModoRota('planeamento');
                 sincronizarPersistencia();
             }
@@ -802,6 +801,10 @@ export function sincronizarInterfaceRota() {
     } else {
         containerSetupRota.classList.remove('hidden');
         containerPlaneadorRota.classList.add('hidden');
+        
+        // Garante que a barra flutuante de blocos fica 100% invisível no ecrã de setup
+        renderizarPainelMultiClusters();
+
         if (dataRotaInput) {
             const hoje = new Date();
             dataRotaInput.value = hoje.toISOString().split('T')[0];

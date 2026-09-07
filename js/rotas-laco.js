@@ -1,9 +1,9 @@
 /**
  * js/rotas-laco.js
- * Versão v82.3 - Sistema Multi-Cluster de Perímetros com Persistência Imediata Anti-F5
+ * Versão v83.1 - Sistema Multi-Cluster de Perímetros com Ocultação em Fecho de Turno
  * Faz: Permite desenhar múltiplos blocos/perímetros com cores distintas sobre o mapa,
  *      deteta paragens em cada polígono, suporta agrupamento antes e depois da otimização,
- *      garante persistência atómica local e remota (Firestore) ao criar ou apagar blocos,
+ *      garante que a barra flutuante de blocos NUNCA aparece com o turno fechado/na tela de setup,
  *      e previne a repetição de cores entre múltiplos clusters.
  * Depende de: ./maps.js, ./rotas.js, ./storage.js
  */
@@ -92,19 +92,17 @@ function obterProximaCorCluster() {
         });
     }
 
-    // Procura uma cor que ainda não esteja a ser usada por nenhum bloco ativo
     const corDisponivel = PALETA_CLUSTERS.find(c => !coresEmUso.has(c.cor.toUpperCase()));
     if (corDisponivel) {
         return corDisponivel;
     }
 
-    // Se todas as cores estiverem em uso, faz rotação modular
     const indexCor = coresEmUso.size % PALETA_CLUSTERS.length;
     return PALETA_CLUSTERS[indexCor];
 }
 
 /**
- * Ativa o modo de desenho livre de perímetro sobre o mapa (Funciona no Planeamento e Condução)
+ * Ativa o modo de desenho livre de perímetro sobre o mapa
  */
 export function ativarModoDesenhoPerimetro(onGrupoSelecionadoCallback) {
     const map = obterInstanciaMapaGoogle();
@@ -277,7 +275,6 @@ function processarNovoCluster(clusterId, configCor, vertices) {
     destacarMarcadoresGrupo(paragensNoGrupo.map(p => p.id));
     renderizarPainelMultiClusters();
 
-    // PERSISTÊNCIA BLINDADA: Grava imediatamente no LocalStorage e Firestore
     sincronizarPersistencia();
 
     if (typeof onGrupoCallbackAtual === 'function') {
@@ -307,10 +304,8 @@ export function removerClusterEspecifico(clusterId) {
     limparLista(window.moradasEntregas);
     limparLista(window.rotaOtimizada);
 
-    // PERSISTÊNCIA BLINDADA: Garante que os dados apagados NUNCA mais voltam no F5
     sincronizarPersistencia();
 
-    // Redesenha o mapa atual com os pinos livres restaurados à cor original
     const mapElement = document.getElementById('map');
     if (mapElement) {
         if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
@@ -357,10 +352,8 @@ export function limparTodosClusters() {
     limparLista(window.moradasEntregas);
     limparLista(window.rotaOtimizada);
 
-    // PERSISTÊNCIA BLINDADA: Grava a limpeza total no LocalStorage e Firestore
     sincronizarPersistencia();
 
-    // Redesenha o mapa atual
     const mapElement = document.getElementById('map');
     if (mapElement) {
         if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
@@ -374,9 +367,24 @@ export function limparTodosClusters() {
 }
 
 /**
- * Renderiza o painel flutuante de múltiplos clusters criados
+ * Renderiza o painel flutuante de múltiplos clusters (Com proteção de Turno Fechado)
  */
 export function renderizarPainelMultiClusters() {
+    let container = document.getElementById('container-acoes-laco-grupo');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'container-acoes-laco-grupo';
+        container.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-md border-2 border-purple-400 p-3 rounded-2xl shadow-2xl transition-all max-w-[92vw] overflow-x-auto';
+        document.body.appendChild(container);
+    }
+
+    // REGRA DE OURO: Se o turno não está iniciado (tela de setup ativa), ESCONDE O PAINEL 100%!
+    if (!window.rotaIniciada) {
+        container.classList.add('hidden');
+        container.innerHTML = '';
+        return;
+    }
+
     const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
     const clustersMap = new Map();
 
@@ -394,14 +402,6 @@ export function renderizarPainelMultiClusters() {
                 clustersMap.get(p.clusterGroupId).count++;
             }
         });
-    }
-
-    let container = document.getElementById('container-acoes-laco-grupo');
-    if (!container) {
-        container = document.createElement('div');
-        container.id = 'container-acoes-laco-grupo';
-        container.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 z-[1000] bg-white/95 backdrop-blur-md border-2 border-purple-400 p-3 rounded-2xl shadow-2xl transition-all max-w-[92vw] overflow-x-auto';
-        document.body.appendChild(container);
     }
 
     if (clustersMap.size === 0) {
@@ -469,4 +469,5 @@ function ocultarBarraAvisoDesenho() {
 // Assinaturas públicas no objeto global Window
 window.ativarModoDesenhoPerimetro = ativarModoDesenhoPerimetro;
 window.removerClusterEspecifico = removerClusterEspecifico;
-window.limparTodosClusters = limparTodosClusters;   
+window.limparTodosClusters = limparTodosClusters;
+window.renderizarPainelMultiClusters = renderizarPainelMultiClusters;
