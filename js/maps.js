@@ -1,10 +1,11 @@
 /**
  * js/maps.js
- * Versão v77.4 - Com Integração da Base Oficial CTT (CP7_DATABASE) como Verdade Absoluta,
- *                Pinos Laranjas, Borda Preta e Bouncing para Novas Paragens por Confirmar
- * Faz: Gere a integração total com a Google Maps Platform (desenho de mapas com marcadores coloridos,
- *      dispersão em espiral, validação de CP7 contra a base oficial CTT, pino saltitante laranja com bordas
- *      pretas para novas adições e balões de informação ricos).
+ * Versão v81.0 - Suporte a Mapa em Tempo Real no Planeamento, Laço de Perímetro e Otimização
+ * Faz: Gere a integração total com a Google Maps Platform:
+ *      - Desenho de mapa em tempo real durante o planeamento (visualização imediata dos pacotes adicionados).
+ *      - Desenho de rota otimizada com polilinha e balões interativos.
+ *      - Dispersão em espiral para moradas no mesmo local.
+ *      - Destaque de marcadores para seleção por perímetro (Lasso / Circuit-Style).
  * Depende de: Nenhuns módulos externos (comunicação direta com o SDK do Google Maps e window.CP7_DATABASE).
  */
 
@@ -14,6 +15,13 @@ let googleRoutePolyline = null;
 let autocompleteWidget = null;
 let autocompleteWidgetTriagem = null;
 let googleInfoWindow = null;
+
+/**
+ * Retorna a instância ativa do Google Maps
+ */
+export function obterInstanciaMapaGoogle() {
+    return googleMap;
+}
 
 /**
  * Utilitário interno: extrai o CP7 de uma lista de address_components do Google Maps
@@ -35,7 +43,6 @@ function extrairCodigoPostalGoogle(components) {
 
 /**
  * Inicializa o widget do Google Places Autocomplete para moradas em Portugal e Espanha (Rotas)
- * Cruza o resultado com a base oficial CTT (window.CP7_DATABASE) para máxima precisão.
  */
 export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
@@ -56,7 +63,6 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
         let lng = place.geometry.location.lng();
         let address = place.formatted_address;
 
-        // Verificação contra a Verdade Absoluta CTT
         const cp7 = extrairCodigoPostalGoogle(place.address_components);
         if (cp7 && window.CP7_DATABASE && window.CP7_DATABASE[cp7]) {
             const officialData = window.CP7_DATABASE[cp7];
@@ -64,16 +70,11 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
             const locOficial = officialData.localidade || officialData.locality || "";
             const concelhoOficial = officialData.concelho || officialData.municipality || "";
 
-            if (ruaOficial) {
-                // Se o Google não tiver rua detalhada ou houver divergência, padroniza com a artéria oficial CTT
-                if (!address.toLowerCase().includes(ruaOficial.toLowerCase())) {
-                    address = `${ruaOficial}, ${cp7} ${locOficial || concelhoOficial}`.trim();
-                }
+            if (ruaOficial && !address.toLowerCase().includes(ruaOficial.toLowerCase())) {
+                address = `${ruaOficial}, ${cp7} ${locOficial || concelhoOficial}`.trim();
             }
 
-            // Se existirem coordenadas calibradas oficiais e o Place for genérico, assegura a precisão
             if (typeof officialData.lat === 'number' && typeof officialData.lng === 'number' && officialData.lat !== 0 && officialData.lng !== 0) {
-                // Preserva a precisão da artéria calibrada
                 lat = officialData.lat;
                 lng = officialData.lng;
             }
@@ -85,7 +86,6 @@ export function inicializarGoogleAutocomplete(buscaMoradaInput, callback) {
 
 /**
  * Inicializa o widget do Google Places Autocomplete para procurar Códigos Postais por moradas (Triagem)
- * Garante enriquecimento oficial CTT em 0ms.
  */
 export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback) {
     if (typeof google === 'undefined' || !google.maps || !google.maps.places || !buscaMoradaInput) return;
@@ -105,7 +105,6 @@ export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback)
         let postalCode = extrairCodigoPostalGoogle(place.address_components);
         let address = place.formatted_address || "";
 
-        // Se encontrou CP7, valida na base oficial CTT
         if (postalCode && window.CP7_DATABASE && window.CP7_DATABASE[postalCode]) {
             const officialData = window.CP7_DATABASE[postalCode];
             const ruaOficial = officialData.rua || officialData.street || officialData.nome || "";
@@ -121,7 +120,6 @@ export function inicializarGoogleAutocompleteTriagem(buscaMoradaInput, callback)
 
 /**
  * Traduz coordenadas GPS obtidas pelo navegador numa morada legível (Reverse Geocoding)
- * com enriquecimento automático pela base oficial CTT.
  */
 export function obterEnderecoPorGPSGoogle(lat, lng, callback) {
     if (typeof google === 'undefined' || !google.maps) {
@@ -167,7 +165,174 @@ export function calcularDistanciaHaversine(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Desenha a rota otimizada no Mapa da Google com algoritmo de espiral de dispersão e balões de informação ao clicar
+ * Algoritmo de dispersão em espiral para evitar sobreposição de pinos na mesma coordenada
+ */
+function criarDispersorEspiral() {
+    const posicoesOcupadas = [];
+    return function evitarSobreposicao(lat, lng) {
+        let finalLat = lat;
+        let finalLng = lng;
+        const margemDiferenca = 0.0001; 
+        const deslocamento = 0.0002;   
+
+        let count = 0;
+        while (posicoesOcupadas.some(pos => 
+            Math.abs(pos.lat - finalLat) < margemDiferenca && 
+            Math.abs(pos.lng - finalLng) < margemDiferenca
+        )) {
+            count++;
+            const angle = count * 1.2; 
+            const radius = deslocamento * (1 + count * 0.1);
+            finalLat = lat + Math.sin(angle) * radius;
+            finalLng = lng + Math.cos(angle) * radius;
+        }
+
+        posicoesOcupadas.push({ lat: finalLat, lng: finalLng });
+        return new google.maps.LatLng(finalLat, finalLng);
+    };
+}
+
+/**
+ * DESENHA O MAPA EM TEMPO REAL NO MODO PLANEAMENTO (Sem linha de rota / polilinha)
+ * Conforme o estafeta insere moradas, os pinos surgem instantaneamente no mapa!
+ */
+export function desenharMapaPlaneamento(mapElement, partida, moradas) {
+    if (typeof google === 'undefined' || !mapElement) return;
+    if (!partida && (!moradas || moradas.length === 0)) return;
+
+    const centroInicial = partida ? { lat: partida.lat, lng: partida.lng } : { lat: moradas[0].lat, lng: moradas[0].lng };
+
+    if (!googleMap) {
+        googleMap = new google.maps.Map(mapElement, {
+            zoom: 13,
+            center: centroInicial,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false
+        });
+        window.googleMapInstance = googleMap;
+    }
+
+    limparMapaVisual();
+
+    if (!googleInfoWindow) {
+        googleInfoWindow = new google.maps.InfoWindow();
+    }
+
+    const bounds = new google.maps.LatLngBounds();
+    const evitarSobreposicao = criarDispersorEspiral();
+
+    // 1. Ponto de Partida (se existir)
+    if (partida && typeof partida.lat === 'number') {
+        const startPos = evitarSobreposicao(partida.lat, partida.lng);
+        bounds.extend(startPos);
+
+        const partidaMarker = new google.maps.Marker({
+            position: startPos,
+            map: googleMap,
+            label: { text: "P", color: "#FFFFFF", fontWeight: "bold" },
+            title: "Ponto de Partida",
+            icon: {
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 14,
+                fillColor: "#DC2626",
+                fillOpacity: 1,
+                strokeWeight: 2,
+                strokeColor: "#FFFFFF"
+            }
+        });
+
+        partidaMarker.addListener('click', () => {
+            googleInfoWindow.setContent(`
+                <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 220px;">
+                    <div style="font-weight: 800; color: #DC2626; font-size: 13px; text-transform: uppercase; margin-bottom: 2px;">
+                        🚩 Ponto de Partida
+                    </div>
+                    <div style="color: #374151; font-weight: 600;">${partida.address}</div>
+                </div>
+            `);
+            googleInfoWindow.open(googleMap, partidaMarker);
+        });
+
+        googleMarkers.push(partidaMarker);
+    }
+
+    // 2. Marcadores das Paragens Mapeadas
+    if (Array.isArray(moradas)) {
+        moradas.forEach((p, i) => {
+            if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
+
+            const pos = evitarSobreposicao(p.lat, p.lng);
+            bounds.extend(pos);
+
+            let pinoColor = p.isClusterGroup ? "#8B5CF6" : (p.tipoOperacao === "Recolha" ? "#9333EA" : "#2563EB");
+            let strokeColor = p.isClusterGroup ? "#4C1D95" : "#FFFFFF";
+            let strokeWeight = p.isClusterGroup ? 3 : 2;
+
+            const m = new google.maps.Marker({
+                position: pos,
+                map: googleMap,
+                label: { 
+                    text: (i + 1).toString(), 
+                    color: "#FFFFFF", 
+                    fontWeight: "bold",
+                    fontSize: "11px"
+                },
+                title: p.address,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 14,
+                    fillColor: pinoColor,
+                    fillOpacity: 0.95,
+                    strokeWeight: strokeWeight,
+                    strokeColor: strokeColor
+                }
+            });
+
+            m.paragemId = p.id;
+            m.paragemIndex = i;
+
+            m.addListener('click', () => {
+                const isRecolha = p.tipoOperacao === "Recolha";
+                const opLabel = isRecolha ? "Recolha" : "Entrega";
+                const opColor = isRecolha ? "#7C3AED" : "#2563EB";
+                const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
+                const clusterBadge = p.isClusterGroup ? `<div style="font-size: 10px; background: #EDE9FE; color: #6D28D9; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px;">🔗 Bloco Selecionado (Perímetro)</div>` : '';
+
+                googleInfoWindow.setContent(`
+                    <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 230px;">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 4px;">
+                            <span style="background: ${pinoColor}; color: #FFFFFF; font-weight: 900; font-size: 11px; padding: 2px 6px; border-radius: 9999px;">
+                                #${i + 1}
+                            </span>
+                            <span style="background: ${opColor}15; color: ${opColor}; font-weight: 800; font-size: 10px; border: 1px solid ${opColor}40; padding: 1px 5px; border-radius: 4px;">
+                                ${opLabel}
+                            </span>
+                        </div>
+                        <div style="font-weight: 700; color: #1F2937; font-size: 12px; margin-top: 2px;">
+                            ${p.address}
+                        </div>
+                        ${brickText}
+                        ${clusterBadge}
+                    </div>
+                `);
+                googleInfoWindow.open(googleMap, m);
+            });
+
+            googleMarkers.push(m);
+        });
+    }
+
+    if (!bounds.isEmpty()) {
+        googleMap.fitBounds(bounds);
+        if (moradas && moradas.length === 1 && !partida) {
+            googleMap.setZoom(15);
+        }
+    }
+}
+
+/**
+ * Desenha a rota otimizada no Mapa da Google com Polilinha de percurso
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -191,30 +356,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     const path = [];
     const bounds = new google.maps.LatLngBounds();
-    const posicoesOcupadas = [];
-
-    // Algoritmo de dispersão em espiral para evitar sobreposição de pinos no mesmo endereço
-    function evitarSobreposicao(lat, lng) {
-        let finalLat = lat;
-        let finalLng = lng;
-        const margemDiferenca = 0.0001; 
-        const deslocamento = 0.0002;   
-
-        let count = 0;
-        while (posicoesOcupadas.some(pos => 
-            Math.abs(pos.lat - finalLat) < margemDiferenca && 
-            Math.abs(pos.lng - finalLng) < margemDiferenca
-        )) {
-            count++;
-            const angle = count * 1.2; 
-            const radius = deslocamento * (1 + count * 0.1);
-            finalLat = lat + Math.sin(angle) * radius;
-            finalLng = lng + Math.cos(angle) * radius;
-        }
-
-        posicoesOcupadas.push({ lat: finalLat, lng: finalLng });
-        return new google.maps.LatLng(finalLat, finalLng);
-    }
+    const evitarSobreposicao = criarDispersorEspiral();
 
     // Ponto de Partida
     const startPos = evitarSobreposicao(partida.lat, partida.lng);
@@ -238,7 +380,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     partidaMarker.addListener('click', () => {
         googleInfoWindow.setContent(`
-            <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 220px;">
+            <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 220px;">
                 <div style="font-weight: 800; color: #DC2626; font-size: 13px; text-transform: uppercase; margin-bottom: 2px;">
                     🚩 Ponto de Partida
                 </div>
@@ -250,7 +392,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     googleMarkers.push(partidaMarker);
 
-    // Paragens / Entregas
+    // Paragens / Entregas Otimizadas
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
@@ -262,9 +404,13 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
         let strokeWeight = 2;
 
         if (p.isNewUnconfirmed) {
-            pinoColor = "#F97316"; // Laranja vibrante para novas paragens não confirmadas
-            bounceAnimation = google.maps.Animation.BOUNCE; // Pino saltitante
-            strokeColor = "#000000"; // Borda preta marcada
+            pinoColor = "#F97316"; 
+            bounceAnimation = google.maps.Animation.BOUNCE;
+            strokeColor = "#000000"; 
+            strokeWeight = 3;
+        } else if (p.isClusterGroup) {
+            pinoColor = "#8B5CF6"; // Roxo para paragens de bloco manual
+            strokeColor = "#4C1D95";
             strokeWeight = 3;
         } else if (p.status === "Entregue") {
             pinoColor = "#10B981"; 
@@ -292,7 +438,9 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             }
         });
 
-        // BALÃO INFORMATIVO RICO AO CLICAR NO PINO DA ROTA
+        m.paragemId = p.id;
+        m.paragemIndex = i;
+
         m.addListener('click', () => {
             const isRecolha = p.tipoOperacao === "Recolha";
             const opColor = isRecolha ? "#7C3AED" : "#2563EB";
@@ -308,9 +456,9 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             }
 
             const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
+            const clusterText = p.isClusterGroup ? `<div style="font-size: 10px; background: #EDE9FE; color: #6D28D9; font-weight: 800; padding: 2px 6px; border-radius: 4px; margin-top: 3px;">🔗 Bloco Roteirizado Junto</div>` : '';
             const obsText = p.observation ? `<div style="font-size: 10px; color: #4B5563; font-style: italic; background: #FEF3C7; padding: 4px; border-radius: 4px; margin-top: 4px;">💬 ${p.observation}</div>` : '';
 
-            // Botão adicional de confirmação se o pino estiver por confirmar
             const confirmBtnHtml = p.isNewUnconfirmed ? `
                 <button onclick="if(typeof window.confirmarPosicaoParagem === 'function') { window.confirmarPosicaoParagem('${p.id}'); }" style="background: #10B981; color: #FFFFFF; border: none; padding: 6px 8px; border-radius: 6px; font-size: 10px; font-weight: 800; cursor: pointer; width: 100%; margin-bottom: 4px;">
                     ✓ Confirmar Posição Atual
@@ -318,7 +466,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
             ` : '';
 
             googleInfoWindow.setContent(`
-                <div style="font-family: system-ui, -apple-system, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 240px;">
+                <div style="font-family: system-ui, sans-serif; font-size: 12px; padding: 4px; line-height: 1.4; max-width: 240px;">
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px;">
                         <span style="background: ${pinoColor}; color: #FFFFFF; font-weight: 900; font-size: 11px; padding: 2px 6px; border-radius: 9999px;">
                             #${i + 1}
@@ -334,6 +482,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
                     </div>
 
                     ${brickText}
+                    ${clusterText}
                     ${obsText}
 
                     <div style="margin-top: 8px;">
@@ -362,6 +511,27 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 }
 
 /**
+ * Destaca visualmente no mapa os marcadores selecionados por um perímetro/laço
+ */
+export function destacarMarcadoresGrupo(idsParagensSelecionadas) {
+    const idSet = new Set(idsParagensSelecionadas);
+    googleMarkers.forEach(m => {
+        if (!m.paragemId) return;
+        const estaNoGrupo = idSet.has(m.paragemId);
+        if (estaNoGrupo) {
+            m.setIcon({
+                path: google.maps.SymbolPath.CIRCLE,
+                scale: 17,
+                fillColor: "#8B5CF6", // Roxo vibrante de destaque
+                fillOpacity: 1,
+                strokeWeight: 3.5,
+                strokeColor: "#4C1D95"
+            });
+        }
+    });
+}
+
+/**
  * Limpa os marcadores e a linha de rota desenhada no mapa
  */
 export function limparMapaVisual() {
@@ -380,9 +550,14 @@ export function limparMapaVisual() {
 // ASSINATURA GLOBAL DO AJUSTADOR DE LIMITES
 // ==========================================
 window.ajustarLimitesMapaGoogle = () => {
-    if (!googleMap || !window.partidaLocalizacao || !window.rotaOtimizada || window.rotaOtimizada.length === 0) return;
+    if (!googleMap) return;
+    const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
+    if (!lista || lista.length === 0) return;
+
     const bounds = new google.maps.LatLngBounds();
-    bounds.extend(new google.maps.LatLng(window.partidaLocalizacao.lat, window.partidaLocalizacao.lng));
-    window.rotaOtimizada.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
+    if (window.partidaLocalizacao) {
+        bounds.extend(new google.maps.LatLng(window.partidaLocalizacao.lat, window.partidaLocalizacao.lng));
+    }
+    lista.forEach(p => bounds.extend(new google.maps.LatLng(p.lat, p.lng)));
     googleMap.fitBounds(bounds);
 };

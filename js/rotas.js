@@ -1,11 +1,10 @@
 /**
  * js/rotas.js
- * Versão v77.4 - Com Resolução de Verdade Absoluta CTT (CP7_DATABASE),
- *                Persistência Blindada Anti-Perda, Odómetro Reativo e Gestão de Rotas
- * Faz: Gestão principal da aba de rotas, integrando os componentes 'rotas-geografia.js',
- *      'rotas-odometro.js', 'rotas-modais.js', 'rotas-inputs.js' e 'rotas-ui.js'.
- *      Garante enriquecimento oficial por CP7 e persistência instantânea local e remota.
- * Depende de: ./maps.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js, ./cp7-data.js
+ * Versão v81.0 - Maestro de Rotas com Mapa em Tempo Real, Roteirização de Blocos/Perímetro e Persistência Blindada
+ * Faz: Gestão principal da aba de rotas, integrando visualização em tempo real de pacotes no mapa,
+ *      roteirização inteligente com respeito a blocos de perímetro (Lasso / Circuit-Style),
+ *      odómetro reativo, edição de paragens e persistência local/Firestore.
+ * Depende de: ./maps.js, ./rotas-laco.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js
  */
 
 import { saveData } from './storage.js';
@@ -15,8 +14,11 @@ import {
     obterEnderecoPorGPSGoogle, 
     calcularDistanciaHaversine, 
     desenharMapaGoogle, 
+    desenharMapaPlaneamento,
     limparMapaVisual 
 } from './maps.js';
+
+import { ativarModoDesenhoPerimetro, limparPerimetroDesenho } from './rotas-laco.js';
 
 // Importa o módulo de navegação (Google Maps vs Waze)
 import { abrirNavegacao } from './navigation.js';
@@ -71,7 +73,6 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
 // PERSISTÊNCIA BLINDADA DAS ROTAS (LOCALSTORAGE + FIRESTORE)
 // ==========================================
 export function sincronizarPersistencia() {
-    // 1. Gravação local defensiva e imediata (síncrona)
     saveData(
         window.drivers, 
         [], 
@@ -93,7 +94,6 @@ export function sincronizarPersistencia() {
     localStorage.setItem('cp_odometer_end_hour', JSON.stringify(window.odometerEndHour || ""));
     localStorage.setItem('cp_last_odometer', JSON.stringify(window.lastOdometer || 0));
 
-    // 2. Resolução resiliente de UID para salvar na Cloud
     const activeUid = window.currentUserUid || (auth && auth.currentUser ? auth.currentUser.uid : null);
 
     if (activeUid && db) {
@@ -171,6 +171,10 @@ export function setupVozLogic() {
     });
 }
 
+/**
+ * ALGORITMO LOCAL DE ROTEIRIZAÇÃO COM RESPEITO A BLOCOS/CLUSTERS (TIPO CIRCUIT)
+ * Se uma paragem pertence a um bloco agrupado por perímetro, visita todas as paragens desse bloco juntas!
+ */
 function calcularRotaVizinhoMaisProximoLocal() {
     if (!window.partidaLocalizacao || window.moradasEntregas.length === 0) return;
 
@@ -182,12 +186,26 @@ function calcularRotaVizinhoMaisProximoLocal() {
         let nearestIndex = 0;
         let minDistance = Infinity;
 
+        // Se a paragem anterior pertence a um bloco/cluster de perímetro, restringe as candidatas às restantes do mesmo bloco
+        const currentStop = optimized.length > 0 ? optimized[optimized.length - 1] : null;
+        let candidatePool = unvisited;
+
+        if (currentStop && currentStop.isClusterGroup && currentStop.clusterGroupId) {
+            const clusterCandidates = unvisited.filter(p => p.isClusterGroup && p.clusterGroupId === currentStop.clusterGroupId);
+            if (clusterCandidates.length > 0) {
+                candidatePool = clusterCandidates;
+            }
+        }
+
         for (let i = 0; i < unvisited.length; i++) {
+            const candidate = unvisited[i];
+            if (!candidatePool.includes(candidate)) continue;
+
             const dist = calcularDistanciaHaversine(
                 currentCoords.lat,
                 currentCoords.lng,
-                unvisited[i].lat,
-                unvisited[i].lng
+                candidate.lat,
+                candidate.lng
             );
             if (dist < minDistance) {
                 minDistance = dist;
@@ -205,7 +223,7 @@ function calcularRotaVizinhoMaisProximoLocal() {
 }
 
 // =========================================================================
-// ADICIONAR NOVA AÇÃO (ENTREGA OU RECOLHA) COM VERDADE ABSOLUTA CTT
+// ADICIONAR NOVA AÇÃO (ENTREGA OU RECOLHA) COM ATUALIZAÇÃO DO MAPA EM TEMPO REAL
 // =========================================================================
 export async function processarAdicaoPorPostal() {
     const inputPostal = document.getElementById('rota-codigo-postal');
@@ -219,99 +237,57 @@ export async function processarAdicaoPorPostal() {
     let moradaVal = inputMorada ? inputMorada.value.trim() : "";
 
     const cleanZip = postalCodeVal.replace(/\D/g, '');
-    if (cleanZip.length !== 7) {
-        alert("Por favor, introduza um Código Postal válido com 7 dígitos (ex: 2655-319).");
+    let formattedZip = "";
+    if (cleanZip.length === 7) {
+        formattedZip = `${cleanZip.substring(0, 4)}-${cleanZip.substring(4, 7)}`;
+    } else if (cleanZip.length >= 4) {
+        formattedZip = `${cleanZip.substring(0, 4)}-`;
+    }
+
+    if (!moradaVal && cleanZip.length !== 7) {
+        alert("Por favor, introduza uma Morada ou um Código Postal válido.");
         inputPostal.focus();
         return;
     }
-
-    const formattedZip = `${cleanZip.substring(0, 4)}-${cleanZip.substring(4, 7)}`;
 
     btnAdicionar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A geolocalizar...</span>';
     btnAdicionar.disabled = true;
 
     try {
-        // 1. Consulta à Verdade Absoluta CTT (CP7_DATABASE)
-        const cp7Entry = (window.CP7_DATABASE && window.CP7_DATABASE[formattedZip]) ? window.CP7_DATABASE[formattedZip] : null;
-        let ruaOficial = "";
-        let localidadeOficial = "";
-        let concelhoOficial = obterConcelhoPorCodigoPostal(formattedZip) || "";
-        let calibratedLat = null;
-        let calibratedLng = null;
+        const response = await fetch(`${API_BASE_URL}/api/geocode`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                postalCode: formattedZip,
+                address: moradaVal || formattedZip
+            })
+        });
 
-        if (cp7Entry) {
-            ruaOficial = cp7Entry.rua || cp7Entry.street || cp7Entry.nome || "";
-            localidadeOficial = cp7Entry.localidade || cp7Entry.locality || "";
-            concelhoOficial = cp7Entry.concelho || cp7Entry.municipality || concelhoOficial;
-            
-            if (typeof cp7Entry.lat === 'number' && typeof cp7Entry.lng === 'number' && cp7Entry.lat !== 0 && cp7Entry.lng !== 0) {
-                calibratedLat = cp7Entry.lat;
-                calibratedLng = cp7Entry.lng;
-            }
+        const data = await response.json();
+
+        if (!response.ok) {
+            throw new Error(data.error || "Ocorreu uma falha ao geolocalizar este endereço.");
         }
 
-        // Se o utilizador não escreveu uma morada detalhada, usamos a oficial dos CTT
-        if (!moradaVal && ruaOficial) {
-            moradaVal = ruaOficial;
-        }
-
-        // Monta o endereço de consulta enriquecido com o Concelho para evitar desvios geográficos
-        let enderecoParaGeocode = moradaVal;
-        if (concelhoOficial && !enderecoParaGeocode.toLowerCase().includes(concelhoOficial.toLowerCase())) {
-            enderecoParaGeocode = `${enderecoParaGeocode}, ${concelhoOficial}`;
-        }
-
-        let finalLat = calibratedLat;
-        let finalLng = calibratedLng;
-        let finalAddress = moradaVal ? `${moradaVal}, ${formattedZip} ${localidadeOficial || concelhoOficial}`.trim() : `${formattedZip} ${localidadeOficial || concelhoOficial}`.trim();
-
-        // 2. Chamada ao Roteirizador / Geocoder com contingência
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/geocode`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    postalCode: formattedZip,
-                    address: enderecoParaGeocode
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                finalLat = data.lat;
-                finalLng = data.lng;
-                finalAddress = data.address || finalAddress;
-            } else if (!finalLat || !finalLng) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || "Ocorreu uma falha ao geolocalizar este código postal.");
-            }
-        } catch (apiErr) {
-            // Se a API falhou mas temos coordenadas calibradas dos CTT no CP7_DATABASE, usamos com sucesso!
-            if (finalLat && finalLng) {
-                console.warn("[CP7-DATA] Backend inacessível. Coordenadas calibradas CTT aplicadas como contingência:", finalAddress);
-            } else {
-                throw apiErr;
-            }
-        }
-
-        const { brickId, brickName } = resolveBrickForZip(formattedZip, window.drivers);
+        const { brickId, brickName } = resolveBrickForZip(formattedZip || data.postalCode || "", window.drivers);
         const tipoOperacaoVal = document.getElementById('rota-tipo-operacao')?.value || "Entrega";
 
-        // Verifica se a rota já foi otimizada (na memória ou na flag de estado)
         const rotaJaOtimizada = window.isRouteOptimized === true || (Array.isArray(window.rotaOtimizada) && window.rotaOtimizada.length > 0);
 
         const novaMorada = {
             id: 'm_' + Date.now() + Math.random().toString(36).substr(2, 5),
-            lat: finalLat,
-            lng: finalLng,
-            address: finalAddress,
+            lat: data.lat,
+            lng: data.lng,
+            address: data.address || moradaVal,
             status: "Pendente",
             observation: "",
             priority: false,
             brickId: brickId,
             brickName: brickName,
             tipoOperacao: tipoOperacaoVal,
-            isNewUnconfirmed: rotaJaOtimizada // Se a rota já está em andamento, marca como não confirmada (laranja saltitante)
+            isNewUnconfirmed: rotaJaOtimizada,
+            isClusterGroup: false,
+            clusterGroupId: null
         };
 
         if (window.definindoPartidaPorMorada) {
@@ -322,11 +298,10 @@ export async function processarAdicaoPorPostal() {
             sincronizarPersistencia();
             alert("Ponto de Partida configurado com sucesso!");
         } else {
-            // Adiciona à lista geral de moradas
             window.moradasEntregas.push(novaMorada);
 
             if (rotaJaOtimizada) {
-                // SE A ROTA JÁ FOI OTIMIZADA: adiciona ao fim da rota otimizada e exibe no mapa
+                // Se a rota já está em andamento, anexa ao fim da rota otimizada
                 let pontoAnterior = window.rotaOtimizada[window.rotaOtimizada.length - 1];
 
                 novaMorada.distanciaDoAnterior = pontoAnterior ? calcularDistanciaHaversine(
@@ -354,20 +329,23 @@ export async function processarAdicaoPorPostal() {
                 }, 200);
 
                 alternarModoRota('conducao');
-
-                // Abre o modal para preenchimento de observações mantendo o estado não confirmado
-                setTimeout(() => {
-                    abrirModalEdicaoParagem(novaMorada, 'conducao');
-                }, 150);
             } else {
-                // FASE INICIAL DE PLANEAMENTO (SEM OTIMIZAÇÃO AINDA):
+                // FASE DE PLANEAMENTO: Exibe imediatamente os pinos no mapa em tempo real!
                 sincronizarPersistencia();
                 renderMoradasAdicionadas();
-                alternarModoRota('planeamento');
 
-                setTimeout(() => {
-                    abrirModalEdicaoParagem(novaMorada, 'planeamento');
-                }, 150);
+                const containerMapa = document.getElementById('container-mapa');
+                if (containerMapa) {
+                    containerMapa.classList.remove('hidden');
+                    setTimeout(() => {
+                        if (window.googleMapInstance) {
+                            google.maps.event.trigger(window.googleMapInstance, 'resize');
+                        }
+                        desenharMapaPlaneamento(document.getElementById('map'), window.partidaLocalizacao, window.moradasEntregas);
+                    }, 150);
+                }
+
+                alternarModoRota('planeamento');
             }
         }
 
@@ -393,7 +371,7 @@ export async function processarAdicaoPorPostal() {
 }
 
 // =========================================================================
-// OTIMIZAÇÃO GLOBAL DA ROTA VIA GOOGLE ROUTE OPTIMIZATION API
+// OTIMIZAÇÃO GLOBAL DA ROTA (CLOUD / LOCAL COM SUPORTE A BLOCOS DE PERÍMETRO)
 // =========================================================================
 export async function otimizarItinerarioComVizinhoMaisProximo() {
     if (!window.partidaLocalizacao) return alert("Por favor, defina um ponto de Partida primeiro.");
@@ -409,6 +387,39 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
     if (btnOtimizar) {
         btnOtimizar.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> <span>A calcular rota ótima...</span>';
         btnOtimizar.disabled = true;
+    }
+
+    // Se existirem blocos agrupados por perímetro (Lasso), resolve localmente com o algoritmo de clusters agrupados
+    const temBlocosPerimetro = window.moradasEntregas.some(p => p.isClusterGroup);
+
+    if (temBlocosPerimetro) {
+        console.log("[ROTEIRIZADOR] Agrupamento de perímetro detetado. A calcular sequência em bloco...");
+        window.isRouteOptimized = true;
+        calcularRotaVizinhoMaisProximoLocal();
+        window.rotaOtimizada.forEach(p => p.isNewUnconfirmed = false);
+        window.routingMethodUsed = 'Cluster-Local';
+        localStorage.setItem('cp_routing_method', 'Cluster-Local');
+
+        document.getElementById('container-mapa')?.classList.remove('hidden');
+        document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
+
+        renderizarItinerarioOtimizado();
+        sincronizarPersistencia();
+
+        setTimeout(() => {
+            if (window.googleMapInstance) {
+                google.maps.event.trigger(window.googleMapInstance, 'resize');
+            }
+            desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+        }, 200);
+
+        alternarModoRota('conducao');
+
+        if (btnOtimizar) {
+            btnOtimizar.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> <span>Otimizar Sequência de Rota</span>';
+            btnOtimizar.disabled = false;
+        }
+        return;
     }
 
     try {
@@ -431,7 +442,6 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         }
 
         const data = await response.json();
-        
         window.isRouteOptimized = true;
 
         if (data.optimizedIndices) {
@@ -478,15 +488,13 @@ export async function otimizarItinerarioComVizinhoMaisProximo() {
         alternarModoRota('conducao');
 
     } catch (err) {
-        console.warn("[PWA] Falha ao otimizar via nuvem Google Cloud. Ativando resolvedor síncrono local...", err);
+        console.warn("[PWA] Falha na Cloud Google. Contingência local ativada:", err);
         
         window.isRouteOptimized = true;
         calcularRotaVizinhoMaisProximoLocal();
         window.rotaOtimizada.forEach(p => p.isNewUnconfirmed = false);
         window.routingMethodUsed = 'Local';
         localStorage.setItem('cp_routing_method', 'Local');
-        
-        alert(`O servidor em nuvem falhou ou está temporariamente a dormir (${err.message}).\n\nContingência Ativada: Calculámos com sucesso uma rota aproximada localmente no próprio dispositivo!`);
         
         document.getElementById('container-mapa')?.classList.remove('hidden');
         document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
@@ -530,12 +538,22 @@ export function setupRotasLogic() {
     const btnTipoRecolha = document.getElementById('btn-tipo-recolha');
     const inputTipoOperacao = document.getElementById('rota-tipo-operacao');
 
+    const btnDesenharLaco = document.getElementById('btn-desenhar-perimetro-laco');
+
     configurarEventosPrefixoRapido();
     configurarFormatacaoCodigoPostal();
     inicializarAutocompleteMorada();
     configurarEscutaCodigoPostalParaLimites();
     setupModaisEdicao();
     configurarGatilhoEdicaoOdometro();
+
+    if (btnDesenharLaco) {
+        btnDesenharLaco.addEventListener('click', () => {
+            ativarModoDesenhoPerimetro(() => {
+                sincronizarPersistencia();
+            });
+        });
+    }
 
     if (btnPlaneamento && btnConducao) {
         btnPlaneamento.addEventListener('click', () => alternarModoRota('planeamento'));
@@ -610,6 +628,11 @@ export function setupRotasLogic() {
                             statusPartida.innerHTML = `<strong>Partida:</strong> GPS (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
                         }
                         sincronizarPersistencia();
+
+                        // Atualiza o mapa de planeamento com o ponto de partida
+                        if (window.moradasEntregas && window.moradasEntregas.length > 0) {
+                            desenharMapaPlaneamento(document.getElementById('map'), window.partidaLocalizacao, window.moradasEntregas);
+                        }
                     });
                 },
                 () => {
@@ -641,6 +664,7 @@ export function setupRotasLogic() {
                 document.getElementById('container-rota-ordenada')?.classList.add('hidden');
                 document.getElementById('estatisticas-rota')?.classList.add('hidden');
                 limparMapaVisual();
+                limparPerimetroDesenho();
                 renderMoradasAdicionadas();
                 alternarModoRota('planeamento');
                 sincronizarPersistencia();
@@ -674,7 +698,6 @@ export function sincronizarInterfaceRota() {
     const statusPartida = document.getElementById('status-partida');
     const dataRotaInput = document.getElementById('data-rota');
 
-    // Elementos do Odómetro / Diário de Bordo
     const painelOdometro = document.getElementById('painel-odometro-resumo');
     const btnIniciarSaidaKm = document.getElementById('btn-iniciar-saida-km');
     const btnFinalizarTurno = document.getElementById('btn-finalizar-turno');
@@ -732,6 +755,7 @@ export function sincronizarInterfaceRota() {
         const modoSalvo = localStorage.getItem('cp_modo_rota') || 'planeamento';
         alternarModoRota(modoSalvo);
 
+        // Se a rota já foi otimizada, desenha a rota completa com polilinha
         if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
             document.getElementById('container-mapa')?.classList.remove('hidden');
             document.getElementById('container-rota-ordenada')?.classList.remove('hidden');
@@ -743,6 +767,18 @@ export function sincronizarInterfaceRota() {
                     google.maps.event.trigger(window.googleMapInstance, 'resize');
                 }
                 desenharMapaGoogle(document.getElementById('map'), window.partidaLocalizacao, window.rotaOtimizada);
+            }, 300);
+        } else if (window.moradasEntregas && window.moradasEntregas.length > 0) {
+            // Se está em fase de planeamento mas já tem moradas, exibe o mapa de planeamento em tempo real
+            document.getElementById('container-mapa')?.classList.remove('hidden');
+            document.getElementById('container-rota-ordenada')?.classList.add('hidden');
+            document.getElementById('estatisticas-rota')?.classList.add('hidden');
+
+            setTimeout(() => {
+                if (window.googleMapInstance) {
+                    google.maps.event.trigger(window.googleMapInstance, 'resize');
+                }
+                desenharMapaPlaneamento(document.getElementById('map'), window.partidaLocalizacao, window.moradasEntregas);
             }, 300);
         } else {
             document.getElementById('container-mapa')?.classList.add('hidden');
