@@ -1,30 +1,41 @@
 /**
  * js/rotas-laco.js
- * Versão v82.0 - Sistema Multi-Cluster de Perímetros (Lasso / Circuit-Style)
+ * Versão v82.3 - Sistema Multi-Cluster de Perímetros com Persistência Imediata Anti-F5
  * Faz: Permite desenhar múltiplos blocos/perímetros com cores distintas sobre o mapa,
  *      deteta paragens em cada polígono, suporta agrupamento antes e depois da otimização,
- *      e permite gerir/reorganizar clusters de forma visual e independente.
- * Depende de: ./maps.js, ./storage.js
+ *      garante persistência atómica local e remota (Firestore) ao criar ou apagar blocos,
+ *      e previne a repetição de cores entre múltiplos clusters.
+ * Depende de: ./maps.js, ./rotas.js, ./storage.js
  */
 
-import { obterInstanciaMapaGoogle, destacarMarcadoresGrupo } from './maps.js';
+import { 
+    obterInstanciaMapaGoogle, 
+    destacarMarcadoresGrupo, 
+    desenharMapaGoogle, 
+    desenharMapaPlaneamento 
+} from './maps.js';
+
+import { sincronizarPersistencia } from './rotas.js';
 
 let isDrawingMode = false;
 let drawingPolyline = null;
 let capturedCoordinates = [];
 let onGrupoCallbackAtual = null;
 
-// Paleta de cores vibrantes para distinguir múltiplos blocos
+// Paleta de cores vibrantes para distinguir múltiplos blocos sem repetição
 const PALETA_CLUSTERS = [
-    { nome: "Roxo",   cor: "#8B5CF6", borda: "#6D28D9", fundo: "#8B5CF625" },
-    { nome: "Ciano",  cor: "#06B6D4", borda: "#0891B2", fundo: "#06B6D425" },
-    { nome: "Âmbar",  cor: "#F59E0B", borda: "#D97706", fundo: "#F59E0B25" },
-    { nome: "Rosa",   cor: "#EC4899", borda: "#DB2777", fundo: "#EC489925" },
+    { nome: "Roxo",      cor: "#8B5CF6", borda: "#6D28D9", fundo: "#8B5CF625" },
+    { nome: "Ciano",     cor: "#06B6D4", borda: "#0891B2", fundo: "#06B6D425" },
+    { nome: "Rosa",      cor: "#EC4899", borda: "#DB2777", fundo: "#EC489925" },
     { nome: "Esmeralda", cor: "#10B981", borda: "#059669", fundo: "#10B98125" },
-    { nome: "Índigo", cor: "#6366F1", borda: "#4F46E5", fundo: "#6366F125" }
+    { nome: "Âmbar",     cor: "#F59E0B", borda: "#D97706", fundo: "#F59E0B25" },
+    { nome: "Índigo",    cor: "#6366F1", borda: "#4F46E5", fundo: "#6366F125" },
+    { nome: "Teal",      cor: "#14B8A6", borda: "#0D9488", fundo: "#14B8A625" },
+    { nome: "Rubi",      cor: "#E11D48", borda: "#BE123C", fundo: "#E11D4825" },
+    { nome: "Azul Real", cor: "#3B82F6", borda: "#1D4ED8", fundo: "#3B82F625" }
 ];
 
-// Registo em memória de todos os polígonos visuais criados no mapa
+// Registo em memória de todos os polígonos visuais desenhados no mapa
 let activePolygons = new Map(); // clusterId -> google.maps.Polygon
 
 /**
@@ -67,17 +78,28 @@ function pixelParaLatLng(map, clientX, clientY) {
 }
 
 /**
- * Retorna a próxima cor disponível para um novo cluster
+ * Retorna a próxima cor virgem e não utilizada para um novo cluster
  */
 function obterProximaCorCluster() {
     const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
-    const clustersExistentes = new Set();
+    const coresEmUso = new Set();
+
     if (Array.isArray(lista)) {
         lista.forEach(p => {
-            if (p.clusterGroupId) clustersExistentes.add(p.clusterGroupId);
+            if (p.isClusterGroup && p.clusterColor) {
+                coresEmUso.add(p.clusterColor.toUpperCase());
+            }
         });
     }
-    const indexCor = clustersExistentes.size % PALETA_CLUSTERS.length;
+
+    // Procura uma cor que ainda não esteja a ser usada por nenhum bloco ativo
+    const corDisponivel = PALETA_CLUSTERS.find(c => !coresEmUso.has(c.cor.toUpperCase()));
+    if (corDisponivel) {
+        return corDisponivel;
+    }
+
+    // Se todas as cores estiverem em uso, faz rotação modular
+    const indexCor = coresEmUso.size % PALETA_CLUSTERS.length;
     return PALETA_CLUSTERS[indexCor];
 }
 
@@ -94,7 +116,6 @@ export function ativarModoDesenhoPerimetro(onGrupoSelecionadoCallback) {
     onGrupoCallbackAtual = onGrupoSelecionadoCallback;
     isDrawingMode = true;
 
-    // Desativa navegação do mapa para permitir desenho livre com o dedo/rato
     map.setOptions({
         draggable: false,
         gestureHandling: 'none'
@@ -208,11 +229,9 @@ export function desativarModoDesenho() {
  * Processa a criação de um novo cluster a partir das coordenadas desenhadas
  */
 function processarNovoCluster(clusterId, configCor, vertices) {
-    // Procura na lista de rota otimizada se já houver, ou na lista de planeamento
     const listaAlvo = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
     if (!Array.isArray(listaAlvo) || listaAlvo.length === 0) return;
 
-    // Calcula o número do bloco (ex: Bloco 1, Bloco 2)
     const clustersExistentes = new Set();
     listaAlvo.forEach(p => {
         if (p.clusterGroupId) clustersExistentes.add(p.clusterGroupId);
@@ -242,7 +261,6 @@ function processarNovoCluster(clusterId, configCor, vertices) {
         return;
     }
 
-    // Se estivermos a operar sobre a lista otimizada, sincroniza também a lista base de moradas
     if (window.rotaOtimizada && window.rotaOtimizada.length > 0 && Array.isArray(window.moradasEntregas)) {
         const idSet = new Set(paragensNoGrupo.map(p => p.id));
         window.moradasEntregas.forEach(p => {
@@ -256,11 +274,11 @@ function processarNovoCluster(clusterId, configCor, vertices) {
         });
     }
 
-    // Redesenha os marcadores com as cores do cluster
     destacarMarcadoresGrupo(paragensNoGrupo.map(p => p.id));
-
-    // Atualiza o painel de gestão de múltiplos clusters
     renderizarPainelMultiClusters();
+
+    // PERSISTÊNCIA BLINDADA: Grava imediatamente no LocalStorage e Firestore
+    sincronizarPersistencia();
 
     if (typeof onGrupoCallbackAtual === 'function') {
         onGrupoCallbackAtual(paragensNoGrupo);
@@ -268,7 +286,7 @@ function processarNovoCluster(clusterId, configCor, vertices) {
 }
 
 /**
- * Remove um cluster específico
+ * Remove um cluster específico e grava a remoção imediatamente
  */
 export function removerClusterEspecifico(clusterId) {
     removerPoligonoCluster(clusterId);
@@ -289,16 +307,20 @@ export function removerClusterEspecifico(clusterId) {
     limparLista(window.moradasEntregas);
     limparLista(window.rotaOtimizada);
 
-    // Redesenha o mapa para atualizar as cores
-    if (typeof window.ajustarLimitesMapaGoogle === 'function') {
-        window.ajustarLimitesMapaGoogle();
+    // PERSISTÊNCIA BLINDADA: Garante que os dados apagados NUNCA mais voltam no F5
+    sincronizarPersistencia();
+
+    // Redesenha o mapa atual com os pinos livres restaurados à cor original
+    const mapElement = document.getElementById('map');
+    if (mapElement) {
+        if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+            desenharMapaGoogle(mapElement, window.partidaLocalizacao, window.rotaOtimizada);
+        } else if (window.moradasEntregas && window.moradasEntregas.length > 0) {
+            desenharMapaPlaneamento(mapElement, window.partidaLocalizacao, window.moradasEntregas);
+        }
     }
 
     renderizarPainelMultiClusters();
-
-    if (typeof window.sincronizarPersistencia === 'function') {
-        window.sincronizarPersistencia();
-    }
 }
 
 /**
@@ -313,7 +335,7 @@ function removerPoligonoCluster(clusterId) {
 }
 
 /**
- * Limpa todos os clusters e polígonos
+ * Limpa todos os clusters e polígonos e persiste a limpeza
  */
 export function limparTodosClusters() {
     activePolygons.forEach(poly => {
@@ -335,11 +357,20 @@ export function limparTodosClusters() {
     limparLista(window.moradasEntregas);
     limparLista(window.rotaOtimizada);
 
-    renderizarPainelMultiClusters();
+    // PERSISTÊNCIA BLINDADA: Grava a limpeza total no LocalStorage e Firestore
+    sincronizarPersistencia();
 
-    if (typeof window.sincronizarPersistencia === 'function') {
-        window.sincronizarPersistencia();
+    // Redesenha o mapa atual
+    const mapElement = document.getElementById('map');
+    if (mapElement) {
+        if (window.isRouteOptimized && window.rotaOtimizada && window.rotaOtimizada.length > 0) {
+            desenharMapaGoogle(mapElement, window.partidaLocalizacao, window.rotaOtimizada);
+        } else if (window.moradasEntregas && window.moradasEntregas.length > 0) {
+            desenharMapaPlaneamento(mapElement, window.partidaLocalizacao, window.moradasEntregas);
+        }
     }
+
+    renderizarPainelMultiClusters();
 }
 
 /**
@@ -347,7 +378,7 @@ export function limparTodosClusters() {
  */
 export function renderizarPainelMultiClusters() {
     const lista = (window.rotaOtimizada && window.rotaOtimizada.length > 0) ? window.rotaOtimizada : window.moradasEntregas;
-    const clustersMap = new Map(); // clusterId -> { name, color, count }
+    const clustersMap = new Map();
 
     if (Array.isArray(lista)) {
         lista.forEach(p => {
@@ -392,7 +423,7 @@ export function renderizarPainelMultiClusters() {
 
             <div class="flex items-center space-x-1.5 flex-nowrap">
                 ${clustersList.map(c => `
-                    <div class="flex items-center space-x-1 px-2 py-1 rounded-xl text-[11px] font-bold text-white shadow-2xs whitespace-nowrap" style="background-color: ${c.color};">
+                    <div class="flex items-center space-x-1 px-2.5 py-1 rounded-xl text-[11px] font-bold text-white shadow-2xs whitespace-nowrap" style="background-color: ${c.color};">
                         <span>${c.name} (${c.count})</span>
                         <button type="button" onclick="window.removerClusterEspecifico('${c.id}')"
                                 class="hover:opacity-80 p-0.5 ml-1 text-[10px] cursor-pointer border-none bg-transparent text-white" title="Desfazer este bloco">
@@ -403,7 +434,7 @@ export function renderizarPainelMultiClusters() {
             </div>
 
             <button type="button" onclick="window.limparTodosClusters()"
-                    class="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-600 text-[10px] font-extrabold rounded-lg border border-gray-300 cursor-pointer whitespace-nowrap ml-1" title="Limpar todos os blocos">
+                    class="px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-[10px] font-extrabold rounded-lg border border-gray-300 cursor-pointer whitespace-nowrap ml-1" title="Limpar todos os blocos">
                 Limpar Todos
             </button>
         </div>
@@ -438,4 +469,4 @@ function ocultarBarraAvisoDesenho() {
 // Assinaturas públicas no objeto global Window
 window.ativarModoDesenhoPerimetro = ativarModoDesenhoPerimetro;
 window.removerClusterEspecifico = removerClusterEspecifico;
-window.limparTodosClusters = limparTodosClusters;
+window.limparTodosClusters = limparTodosClusters;   

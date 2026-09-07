@@ -1,9 +1,8 @@
 /**
  * js/rotas-modais.js
- * Versão v82.0 - Modais de Edição com Atribuição de Bloco (Cluster) e Inserção Cirúrgica Anti-Caos
- * Faz: Controla o modal de edição detalhada de entregas/recolhas, permitindo associar qualquer paragem
- *      diretamente a um Bloco (Cluster) existente ou desassociar;
- *      ao associar a um bloco, realiza o encaixe cirúrgico da paragem junto das outras daquele bloco;
+ * Versão v82.2 - Modais de Edição com Seletor de Bloco Seguro e Inserção Cirúrgica
+ * Faz: Corrige o seletor do modal eliminando o SyntaxError no console;
+ *      injeta seletor de Bloco (Cluster) e realiza o encaixe cirúrgico da paragem junto das outras do mesmo bloco;
  *      mantém a re-sequenciação manual e confirmação de posição.
  * Depende de: ./rotas-geografia.js, ./maps.js, ./rotas.js, ./rotas-laco.js
  */
@@ -47,7 +46,7 @@ function obterListaClustersDisponiveis() {
 }
 
 /**
- * Injeta ou atualiza o seletor de Bloco (Cluster) dentro do modal de edição
+ * Injeta ou atualiza o seletor de Bloco (Cluster) dentro do modal de edição com posicionamento seguro
  */
 function popularSeletorBlocosNoModal(paragemAtual) {
     const modalEditar = document.getElementById('modal-editar-paragem');
@@ -60,9 +59,10 @@ function popularSeletorBlocosNoModal(paragemAtual) {
         containerSeletor.className = 'space-y-1.5 pt-1';
 
         const btnSalvar = document.getElementById('btn-salvar-edicao');
-        const formContainer = btnSalvar ? btnSalvar.closest('.space-y-3.5') || btnSalvar.parentElement : null;
-        if (formContainer) {
-            formContainer.insertBefore(containerSeletor, btnSalvar.parentElement || btnSalvar);
+        if (btnSalvar && btnSalvar.parentElement) {
+            btnSalvar.parentElement.parentNode.insertBefore(containerSeletor, btnSalvar.parentElement);
+        } else {
+            modalEditar.querySelector('.bg-white')?.appendChild(containerSeletor);
         }
     }
 
@@ -81,7 +81,7 @@ function popularSeletorBlocosNoModal(paragemAtual) {
             <option value="">-- Sem Bloco (Entrega Avulsa) --</option>
             ${clustersAtivos.map(c => `
                 <option value="${c.id}" ${paragemAtual && paragemAtual.clusterGroupId === c.id ? 'selected' : ''}>
-                    🔗 ${c.nome} (${c.cor})
+                    🔗 ${c.nome}
                 </option>
             `).join('')}
         </select>
@@ -270,7 +270,6 @@ export function setupModaisEdicao() {
                 }
 
                 if (itemSendoEditado.isClusterGroup && itemSendoEditado.clusterGroupId) {
-                    // Encontra a última paragem daquele mesmo bloco na rota para inserir logo a seguir
                     let ultimoIndexCluster = -1;
                     window.rotaOtimizada.forEach((p, idx) => {
                         if (p.clusterGroupId === itemSendoEditado.clusterGroupId) {
@@ -287,7 +286,6 @@ export function setupModaisEdicao() {
                     window.rotaOtimizada.push({ ...itemSendoEditado });
                 }
 
-                // Recalcula distâncias encadeadas
                 window.rotaOtimizada.forEach((p, idx) => {
                     p.distanciaDoAnterior = calcularDistanciaHaversine(
                         idx === 0 ? window.partidaLocalizacao.lat : window.rotaOtimizada[idx - 1].lat,
@@ -361,7 +359,7 @@ export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
     }
 
     if (!paragem || typeof paragem !== 'object') {
-        console.warn("[PWA] Paragem inválida ou não encontrada para abrir modal:", paragemOuIndex);
+        console.warn("[PWA] Paragem inválida para abrir modal:", paragemOuIndex);
         return;
     }
 
@@ -390,7 +388,6 @@ export function abrirModalEdicaoParagem(paragemOuIndex, modoOuEstaNaRota) {
         }
     }
 
-    // Popula o seletor com os blocos disponíveis e marca o bloco atual da paragem
     popularSeletorBlocosNoModal(paragem);
 
     modalEditarParagem.classList.remove('hidden');
