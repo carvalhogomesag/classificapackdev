@@ -5,7 +5,6 @@
  */
 
 
-
 const CACHE_NAME = 'classificapack-v78.8';
 
 const ASSETS = [
