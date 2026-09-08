@@ -1,9 +1,9 @@
 /**
  * js/rotas.js
- * Versão v83.0 - Maestro de Rotas com Sincronização Perfeita de Fecho de Turno e Multi-Cluster
+ * Versão v83.2 - Maestro de Rotas com Abertura Automática de Observações e Multi-Cluster
  * Faz: Gestão principal da aba de rotas, integrando visualização em tempo real de pacotes no mapa,
  *      roteirização encadeada de múltiplos blocos/perímetros (Multi-Cluster / Circuit-Style),
- *      garante que a barra de blocos é 100% ocultada ao fechar o turno, odómetro reativo e persistência blindada.
+ *      abertura automática do modal de observações ao inserir paragem, odómetro reativo e persistência blindada.
  * Depende de: ./maps.js, ./rotas-laco.js, ./navigation.js, ./firebase-init.js, ./rotas-*.js
  */
 
@@ -361,6 +361,9 @@ export async function processarAdicaoPorPostal() {
 
                 alternarModoRota('planeamento');
             }
+
+            // RESTAURAÇÃO: Abre automaticamente o modal para inserção de observações
+            abrirModalEdicaoParagem(novaMorada, rotaJaOtimizada ? 'conducao' : 'planeamento');
         }
 
         inputPostal.value = "";
