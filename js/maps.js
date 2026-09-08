@@ -1,9 +1,9 @@
 /**
  * js/maps.js
- * Versão v83.0 - Seleção Direta de Bloco (Cluster) no Card do Pino do Mapa
- * Faz: Permite associar, trocar ou criar um novo Bloco (Cluster) diretamente no balão informativo (card)
- *      ao clicar em qualquer pino no mapa, com encaixe cirúrgico e atualização de cores em tempo real;
- *      mantém suporte a múltiplos clusters com cores vibrantes, dispersão em espiral e polilinhas.
+ * Versão v83.3 - Diferenciação Visual de Entregas (Azul) vs Recolhas (Roxo) e Seleção de Blocos
+ * Faz: Garante que os pontos de Entrega são Azuis e os de Recolha são Roxos em todos os modos do mapa;
+ *      mantém suporte a múltiplos clusters com cores vibrantes, seletor de bloco no card,
+ *      dispersão em espiral para evitar sobreposições e polilinhas.
  * Depende de: Nenhuns módulos externos (comunicação direta com o SDK do Google Maps e window.CP7_DATABASE).
  */
 
@@ -278,7 +278,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
         googleMarkers.push(partidaMarker);
     }
 
-    // 2. Marcadores das Paragens com Cores do Bloco e Seletor no Card
+    // 2. Marcadores das Paragens (Azul para Entrega, Roxo para Recolha ou Cor do Bloco)
     if (Array.isArray(moradas)) {
         moradas.forEach((p, i) => {
             if (typeof p.lat !== 'number' || typeof p.lng !== 'number') return;
@@ -286,9 +286,12 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
             const pos = evitarSobreposicao(p.lat, p.lng);
             bounds.extend(pos);
 
+            const isRecolha = p.tipoOperacao === "Recolha";
+
+            // Se pertencer a um Bloco (Cluster), tem prioridade; caso contrário: Roxo (Recolha) ou Azul (Entrega)
             let pinoColor = p.isClusterGroup && p.clusterColor 
                 ? p.clusterColor 
-                : (p.tipoOperacao === "Recolha" ? "#9333EA" : "#2563EB");
+                : (isRecolha ? "#9333EA" : "#2563EB");
 
             let strokeColor = p.isClusterGroup && p.clusterBorder 
                 ? p.clusterBorder 
@@ -320,9 +323,8 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
             m.paragemIndex = i;
 
             m.addListener('click', () => {
-                const isRecolha = p.tipoOperacao === "Recolha";
                 const opLabel = isRecolha ? "Recolha" : "Entrega";
-                const opColor = isRecolha ? "#7C3AED" : "#2563EB";
+                const opColor = isRecolha ? "#9333EA" : "#2563EB";
                 const brickText = p.brickName ? `<div style="font-size: 11px; color: #2563EB; font-weight: 700; margin-top: 3px;">📦 Estante: ${p.brickName}</div>` : '';
                 
                 // SELETOR INTERATIVO DE BLOCO DIRETAMENTE NO CARD
@@ -378,7 +380,7 @@ export function desenharMapaPlaneamento(mapElement, partida, moradas) {
 }
 
 /**
- * Desenha a rota otimizada com polilinha e seletor de bloco interativo no card
+ * Desenha a rota otimizada com polilinha, cores diferenciadas (Azul = Entrega / Roxo = Recolha) e seletor de bloco
  */
 export function desenharMapaGoogle(mapElement, partida, rotas) {
     if (typeof google === 'undefined' || !mapElement || !partida) return;
@@ -405,7 +407,7 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
     const evitarSobreposicao = criarDispersorEspiral();
     const clustersAtivos = obterListaClustersAtivos();
 
-    // Ponto de Partida
+    // 1. Ponto de Partida
     const startPos = evitarSobreposicao(partida.lat, partida.lng);
     path.push(startPos);
     bounds.extend(startPos);
@@ -439,29 +441,35 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
 
     googleMarkers.push(partidaMarker);
 
-    // Paragens Otimizadas com Cores de Bloco e Seletor no Card
+    // 2. Paragens Otimizadas com Cores Diferenciadas (Azul = Entrega / Roxo = Recolha)
     rotas.forEach((p, i) => {
         const pos = evitarSobreposicao(p.lat, p.lng);
         path.push(pos);
         bounds.extend(pos);
 
-        let pinoColor = (p.isClusterGroup && p.clusterColor) ? p.clusterColor : "#2563EB"; 
+        const isRecolha = p.tipoOperacao === "Recolha";
+
+        // Cor Base: Bloco > (Recolha = Roxo / Entrega = Azul)
+        let pinoColor = (p.isClusterGroup && p.clusterColor) 
+            ? p.clusterColor 
+            : (isRecolha ? "#9333EA" : "#2563EB"); 
+
         let bounceAnimation = null;
         let strokeColor = (p.isClusterGroup && p.clusterBorder) ? p.clusterBorder : "#FFFFFF";
         let strokeWeight = p.isClusterGroup ? 3.5 : 2;
 
         if (p.isNewUnconfirmed) {
             if (!p.isClusterGroup) {
-                pinoColor = "#F97316"; 
+                pinoColor = "#F97316"; // Laranja de aviso enquanto não confirmada
             }
             bounceAnimation = google.maps.Animation.BOUNCE;
             strokeColor = "#000000"; 
             strokeWeight = 3.5;
-        } else if (p.status === "Entregue") {
-            pinoColor = "#10B981"; 
+        } else if (p.status === "Entregue" || p.status === "Recolhido") {
+            pinoColor = "#10B981"; // Verde de sucesso
             strokeColor = "#059669";
         } else if (p.status === "Falhou" || p.status === "Failed") {
-            pinoColor = "#EF4444"; 
+            pinoColor = "#EF4444"; // Vermelho de insucesso
             strokeColor = "#B91C1C";
         }
 
@@ -489,15 +497,14 @@ export function desenharMapaGoogle(mapElement, partida, rotas) {
         m.paragemIndex = i;
 
         m.addListener('click', () => {
-            const isRecolha = p.tipoOperacao === "Recolha";
-            const opColor = isRecolha ? "#7C3AED" : "#2563EB";
+            const opColor = isRecolha ? "#9333EA" : "#2563EB";
             const opLabel = isRecolha ? "Recolha" : "Entrega";
             
             let statusBadge = `<span style="background: #DBEAFE; color: #1E40AF; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">Pendente</span>`;
             if (p.isNewUnconfirmed) {
                 statusBadge = `<span style="background: #FFEDD5; color: #C2410C; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">⚠️ Por Confirmar</span>`;
-            } else if (p.status === "Entregue") {
-                statusBadge = `<span style="background: #D1FAE5; color: #065F46; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✓ Entregue</span>`;
+            } else if (p.status === "Entregue" || p.status === "Recolhido") {
+                statusBadge = `<span style="background: #D1FAE5; color: #065F46; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✓ ${p.status}</span>`;
             } else if (p.status === "Falhou" || p.status === "Failed") {
                 statusBadge = `<span style="background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 800;">✗ Falhou</span>`;
             }
